@@ -237,4 +237,4 @@ Before opening an issue, search existing issues and the `docs/` directory. For q
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).

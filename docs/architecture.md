@@ -54,4 +54,4 @@ Research Harness is an MCP-based research automation system that orchestrates th
 
 ## License
 
-Apache-2.0
+PolyForm-Noncommercial-1.0.0

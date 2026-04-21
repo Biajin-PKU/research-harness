@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-red.svg" alt="License"/></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python"/>
   <img src="https://img.shields.io/badge/tests-987%2B-green.svg" alt="Tests"/>
   <img src="https://img.shields.io/badge/primitives-69-purple.svg" alt="Primitives"/>
@@ -304,7 +304,7 @@ name: my-paper-source
 version: 0.1.0
 description: Custom paper source integration
 author: Your Name
-license: Apache-2.0
+license: PolyForm-Noncommercial-1.0.0
 schema_version: 1
 min_harness_version: 0.1.0
 extension_points:
@@ -352,13 +352,13 @@ extension_points:
   year         = {2026},
   version      = {0.1.0},
   url          = {https://github.com/your-org/research-harness},
-  license      = {Apache-2.0}
+  license      = {PolyForm-Noncommercial-1.0.0}
 }
 ```
 
 ## License
 
-[Apache License 2.0](LICENSE)。所有贡献默认使用同一许可证。
+[PolyForm Noncommercial License 1.0.0](LICENSE)。所有贡献默认使用同一许可证。
 
 ## 贡献
 

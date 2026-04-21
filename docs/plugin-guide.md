@@ -33,7 +33,7 @@ name: my-paper-source
 version: 0.1.0
 description: Custom paper source integration
 author: Your Name
-license: Apache-2.0
+license: PolyForm-Noncommercial-1.0.0
 schema_version: 1
 min_harness_version: 0.1.0
 extension_points:
@@ -71,7 +71,7 @@ for plugin in plugins:
 
 ## Free vs Premium Boundary
 
-| Free (Apache-2.0) | Premium (Enterprise) |
+| Free (PolyForm-Noncommercial-1.0.0) | Premium (Enterprise) |
 |---|---|
 | All core primitives | Hosted team workspace |
 | Local orchestrator | Multi-user collaboration |

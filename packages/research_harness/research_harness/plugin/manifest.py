@@ -33,7 +33,7 @@ class PluginManifest:
     version: str
     description: str
     author: str = ""
-    license: str = "Apache-2.0"
+    license: str = "PolyForm-Noncommercial-1.0.0"
     homepage: str = ""
     schema_version: int = MANIFEST_SCHEMA_VERSION
     min_harness_version: str = "0.1.0"
@@ -89,7 +89,7 @@ def load_manifest_from_dict(data: dict[str, Any]) -> PluginManifest:
         version=str(data.get("version", "")),
         description=str(data.get("description", "")),
         author=str(data.get("author", "")),
-        license=str(data.get("license", "Apache-2.0")),
+        license=str(data.get("license", "PolyForm-Noncommercial-1.0.0")),
         homepage=str(data.get("homepage", "")),
         schema_version=int(data.get("schema_version", MANIFEST_SCHEMA_VERSION)),
         min_harness_version=str(data.get("min_harness_version", "0.1.0")),
