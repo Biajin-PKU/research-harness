@@ -1,0 +1,56 @@
+{
+  "proxy_config": {
+    "name": "Unified LLM Proxy",
+    "description": "Unified proxy supporting multiple LLM models for research and general tasks",
+    "base_url": "http://127.0.0.1:${PROXY_PORT}",
+    "endpoints": {
+      "anthropic": "/v1/messages",
+      "openai": "/v1/chat/completions",
+      "models": "/v1/models",
+      "health": "/healthz"
+    },
+    "models": {
+      "research": {
+        "id": "your-research-model",
+        "display_name": "Research Model",
+        "description": "Optimized for academic paper reading and analysis",
+        "endpoint": "openai"
+      },
+      "general": {
+        "id": "your-general-model",
+        "display_name": "General Model",
+        "description": "High-performance model for complex reasoning tasks",
+        "endpoint": "openai"
+      },
+      "fallback": {
+        "id": "your-fallback-model",
+        "display_name": "Fallback Model",
+        "description": "Balanced performance and speed",
+        "endpoint": "openai"
+      }
+    },
+    "default_settings": {
+      "temperature": 0.2,
+      "max_tokens": 4096,
+      "top_p": 0.95
+    },
+    "research_settings": {
+      "temperature": 0.1,
+      "max_tokens": 4096,
+      "system_prompt": "You are a research assistant specialized in academic paper reading and analysis. Focus on providing detailed, accurate analysis of research papers, including methodology, results, and implications."
+    }
+  },
+  "cursor_integration": {
+    "enabled": true,
+    "model_mapping": {
+      "research": "your-research-model",
+      "general": "your-general-model"
+    },
+    "api_key": "your-proxy-api-key"
+  },
+  "claude_code_integration": {
+    "enabled": true,
+    "anthropic_base_url": "http://127.0.0.1:${PROXY_PORT}",
+    "default_model": "your-general-model"
+  }
+}

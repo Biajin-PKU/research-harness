@@ -1,0 +1,54 @@
+{
+  "models": [
+    {
+      "title": "Research Model",
+      "provider": "openai",
+      "model": "your-research-model",
+      "apiKey": "your-proxy-api-key",
+      "apiBase": "http://127.0.0.1:${PROXY_PORT}/v1",
+      "completionOptions": {
+        "temperature": 0.1,
+        "maxTokens": 4096
+      }
+    },
+    {
+      "title": "General Model",
+      "provider": "openai",
+      "model": "your-general-model",
+      "apiKey": "your-proxy-api-key",
+      "apiBase": "http://127.0.0.1:${PROXY_PORT}/v1",
+      "completionOptions": {
+        "temperature": 0.2,
+        "maxTokens": 4096
+      }
+    },
+    {
+      "title": "Fallback Model",
+      "provider": "openai",
+      "model": "your-fallback-model",
+      "apiKey": "your-proxy-api-key",
+      "apiBase": "http://127.0.0.1:${PROXY_PORT}/v1",
+      "completionOptions": {
+        "temperature": 0.2,
+        "maxTokens": 4096
+      }
+    }
+  ],
+  "customCommands": [
+    {
+      "name": "research-analyze",
+      "prompt": "You are a research assistant. Please provide a detailed analysis of the following academic content, focusing on methodology, results, and implications.",
+      "description": "Analyze research content with research model"
+    },
+    {
+      "name": "code-explain",
+      "prompt": "Please explain this code in detail, including its purpose, functionality, and any potential improvements.",
+      "description": "Explain code with general model"
+    }
+  ],
+  "systemMessage": "You are a helpful AI assistant. Use the appropriate model based on the task: research model for paper analysis, general model for coding and reasoning tasks.",
+  "completionOptions": {
+    "temperature": 0.2,
+    "maxTokens": 4096
+  }
+}

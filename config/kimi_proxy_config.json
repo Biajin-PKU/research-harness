@@ -1,0 +1,56 @@
+{
+  "mcpServers": {
+    "research-harness": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "research_harness_mcp.server"],
+      "env": {
+        "RESEARCH_HARNESS_DB_PATH": "${RESEARCH_HARNESS_DB_PATH}"
+      }
+    },
+    "arxiv": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "arxiv_mcp_server"],
+      "env": {}
+    },
+    "semantic-scholar": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "semantic_scholar_mcp"],
+      "env": {}
+    },
+    "refcheck": {
+      "type": "stdio",
+      "command": "refcheck",
+      "args": [],
+      "env": {}
+    },
+    "arxiv-latex": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "arxiv_latex_mcp"],
+      "env": {}
+    },
+    "mcp-dblp": {
+      "type": "stdio",
+      "command": "mcp-dblp",
+      "args": [],
+      "env": {}
+    },
+    "unpaywall": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "unpaywall-mcp"],
+      "env": {
+        "UNPAYWALL_EMAIL": "you@your-domain.com"
+      }
+    }
+  },
+  "llmConfig": {
+    "provider": "openai",
+    "base_url": "http://127.0.0.1:${PROXY_PORT}/v1",
+    "model": "your-research-model",
+    "api_key": "your-proxy-api-key"
+  }
+}

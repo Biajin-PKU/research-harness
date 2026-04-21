@@ -1,0 +1,94 @@
+{
+  "papers": [
+    {
+      "paper_id": 2,
+      "title": "Multichannel Advertising: Budget Allocation in the Presence of Spillover and Carryover Effects",
+      "venue": "M&SOM 2025",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 3,
+      "title": "Cross-channel Marketing Effectiveness on E-commerce Platform",
+      "venue": "SSRN 2023",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 8,
+      "title": "A Multi-Channel Advertising Budget Allocation Using Reinforcement Learning and an Improved Differential Evolution Algorithm",
+      "venue": "IEEE Access 2024",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 9,
+      "title": "Multi-channel advertising budget allocation: A novel method using Q-learning and mutual learning-based artificial bee colony",
+      "venue": "Expert Syst Appl 2025",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 10,
+      "title": "Cross-Channel Real-Time Response Analysis",
+      "venue": "",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 11,
+      "title": "Marketing Mix Modeling (MMM) - Concepts and Model Interpretation",
+      "venue": "",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 12,
+      "title": "Deep Learning-Based Attribution Framework for Real-Time Budget Optimization in Cross-Channel Pharmaceutical Advertising",
+      "venue": "SECA 2025",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 13,
+      "title": "Spending Programmed Bidding: Privacy-friendly Bid Optimization with ROI Constraint in Online Advertising",
+      "venue": "KDD",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 17,
+      "title": "Generation and dynamic optimization of cross-channel marketing budget allocation strategy based on causal discovery algorithm and deep reinforcement learning",
+      "venue": "CIDT",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 18,
+      "title": "Multimodal Reinforcement Learning for Dynamic Cross-Media Advertising Budget Allocation Via DDPG and PPO Combined with Meta-Learning and Adversarial Training",
+      "venue": "Informatica",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 19,
+      "title": "Cross-Channel Advertising Allocation and Consumer Dynamics: An Empirical and Theoretical Investigation",
+      "venue": "SSRN",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 20,
+      "title": "A new framework for Marketing Mix Modeling: Addressing Channel Influence Bias and Cross-Channel Effects",
+      "venue": "arXiv",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 21,
+      "title": "Reinforcement learning-based optimization strategy for online advertising budget allocation",
+      "venue": "ICAID",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 22,
+      "title": "Advanced Deep Reinforcement Learning Framework for Dynamic Multi-Channel Budget Allocation and Media Optimization",
+      "venue": "SSRN",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 23,
+      "title": "Learning-Based Dynamic Budget Allocation for Profit Optimization in Social Media Advertising",
+      "venue": "SSRN",
+      "manual_urls": []
+    }
+  ]
+}

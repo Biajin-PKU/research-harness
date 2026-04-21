@@ -1,0 +1,20 @@
+# direnv configuration for Research Harness
+# Copy to .envrc: cp .envrc.example .envrc
+# Then allow: direnv allow
+
+export PROJECT_ROOT="$PWD"
+export RESEARCH_HARNESS_DB_PATH="$PWD/.research-harness/pool.db"
+
+# LLM provider flags (uncomment the ones you use)
+# export CODEX_ENABLED=1
+# export CURSOR_AGENT_ENABLED=1
+
+# Tier routing overrides (format: provider:model)
+# export LLM_ROUTE_LIGHT=openai:gpt-4o-mini
+# export LLM_ROUTE_MEDIUM=openai:gpt-4o
+# export LLM_ROUTE_HEAVY=anthropic:claude-opus-4-5
+
+PATH_add "$PWD/scripts"
+
+# Load local machine-specific overrides (not committed)
+source_env_if_exists .envrc.local

@@ -1,0 +1,125 @@
+{
+  "papers": [
+    {
+      "paper_id": 2,
+      "title": "Multichannel Advertising: Budget Allocation in the Presence of Spillover and Carryover Effects",
+      "venue": "M&SOM 2025",
+      "manual_urls": [
+        "https://pubsonline.informs.org/doi/pdf/10.1287/msom.2023.0293",
+        "https://doi.org/10.1287/msom.2023.0293"
+      ]
+    },
+    {
+      "paper_id": 3,
+      "title": "Cross-channel Marketing Effectiveness on E-commerce Platform",
+      "venue": "SSRN 2023",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 8,
+      "title": "A Multi-Channel Advertising Budget Allocation Using Reinforcement Learning and an Improved Differential Evolution Algorithm",
+      "venue": "IEEE Access 2024",
+      "manual_urls": [
+        "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10599475",
+        "https://ieeexplore.ieee.org/document/10599475",
+        "https://doi.org/10.1109/access.2024.3429359"
+      ]
+    },
+    {
+      "paper_id": 9,
+      "title": "Multi-channel advertising budget allocation: A novel method using Q-learning and mutual learning-based artificial bee colony",
+      "venue": "Expert Syst Appl 2025",
+      "manual_urls": [
+        "https://www.sciencedirect.com/science/article/pii/S0957417425002714/pdfft?isDTMRedir=true&download=true",
+        "https://doi.org/10.1016/j.eswa.2025.126649"
+      ]
+    },
+    {
+      "paper_id": 10,
+      "title": "Cross-Channel Real-Time Response Analysis",
+      "venue": "",
+      "manual_urls": [
+        "https://link.springer.com/content/pdf/10.1007/978-3-319-25023-6_12.pdf",
+        "https://doi.org/10.1007/978-3-319-25023-6_12"
+      ]
+    },
+    {
+      "paper_id": 11,
+      "title": "Marketing Mix Modeling (MMM) - Concepts and Model Interpretation",
+      "venue": "",
+      "manual_urls": []
+    },
+    {
+      "paper_id": 12,
+      "title": "Deep Learning-Based Attribution Framework for Real-Time Budget Optimization in Cross-Channel Pharmaceutical Advertising",
+      "venue": "SECA 2025",
+      "manual_urls": [
+        "https://dl.acm.org/doi/pdf/10.1145/3747912.3747951",
+        "https://doi.org/10.1145/3747912.3747951"
+      ]
+    },
+    {
+      "paper_id": 13,
+      "title": "Spending Programmed Bidding: Privacy-friendly Bid Optimization with ROI Constraint in Online Advertising",
+      "venue": "KDD",
+      "manual_urls": [
+        "https://dl.acm.org/doi/pdf/10.1145/3637528.3671540",
+        "https://doi.org/10.1145/3637528.3671540"
+      ]
+    },
+    {
+      "paper_id": 17,
+      "title": "Generation and dynamic optimization of cross-channel marketing budget allocation strategy based on causal discovery algorithm and deep reinforcement learning",
+      "venue": "CIDT",
+      "manual_urls": [
+        "https://www.spiedigitallibrary.org/doi/pdf/10.1117/12.3093957",
+        "https://doi.org/10.1117/12.3093957"
+      ]
+    },
+    {
+      "paper_id": 18,
+      "title": "Multimodal Reinforcement Learning for Dynamic Cross-Media Advertising Budget Allocation Via DDPG and PPO Combined with Meta-Learning and Adversarial Training",
+      "venue": "Informatica",
+      "manual_urls": [
+        "https://www.informatica.si/index.php/informatica/article/download/11440/5798",
+        "https://doi.org/10.31449/inf.v49i30.11440"
+      ]
+    },
+    {
+      "paper_id": 19,
+      "title": "Cross-Channel Advertising Allocation and Consumer Dynamics: An Empirical and Theoretical Investigation",
+      "venue": "SSRN",
+      "manual_urls": [
+        "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID5336880_code5336880.pdf?abstractid=5336880&mirid=1",
+        "https://doi.org/10.2139/ssrn.5336880"
+      ]
+    },
+    {
+      "paper_id": 21,
+      "title": "Reinforcement learning-based optimization strategy for online advertising budget allocation",
+      "venue": "ICAID",
+      "manual_urls": [
+        "https://www.preprints.org/manuscript/202505.2063/v1/download",
+        "https://doi.org/10.1109/icaid65275.2025.11034517"
+      ]
+    },
+    {
+      "paper_id": 22,
+      "title": "Advanced Deep Reinforcement Learning Framework for Dynamic Multi-Channel Budget Allocation and Media Optimization",
+      "venue": "SSRN",
+      "manual_urls": [
+        "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID5023191_code5023191.pdf?abstractid=5023191&mirid=1",
+        "https://doi.org/10.2139/ssrn.5023191"
+      ]
+    },
+    {
+      "paper_id": 23,
+      "title": "Learning-Based Dynamic Budget Allocation for Profit Optimization in Social Media Advertising",
+      "venue": "SSRN",
+      "manual_urls": [
+        "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID5226977_code5226977.pdf?abstractid=5226977&mirid=1",
+        "https://doi.org/10.2139/ssrn.5226977"
+      ]
+    }
+  ]
+}

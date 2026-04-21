@@ -1,0 +1,35 @@
+{
+  "themes": {
+    "my-research-theme": {
+      "slug": "my-research-theme",
+      "title": "My Research Theme",
+      "summary": "A configurable research theme spanning your papers and projects.",
+      "status": "active",
+      "project_slugs": ["paper1", "paper2"]
+    }
+  },
+  "projects": {
+    "paper1": {
+      "slug": "paper1",
+      "theme_slug": "my-research-theme",
+      "title": "Paper 1 Title",
+      "short_title": "Paper1",
+      "relative_path": "projects/paper1",
+      "stage": "pre-start",
+      "selection_priority": 0,
+      "include_topics": ["my-topic-1"],
+      "allow_shared": false
+    },
+    "paper2": {
+      "slug": "paper2",
+      "theme_slug": "my-research-theme",
+      "title": "Paper 2 Title",
+      "short_title": "Paper2",
+      "relative_path": "projects/paper2",
+      "stage": "pre-start",
+      "selection_priority": 1,
+      "include_topics": ["my-topic-2"],
+      "allow_shared": false
+    }
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "description": "Test data for paper URL handling in research-hub ingestion and PDF download pipeline. Each case represents a real URL pattern from academic search providers.",
+  "test_cases": [
+    {
+      "type": "arxiv_pdf",
+      "source": "arxiv",
+      "paper_id": "2302.01523",
+      "title": "Multi-channel Autobidding with Budget and ROI Constraints",
+      "url": "https://arxiv.org/pdf/2302.01523.pdf",
+      "expected_downloadable": true,
+      "expected_file_size_min_kb": 1000,
+      "note": "Standard arXiv PDF URL pattern"
+    },
+    {
+      "type": "arxiv_abs",
+      "source": "arxiv",
+      "paper_id": "2302.01523",
+      "title": "Multi-channel Autobidding with Budget and ROI Constraints",
+      "url": "https://arxiv.org/abs/2302.01523",
+      "expected_downloadable": false,
+      "note": "arXiv landing page, NOT a direct PDF"
+    },
+    {
+      "type": "arxiv_v1_pdf",
+      "source": "arxiv",
+      "paper_id": "2105.02723v1",
+      "title": "Do You Even Need Attention?",
+      "url": "https://arxiv.org/pdf/2105.02723v1.pdf",
+      "expected_downloadable": true,
+      "note": "arXiv with version suffix"
+    },
+    {
+      "type": "semantic_scholar_open_access",
+      "source": "semantic-scholar",
+      "paper_id": "204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+      "title": "Attention is All you Need",
+      "url": "",
+      "openAccessPdf": {"url": "", "status": null},
+      "expected_downloadable": false,
+      "note": "Semantic Scholar sometimes returns empty openAccessPdf.url even for famous papers"
+    },
+    {
+      "type": "semantic_scholar_with_pdf",
+      "source": "semantic-scholar",
+      "paper_id": "42f6af2b4b5258b1d579bf56156fa291e5adc3e5",
+      "title": "Spending Programmed Bidding",
+      "url": "",
+      "openAccessPdf": {"url": "https://arxiv.org/pdf/2405.12345.pdf", "status": "GREEN"},
+      "expected_downloadable": true,
+      "note": "Hypothetical Semantic Scholar result with actual PDF URL"
+    },
+    {
+      "type": "pasa_pdf_url",
+      "source": "pasa",
+      "title": "Retrieved via PASA search agent",
+      "pdf_url": "https://example-journal.com/pdf/123456.pdf",
+      "paper_url": "https://example-journal.com/article/123456",
+      "expected_downloadable": true,
+      "note": "PASA MCP returns both pdf_url and paper_url"
+    },
+    {
+      "type": "ieee_xplore_pdf",
+      "source": "ieee",
+      "title": "A Multi-Channel Advertising Budget Allocation",
+      "url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=12345678",
+      "alternate_url": "https://ieeexplore.ieee.org/document/12345678",
+      "expected_downloadable": true,
+      "note": "IEEE Xplore stamp PDF URL requires session cookies"
+    },
+    {
+      "type": "acm_dl_pdf",
+      "source": "acm",
+      "title": "Spending Programmed Bidding (KDD 2024)",
+      "url": "https://dl.acm.org/doi/pdf/10.1145/3637528.3671592",
+      "expected_downloadable": true,
+      "note": "ACM DL direct PDF via DOI"
+    },
+    {
+      "type": "elsevier_scienceDirect",
+      "source": "elsevier",
+      "title": "Expert Systems with Applications paper",
+      "url": "https://www.sciencedirect.com/science/article/pii/S0957417424012345/pdfft?md5=abc123",
+      "expected_downloadable": true,
+      "note": "Elsevier direct PDF link with MD5 token"
+    },
+    {
+      "type": "springer_pdf",
+      "source": "springer",
+      "title": "Springer conference paper",
+      "url": "https://link.springer.com/content/pdf/10.1007/978-3-031-12345-6_15.pdf",
+      "expected_downloadable": true,
+      "note": "Springer direct PDF pattern"
+    },
+    {
+      "type": "ssrn",
+      "source": "ssrn",
+      "paper_id": "1234567",
+      "title": "Cross-channel Marketing Effectiveness",
+      "url": "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID1234567_code1234567.pdf?abstractid=1234567&mirid=1",
+      "expected_downloadable": true,
+      "note": "SSRN direct PDF delivery URL"
+    },
+    {
+      "type": "ssrn_download",
+      "source": "ssrn",
+      "paper_id": "1234567",
+      "title": "Cross-channel Marketing Effectiveness",
+      "url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1234567",
+      "expected_downloadable": false,
+      "note": "SSRN abstract page, NOT direct PDF"
+    },
+    {
+      "type": "informs_pubsOnLine",
+      "source": "informs",
+      "title": "Multichannel Advertising Budget Allocation (M&SOM)",
+      "url": "https://pubsonline.informs.org/doi/pdf/10.1287/msom.2023.0293",
+      "expected_downloadable": true,
+      "note": "INFORMS PubsOnLine PDF via DOI"
+    },
+    {
+      "type": "pkulib_redirect",
+      "source": "pku-library",
+      "title": "Paper accessed via PKU library portal",
+      "url": "https://www.lib.pku.edu.cn/portal/cn/resourcedb/redirect?target=https://ieeexplore.ieee.org/document/12345678",
+      "expected_downloadable": true,
+      "note": "PKU library redirect URL wrapping external database"
+    },
+    {
+      "type": "cnki",
+      "source": "cnki",
+      "title": "中文论文示例",
+      "url": "https://kns.cnki.net/kcms2/article/abstract?v=3uoqIhG8C44YLTlOAiTRKgchrJ08w1e7tvjWANqNvDtPE5L4gvY8fJUOVcmhLcvVSZJRWYaXxMmVTZvs0aPnq0A=&uniplatform=NZKPT",
+      "pdf_url": "https://kns.cnki.net/kcms2/article/pdf?v=3uoqIhG8C44YLTlOAiTRKgchrJ08w1e7tvjWANqNvDtPE5L4gvY8fJUOVcmhLcvVSZJRWYaXxMmVTZvs0aPnq0A=&uniplatform=NZKPT",
+      "expected_downloadable": true,
+      "note": "CNKI abstract page vs PDF page"
+    },
+    {
+      "type": "empty_url",
+      "source": "local-db",
+      "title": "Paper with no URL",
+      "url": "",
+      "expected_downloadable": false,
+      "note": "Edge case: empty string should not overwrite existing URL in merge"
+    },
+    {
+      "type": "invalid_404",
+      "source": "arxiv",
+      "paper_id": "9999.99999",
+      "title": "Non-existent paper",
+      "url": "https://arxiv.org/pdf/9999.99999.pdf",
+      "expected_downloadable": false,
+      "expected_error": "HTTP Error 404: Not Found",
+      "note": "Edge case: non-existent arXiv ID"
+    },
+    {
+      "type": "small_html_page",
+      "source": "arxiv",
+      "paper_id": "2302.01523",
+      "title": "arXiv abstract page mistaken for PDF",
+      "url": "https://arxiv.org/abs/2302.01523",
+      "expected_downloadable": false,
+      "note": "If downloaded, file is ~10KB HTML, should be rejected by size check"
+    }
+  ],
+  "download_heuristics": {
+    "size_check": {
+      "min_bytes": 10000,
+      "description": "Reject files smaller than 10KB (likely HTML error pages)"
+    },
+    "pdf_magic_bytes": {
+      "expected_header": "%PDF",
+      "description": "Verify downloaded file starts with PDF magic bytes"
+    },
+    "url_priority_for_download": [
+      "pdf_url (from PASA)",
+      "openAccessPdf.url (from Semantic Scholar)",
+      "arxiv.org/pdf/{arxiv_id}.pdf (constructed)",
+      "url field from direct search"
+    ]
+  }
+}

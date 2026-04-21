@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Hub</title>
+    <style>
+        :root {
+            --bg: #efe7db;
+            --panel: rgba(255, 251, 245, 0.9);
+            --panel-strong: #fffaf2;
+            --panel-soft: rgba(255, 248, 241, 0.82);
+            --ink: #231c19;
+            --muted: #72645a;
+            --line: rgba(88, 65, 48, 0.12);
+            --accent: #a64b2a;
+            --accent-dark: #6b2a13;
+            --accent-soft: rgba(166, 75, 42, 0.1);
+            --sage: #537262;
+            --gold: #b38a32;
+            --danger: #b7462f;
+            --shadow: 0 22px 60px rgba(66, 48, 33, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(201, 135, 93, 0.22), transparent 24%),
+                radial-gradient(circle at top right, rgba(83, 114, 98, 0.14), transparent 26%),
+                linear-gradient(180deg, #f7f2ea 0%, #efe7db 100%);
+            overflow: hidden;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        .app {
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr) 360px;
+            gap: 18px;
+            padding: 18px;
+        }
+
+        .sidebar,
+        .workspace,
+        .inspector {
+            min-height: 0;
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            background: var(--panel);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-top {
+            padding: 16px 20px 14px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .eyebrow {
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .brand-title {
+            margin: 8px 0 0;
+            font-size: 20px;
+            line-height: 1.1;
+        }
+
+        .theme-list,
+        .project-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .sidebar-section {
+            padding: 18px 20px 0;
+        }
+
+        .sidebar-label {
+            margin: 0 0 10px;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .sidebar-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding-bottom: 20px;
+        }
+
+        .theme-chip,
+        .project-nav {
+            width: 100%;
+            text-align: left;
+            border: 1px solid rgba(88, 65, 48, 0.12);
+            border-radius: 18px;
+            padding: 14px 15px;
+            background: var(--panel-soft);
+            cursor: pointer;
+            transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+        }
+
+        .theme-chip:hover,
+        .theme-chip.active,
+        .project-nav:hover,
+        .project-nav.active {
+            border-color: rgba(166, 75, 42, 0.28);
+            background: rgba(166, 75, 42, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .theme-chip strong,
+        .project-nav strong {
+            display: block;
+            font-size: 16px;
+            color: var(--ink);
+        }
+
+        .theme-chip span,
+        .project-nav span {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .project-nav-meta {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .tiny-stat {
+            padding: 8px 9px;
+            border-radius: 12px;
+            background: rgba(255, 252, 247, 0.85);
+        }
+
+        .tiny-stat strong {
+            display: block;
+            font-size: 15px;
+        }
+
+        .tiny-stat span {
+            display: block;
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .workspace {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .workspace-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 26px;
+            border-bottom: 1px solid var(--line);
+            background:
+                linear-gradient(135deg, rgba(166, 75, 42, 0.92), rgba(98, 45, 30, 0.94)),
+                linear-gradient(180deg, #8e3d22, #6b2a13);
+            color: #fff7f2;
+        }
+
+        .workspace-top h1 {
+            margin: 0;
+            font-size: clamp(22px, 3vw, 28px);
+            line-height: 1.1;
+        }
+
+        .workspace-meta {
+            display: grid;
+            gap: 10px;
+            min-width: 220px;
+        }
+
+        .meta-pill {
+            padding: 10px 13px;
+            border-radius: 999px;
+            background: rgba(255, 251, 245, 0.1);
+            border: 1px solid rgba(255, 236, 220, 0.16);
+            font-size: 12px;
+        }
+
+        .view-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 14px 24px 0;
+            flex-wrap: wrap;
+        }
+
+        .view-tab {
+            border: 1px solid rgba(88, 65, 48, 0.14);
+            background: rgba(255, 251, 245, 0.88);
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .view-tab.active {
+            background: var(--accent-soft);
+            color: var(--accent-dark);
+            border-color: rgba(166, 75, 42, 0.3);
+        }
+
+        .workspace-body {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            padding: 16px 24px 24px;
+        }
+
+        .view-panel {
+            display: none;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .view-panel.active {
+            display: grid;
+        }
+
+        .overview-grid {
+            grid-template-columns: 1.15fr 0.95fr;
+            gap: 16px;
+        }
+
+        .project-grid-view {
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .library-grid {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .panel-card {
+            min-height: 0;
+            border-radius: 22px;
+            border: 1px solid rgba(88, 65, 48, 0.12);
+            background: rgba(255, 252, 247, 0.9);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-card-header {
+            padding: 18px 18px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .panel-card-title {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .panel-card-body {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 16px 18px 18px;
+        }
+
+        .coverage-track {
+            margin-top: 16px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .coverage-item {
+            display: grid;
+            gap: 7px;
+        }
+
+        .coverage-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .coverage-bar {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(88, 65, 48, 0.08);
+            overflow: hidden;
+        }
+
+        .coverage-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(166, 75, 42, 0.88), rgba(214, 132, 98, 0.85));
+        }
+
+        .project-matrix,
+        .health-list,
+        .risk-list,
+        .activity-list,
+        .doc-list,
+        .agenda-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .project-matrix-item,
+        .health-item,
+        .risk-item,
+        .activity-item,
+        .agenda-item {
+            padding: 14px 15px;
+            border-radius: 18px;
+            border: 1px solid rgba(88, 65, 48, 0.1);
+            background: rgba(255, 250, 244, 0.95);
+        }
+
+        .project-matrix-item {
+            cursor: pointer;
+        }
+
+        .project-matrix-item.active {
+            border-color: rgba(166, 75, 42, 0.28);
+            background: rgba(166, 75, 42, 0.08);
+        }
+
+        .matrix-head,
+        .item-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .matrix-title,
+        .item-title {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .item-meta,
+        .item-copy {
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .stage-badge,
+        .kind-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .stage-badge.design-ready,
+        .kind-badge.card {
+            background: rgba(83, 114, 98, 0.14);
+            color: var(--sage);
+        }
+
+        .stage-badge.pre-start,
+        .kind-badge.doc {
+            background: rgba(179, 138, 50, 0.16);
+            color: var(--gold);
+        }
+
+        .stage-badge.active,
+        .kind-badge.annotation {
+            background: rgba(83, 114, 98, 0.14);
+            color: var(--sage);
+        }
+
+        .stage-badge.planned,
+        .kind-badge.paper {
+            background: rgba(179, 138, 50, 0.16);
+            color: var(--gold);
+        }
+
+        .micro-grid {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .micro-stat {
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(255, 252, 247, 0.92);
+        }
+
+        .micro-stat strong {
+            display: block;
+            font-size: 17px;
+        }
+
+        .micro-stat span {
+            display: block;
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .toolbar input,
+        .toolbar select {
+            padding: 11px 13px;
+            border-radius: 14px;
+            border: 1px solid rgba(88, 65, 48, 0.16);
+            background: rgba(255, 252, 247, 0.96);
+            min-width: 200px;
+        }
+
+        .group-filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .group-filter-chip {
+            border: 1px solid rgba(88, 65, 48, 0.16);
+            background: rgba(255, 250, 244, 0.96);
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .group-filter-chip.active {
+            background: rgba(166, 75, 42, 0.12);
+            border-color: rgba(166, 75, 42, 0.32);
+            color: var(--accent-dark);
+        }
+
+.status-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .status-pill.missing {
+            background: rgba(183, 70, 47, 0.12);
+            color: var(--danger);
+        }
+
+        .status-pill.generated {
+            background: rgba(179, 138, 50, 0.16);
+            color: var(--gold);
+        }
+
+        .status-pill.exported {
+            background: rgba(83, 114, 98, 0.12);
+            color: var(--sage);
+        }
+
+        .status-pill.annotated {
+            background: rgba(83, 114, 98, 0.12);
+            color: var(--sage);
+        }
+
+        .status-pill.untracked {
+            background: rgba(88, 65, 48, 0.09);
+            color: var(--muted);
+        }
+
+        .detail-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .detail-column {
+            display: grid;
+            gap: 12px;
+            grid-auto-rows: min-content;
+            align-content: start;
+        }
+
+        .detail-scroll {
+            overflow: auto;
+            min-height: 0;
+        }
+
+        .detail-box {
+            padding: 14px 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(88, 65, 48, 0.1);
+            background: rgba(255, 250, 244, 0.95);
+            overflow: hidden;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .detail-box h4 {
+            margin: 0 0 8px;
+            font-size: 14px;
+        }
+
+        .detail-box p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.6;
+            word-break: break-all;
+        }
+
+        .flat-list {
+            margin: 0;
+            padding-left: 18px;
+            display: grid;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .monitor-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .monitor-card {
+            padding: 14px;
+            border-radius: 18px;
+            background: rgba(255, 250, 244, 0.95);
+            border: 1px solid rgba(88, 65, 48, 0.1);
+        }
+
+        .monitor-card strong {
+            display: block;
+            font-size: 25px;
+        }
+
+        .monitor-card span {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .monitor-card p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .doc-item {
+            width: 100%;
+            text-align: left;
+            padding: 12px 13px;
+            border-radius: 14px;
+            border: 1px solid rgba(88, 65, 48, 0.12);
+            background: rgba(255, 250, 244, 0.95);
+            color: var(--ink);
+            cursor: pointer;
+        }
+
+        .doc-item.active {
+            border-color: rgba(166, 75, 42, 0.28);
+            background: rgba(166, 75, 42, 0.08);
+        }
+
+        .doc-item small {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .doc-preview {
+            min-height: 0;
+            height: 100%;
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(88, 65, 48, 0.1);
+            background: rgba(255, 253, 249, 0.98);
+            overflow: auto;
+        }
+
+        .doc-preview-meta {
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .md-render {
+            color: var(--muted);
+            line-height: 1.75;
+        }
+
+        .md-render h1,
+        .md-render h2,
+        .md-render h3,
+        .md-render h4 {
+            color: var(--ink);
+            margin: 1.1em 0 0.45em;
+            line-height: 1.25;
+        }
+
+        .md-render p {
+            margin: 0 0 0.9em;
+        }
+
+        .md-render ul,
+        .md-render ol {
+            margin: 0 0 1em 1.2em;
+            padding: 0;
+        }
+
+        .md-render code,
+        .md-render pre {
+            font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+        }
+
+        .md-render pre {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(111, 98, 87, 0.06);
+            overflow: auto;
+        }
+
+        .md-render table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 1em;
+        }
+
+        .md-render th,
+        .md-render td {
+            padding: 10px 12px;
+            border: 1px solid rgba(111, 98, 87, 0.12);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .md-render th {
+            background: rgba(166, 75, 42, 0.06);
+            color: var(--ink);
+            font-size: 13px;
+        }
+
+        .inspector {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .inspector-top {
+            padding: 16px 20px 12px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .inspector-title {
+            margin: 6px 0 0;
+            font-size: 20px;
+        }
+
+        .inspector-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 14px 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .inspector-tab {
+            border: 1px solid rgba(88, 65, 48, 0.14);
+            background: rgba(255, 251, 245, 0.88);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .inspector-tab.active {
+            background: rgba(166, 75, 42, 0.1);
+            border-color: rgba(166, 75, 42, 0.28);
+            color: var(--accent-dark);
+        }
+
+        .inspector-body {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 16px 20px 20px;
+        }
+
+        .metadata-grid {
+            margin: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .metadata-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metadata-label {
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .metadata-value {
+            font-size: 14px;
+            color: var(--ink);
+            line-height: 1.45;
+        }
+
+        .card-sections {
+            display: grid;
+            gap: 12px;
+        }
+
+        .card-section {
+            padding: 15px;
+            border-radius: 18px;
+            background: rgba(255, 252, 247, 0.96);
+            border: 1px solid rgba(88, 65, 48, 0.1);
+        }
+
+        .card-section h4 {
+            margin: 0 0 9px;
+            font-size: 14px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .card-section p,
+        .card-section li,
+        .card-section pre {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .card-section ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .artifact-links {
+            display: grid;
+            gap: 6px;
+        }
+
+        .artifact-links a {
+            color: var(--accent-dark);
+            text-decoration: underline;
+            font-weight: 600;
+        }
+
+        .empty {
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(111, 98, 87, 0.06);
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            padding: 36px 0;
+            color: var(--muted);
+        }
+
+        .toolbar-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .paper-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .paper-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 10px 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: rgba(255, 252, 247, 0.98);
+            border-bottom: 2px solid var(--line);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .paper-table thead th:hover {
+            color: var(--accent);
+        }
+
+        .paper-table thead th.sorted-asc::after {
+            content: " \u25B2";
+            font-size: 9px;
+        }
+
+        .paper-table thead th.sorted-desc::after {
+            content: " \u25BC";
+            font-size: 9px;
+        }
+
+        .paper-table tbody tr {
+            cursor: pointer;
+            transition: background 100ms ease;
+        }
+
+        .paper-table tbody tr:hover {
+            background: rgba(166, 75, 42, 0.04);
+        }
+
+        .paper-table tbody tr.active {
+            background: rgba(166, 75, 42, 0.08);
+        }
+
+        .paper-table tbody td {
+            padding: 9px 10px;
+            border-bottom: 1px solid rgba(88, 65, 48, 0.06);
+            vertical-align: top;
+            line-height: 1.45;
+        }
+
+        .col-title {
+            min-width: 200px;
+        }
+
+        .col-venue {
+            width: 100px;
+        }
+
+        .col-year {
+            width: 55px;
+        }
+
+        .col-icon {
+            width: 42px;
+            text-align: center !important;
+        }
+
+        .col-icon td, .paper-table td:nth-child(4), .paper-table td:nth-child(5) {
+            text-align: center;
+        }
+
+        .col-aff {
+            width: 160px;
+        }
+
+        .paper-table .cell-title {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .paper-table .cell-venue {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .paper-table .cell-year {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .paper-table .cell-aff {
+            color: var(--muted);
+            font-size: 11px;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .icon-ok {
+            color: var(--sage);
+            font-weight: 700;
+        }
+
+        .icon-miss {
+            color: var(--danger);
+            opacity: 0.6;
+        }
+
+        .icon-gen {
+            color: var(--gold);
+        }
+
+        .table-footer {
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .pipeline-summary {
+            margin-bottom: 16px;
+        }
+
+        .pipeline-counts {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .pipeline-count {
+            padding: 12px 10px;
+            border-radius: 14px;
+            background: rgba(88, 65, 48, 0.06);
+            text-align: center;
+        }
+
+        .pipeline-count strong {
+            display: block;
+            font-size: 22px;
+        }
+
+        .pipeline-count span {
+            display: block;
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .pipeline-count.ok strong {
+            color: var(--sage);
+        }
+
+        .pipeline-count.warn strong {
+            color: var(--danger);
+        }
+
+        .pipeline-section {
+            margin-top: 16px;
+        }
+
+        .pipeline-section h4 {
+            margin: 0 0 10px;
+            font-size: 13px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .attention-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .attention-item {
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(183, 70, 47, 0.15);
+            background: rgba(183, 70, 47, 0.04);
+        }
+
+        .attention-item .item-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .attention-item .item-meta {
+            margin-top: 3px;
+            font-size: 11px;
+            color: var(--danger);
+        }
+
+        .activity-item.compact {
+            padding: 10px 12px;
+        }
+
+        .activity-item.compact .item-title {
+            font-size: 13px;
+        }
+
+        .progress-card {
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(88, 65, 48, 0.1);
+            background: rgba(255, 250, 244, 0.95);
+            margin-bottom: 12px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .progress-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .progress-pct {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .progress-bar-outer {
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(88, 65, 48, 0.08);
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--sage), rgba(83, 114, 98, 0.7));
+            transition: width 300ms ease;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .progress-stat {
+            text-align: center;
+            padding: 8px 4px;
+            border-radius: 12px;
+            background: rgba(88, 65, 48, 0.04);
+        }
+
+        .progress-stat strong {
+            display: block;
+            font-size: 18px;
+        }
+
+        .progress-stat span {
+            display: block;
+            font-size: 10px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-top: 2px;
+        }
+
+        .progress-issues {
+            display: grid;
+            gap: 6px;
+        }
+
+        .progress-issue {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .progress-issue .issue-icon {
+            flex-shrink: 0;
+            font-size: 11px;
+        }
+
+        .issue-icon.blocker { color: var(--danger); }
+        .issue-icon.next { color: var(--sage); }
+
+        @media (max-width: 1360px) {
+            .app {
+                grid-template-columns: 250px minmax(0, 1fr) 320px;
+            }
+        }
+
+        @media (max-width: 1180px) {
+            body {
+                overflow: auto;
+            }
+
+            .app {
+                height: auto;
+                min-height: 100vh;
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar,
+            .workspace,
+            .inspector {
+                min-height: 420px;
+            }
+
+            .overview-grid,
+            .project-grid-view,
+            .detail-layout,
+            .library-grid-body {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <div class="eyebrow">Research Hub</div>
+                <div class="brand-title" id="sidebar-project-title">Loading...</div>
+            </div>
+            <div class="sidebar-scroll">
+                <section class="sidebar-section">
+                    <h3 class="sidebar-label">Themes</h3>
+                    <div class="theme-list" id="theme-list"></div>
+                </section>
+                <section class="sidebar-section">
+                    <h3 class="sidebar-label">Projects In Theme</h3>
+                    <div class="project-list" id="project-nav-list"></div>
+                </section>
+            </div>
+        </aside>
+
+        <main class="workspace">
+            <div class="workspace-top">
+                <div>
+                    <h1 id="workspace-title">Loading...</h1>
+                </div>
+                <div class="workspace-meta">
+                    <div class="meta-pill" id="workspace-papers">Papers: -</div>
+                    <div class="meta-pill" id="workspace-coverage">Coverage: -</div>
+                    <div class="meta-pill" id="workspace-stage">Stage: -</div>
+                </div>
+            </div>
+
+            <div class="view-tabs">
+                <button class="view-tab active" data-view="overview">Overview</button>
+                <button class="view-tab" data-view="projects">Projects</button>
+                <button class="view-tab" data-view="library">Library</button>
+            </div>
+
+            <div class="workspace-body">
+                <section class="view-panel overview-grid active" id="view-overview">
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <div>
+                                <h2 class="panel-card-title">Research Progress</h2>
+                            </div>
+                        </div>
+                        <div class="panel-card-body detail-scroll"></div>
+                    </div>
+
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <div>
+                                <h2 class="panel-card-title">Coverage & Risks</h2>
+                            </div>
+                        </div>
+                        <div class="panel-card-body detail-scroll"></div>
+                    </div>
+                </section>
+
+                <section class="view-panel project-grid-view" id="view-projects">
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <div>
+                                <h2 class="panel-card-title">Project Workspace</h2>
+                            </div>
+                        </div>
+                        <div class="panel-card-body detail-scroll" id="project-workspace"></div>
+                    </div>
+
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <div>
+                                <h2 class="panel-card-title">Document Preview</h2>
+                            </div>
+                        </div>
+                        <div class="panel-card-body" id="project-doc-preview"></div>
+                    </div>
+                </section>
+
+                <section class="view-panel library-grid" id="view-library">
+                    <div class="panel-card">
+                        <div class="panel-card-body" style="padding-top:14px;">
+                            <div class="toolbar">
+                                <input id="paper-search" type="search" placeholder="Search title, venue, arXiv id...">
+                                <div class="toolbar-right">
+                                    <select id="card-filter">
+                                        <option value="all">All</option>
+                                        <option value="exported">Exported</option>
+                                        <option value="generated">Generated</option>
+                                        <option value="missing">Missing</option>
+                                    </select>
+                                    <select id="pdf-filter">
+                                        <option value="all">PDF: All</option>
+                                        <option value="yes">Has PDF</option>
+                                        <option value="no">No PDF</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="group-filter-row" id="group-filter-row"></div>
+                            <div class="detail-scroll">
+                                <table class="paper-table" id="paper-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-title" data-sort="title">Title</th>
+                                            <th class="col-venue" data-sort="venue">Venue</th>
+                                            <th class="col-year" data-sort="year">Year</th>
+                                            <th class="col-icon" data-sort="pdf">PDF</th>
+                                            <th class="col-icon" data-sort="card">Card</th>
+                                            <th class="col-aff">Affiliations</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="paper-table-body"></tbody>
+                                </table>
+                                <div class="table-footer" id="table-footer"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <aside class="inspector">
+            <div class="inspector-top">
+                <div class="eyebrow">Inspector</div>
+                <div class="inspector-title" id="inspector-title">Pipeline</div>
+            </div>
+            <div class="inspector-tabs">
+                <button class="inspector-tab active" data-inspector="pipeline">Pipeline</button>
+                <button class="inspector-tab" data-inspector="card">Card</button>
+            </div>
+            <div class="inspector-body" id="inspector-body"></div>
+        </aside>
+    </div>
+
+    <script>
+        const state = {
+            themeSlug: "",
+            themes: [],
+            themeOverview: null,
+            projects: [],
+            activity: [],
+            currentView: "overview",
+            currentInspector: "pipeline",
+            selectedProject: "",
+            projectDetail: null,
+            selectedDocumentId: null,
+            documentPreview: null,
+            selectedPaperGroup: "all",
+            papers: [],
+            filteredPapers: [],
+            selectedPaperId: null,
+            selectedCardPayload: null,
+            pipelineEvents: [],
+            pipelineSummary: {},
+        };
+
+        const themeList = document.getElementById("theme-list");
+        const projectNavList = document.getElementById("project-nav-list");
+        const projectWorkspace = document.getElementById("project-workspace");
+        const projectDocPreview = document.getElementById("project-doc-preview");
+        const groupFilterRow = document.getElementById("group-filter-row");
+        const paperCollection = document.getElementById("paper-collection");
+        const libraryDetail = document.getElementById("library-detail");
+        const inspectorBody = document.getElementById("inspector-body");
+        const paperSearch = document.getElementById("paper-search");
+        const cardFilter = document.getElementById("card-filter");
+
+        async function fetchJSON(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Request failed: ${url}`);
+            }
+            return response.json();
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function formatPercent(value) {
+            return `${Number(value || 0).toFixed(1)}%`;
+        }
+
+        function formatTimestamp(value) {
+            if (!value) return "unknown time";
+            try {
+                return new Date(value).toLocaleString("zh-CN");
+            } catch {
+                return value;
+            }
+        }
+
+        function switchView(view) {
+            state.currentView = view;
+            document.querySelectorAll(".view-tab").forEach(node => {
+                node.classList.toggle("active", node.dataset.view === view);
+            });
+            document.querySelectorAll(".view-panel").forEach(node => {
+                node.classList.toggle("active", node.id === `view-${view}`);
+            });
+            if (view === "library") {
+                state.currentInspector = "card";
+            } else if (state.currentInspector === "card") {
+                state.currentInspector = "pipeline";
+            }
+            renderInspector();
+        }
+
+        function switchInspector(tab) {
+            state.currentInspector = tab;
+            document.getElementById("inspector-title").textContent = tab === "pipeline" ? "Pipeline" : "Paper Card";
+            renderInspector();
+        }
+
+        function renderShellHeader() {
+            const overview = state.themeOverview;
+            const project = state.projects.find(p => p.slug === state.selectedProject);
+            document.getElementById("workspace-title").textContent = project?.short_title || overview?.title || "Research";
+            document.getElementById("sidebar-project-title").textContent = overview?.title || "Research";
+            document.getElementById("workspace-papers").textContent = `${overview?.paper_count || 0} papers · ${overview?.card_count || 0} cards`;
+            document.getElementById("workspace-coverage").textContent = `PDF ${formatPercent(overview?.pdf_coverage)} · Card ${formatPercent(overview?.card_coverage)}`;
+            document.getElementById("workspace-stage").textContent = project?.stage || "-";
+        }
+
+        function renderThemes() {
+            themeList.innerHTML = state.themes.map(theme => `
+                <button class="theme-chip ${theme.slug === state.themeSlug ? "active" : ""}" data-theme="${theme.slug}">
+                    <strong>${theme.title}</strong>
+                    <span>${theme.paper_count} papers \u00B7 ${theme.card_count} cards \u00B7 ${theme.project_count} projects</span>
+                </button>
+            `).join("");
+
+            themeList.querySelectorAll("[data-theme]").forEach(node => {
+                node.addEventListener("click", async () => {
+                    const slug = node.dataset.theme;
+                    if (slug === state.themeSlug) return;
+                    state.themeSlug = slug;
+                    const [overview, projects, activity] = await Promise.all([
+                        fetchJSON(`/api/themes/${slug}/overview`),
+                        fetchJSON(`/api/themes/${slug}/projects`),
+                        fetchJSON(`/api/activity`),
+                    ]);
+                    state.themeOverview = overview;
+                    state.projects = projects;
+                    state.activity = activity;
+                    state.selectedProject = projects[0]?.slug || "";
+                    renderThemes();
+                    renderShellHeader();
+                    renderProjectNav();
+                    renderOverview();
+                    if (state.selectedProject) {
+                        await loadProject(state.selectedProject);
+                    }
+                    await loadPipelineData();
+                    renderInspector();
+                });
+            });
+        }
+
+        function renderProjectNav() {
+            projectNavList.innerHTML = state.projects.map(project => `
+                <button class="project-nav ${project.slug === state.selectedProject ? "active" : ""}" data-project="${project.slug}">
+                    <strong>${project.short_title}</strong>
+                    <span>${project.title}</span>
+                    <div class="project-nav-meta">
+                        <div class="tiny-stat"><strong>${project.paper_count}</strong><span>Papers</span></div>
+                        <div class="tiny-stat"><strong>${project.card_count}</strong><span>Cards</span></div>
+                        <div class="tiny-stat"><strong>${project.health_score}</strong><span>Health</span></div>
+                    </div>
+                </button>
+            `).join("");
+
+            projectNavList.querySelectorAll("[data-project]").forEach(node => {
+                node.addEventListener("click", async () => {
+                    state.selectedProject = node.dataset.project;
+                    renderProjectNav();
+                    renderShellHeader();
+                    await loadProject(state.selectedProject);
+                });
+            });
+        }
+
+        function computeCompletion(project) {
+            // Weighted completion: papers(10%) + PDF(25%) + cards(35%) + docs(15%) + annotations(15%)
+            const total = project.paper_count || 0;
+            if (total === 0) return 0;
+            const pdfPct = (state.papers.filter(p => p.has_pdf).length / total) * 100;
+            const cardPct = project.card_coverage || 0;
+            const annotPct = ((project.annotated_count || 0) / total) * 100;
+            const hasPapers = total >= 5 ? 100 : (total / 5) * 100;
+            const docScore = Math.min(100, ((project.doc_count || 0) + (project.reference_count || 0)) * 15);
+            return Math.round(hasPapers * 0.10 + pdfPct * 0.25 + cardPct * 0.35 + docScore * 0.15 + annotPct * 0.15);
+        }
+
+        function renderOverview() {
+            const overview = state.themeOverview;
+            const projects = overview.projects || state.projects;
+
+            // Left panel: per-project progress cards
+            const leftPanel = document.querySelector("#view-overview .panel-card:first-child .panel-card-body");
+            leftPanel.innerHTML = projects.map(project => {
+                const pct = computeCompletion(project);
+                const pdfCount = state.papers.filter(p => p.has_pdf).length;
+                const missingPdf = (project.paper_count || 0) - pdfCount;
+                const missingCard = (project.paper_count || 0) - (project.card_count || 0);
+                return `
+                    <div class="progress-card" data-project-open="${project.slug}">
+                        <div class="progress-header">
+                            <div>
+                                <h3>${project.short_title}</h3>
+                                <span class="stage-badge ${project.stage}" style="margin-top:4px;">${project.stage}</span>
+                            </div>
+                            <div class="progress-pct">${pct}%</div>
+                        </div>
+                        <div class="progress-bar-outer">
+                            <div class="progress-bar-fill" style="width:${pct}%"></div>
+                        </div>
+                        <div class="progress-stats">
+                            <div class="progress-stat"><strong>${project.paper_count || 0}</strong><span>Papers</span></div>
+                            <div class="progress-stat"><strong>${pdfCount}</strong><span>PDFs</span></div>
+                            <div class="progress-stat"><strong>${project.card_count || 0}</strong><span>Cards</span></div>
+                            <div class="progress-stat"><strong>${project.annotated_count || 0}</strong><span>Annotated</span></div>
+                            <div class="progress-stat"><strong>${(project.doc_count || 0) + (project.reference_count || 0)}</strong><span>Docs</span></div>
+                        </div>
+                        <div class="progress-issues">
+                            ${(project.blockers || []).map(b => `<div class="progress-issue"><span class="issue-icon blocker">\u25CF</span>${escapeHtml(b)}</div>`).join("")}
+                            ${(project.next_steps || []).map(n => `<div class="progress-issue"><span class="issue-icon next">\u25B8</span>${escapeHtml(n)}</div>`).join("")}
+                            ${missingPdf > 0 ? `<div class="progress-issue"><span class="issue-icon blocker">\u25CF</span>${missingPdf} papers missing PDF</div>` : ""}
+                            ${missingCard > 0 ? `<div class="progress-issue"><span class="issue-icon blocker">\u25CF</span>${missingCard} papers missing card</div>` : ""}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            leftPanel.querySelectorAll("[data-project-open]").forEach(node => {
+                node.style.cursor = "pointer";
+                node.addEventListener("click", async () => {
+                    state.selectedProject = node.dataset.projectOpen;
+                    renderProjectNav();
+                    renderShellHeader();
+                    await loadProject(state.selectedProject);
+                    switchView("projects");
+                });
+            });
+
+            // Right panel: theme-level coverage + risks
+            const rightPanel = document.querySelector("#view-overview .panel-card:last-child .panel-card-body");
+            const completion = overview.health?.paper_completion || {};
+            rightPanel.innerHTML = `
+                <div class="coverage-track">
+                    ${[
+                        { label: "PDF Coverage", value: overview.pdf_coverage || 0 },
+                        { label: "Card Coverage", value: overview.card_coverage || 0 },
+                    ].map(item => `
+                        <div class="coverage-item">
+                            <div class="coverage-top">
+                                <span>${item.label}</span>
+                                <strong>${formatPercent(item.value)}</strong>
+                            </div>
+                            <div class="coverage-bar"><div class="coverage-fill" style="width:${Math.max(0, Math.min(100, item.value))}%"></div></div>
+                        </div>
+                    `).join("")}
+                </div>
+                <div style="height:14px"></div>
+                <div class="risk-list">
+                    ${(overview.risk_alerts || []).map(item => `
+                        <div class="risk-item">
+                            <div class="item-head">
+                                <div class="item-title">${item.title}</div>
+                                <span class="kind-badge ${item.level === "risk" ? "paper" : item.level === "watch" ? "doc" : "card"}">${item.level}</span>
+                            </div>
+                            <div class="item-copy">${item.detail}</div>
+                            <div class="item-meta">${item.action || ""}</div>
+                        </div>
+                    `).join("")}
+                    ${!(overview.risk_alerts || []).length ? `<div class="empty">No risk alerts.</div>` : ""}
+                </div>
+            `;
+        }
+
+        function renderMarkdown(text) {
+            if (!text) {
+                return `<div class="empty">No document content.</div>`;
+            }
+            const lines = text.split("\n");
+            const html = [];
+            let paragraph = [];
+            let listItems = [];
+            let ordered = false;
+            let inCode = false;
+            let codeBuffer = [];
+            let tableRows = [];
+
+            function flushParagraph() {
+                if (!paragraph.length) return;
+                html.push(`<p>${escapeHtml(paragraph.join(" "))}</p>`);
+                paragraph = [];
+            }
+
+            function flushList() {
+                if (!listItems.length) return;
+                const tag = ordered ? "ol" : "ul";
+                html.push(`<${tag}>${listItems.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</${tag}>`);
+                listItems = [];
+                ordered = false;
+            }
+
+            function flushCode() {
+                if (!codeBuffer.length) return;
+                html.push(`<pre>${escapeHtml(codeBuffer.join("\n"))}</pre>`);
+                codeBuffer = [];
+            }
+
+            function flushTable() {
+                if (!tableRows.length) return;
+                const [header, ...body] = tableRows;
+                html.push(`
+                    <table>
+                        <thead><tr>${header.map(cell => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead>
+                        <tbody>${body.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+                    </table>
+                `);
+                tableRows = [];
+            }
+
+            for (const rawLine of lines) {
+                const line = rawLine.replace(/\r$/, "");
+                const trimmed = line.trim();
+
+                if (trimmed.startsWith("```")) {
+                    flushParagraph();
+                    flushList();
+                    flushTable();
+                    if (inCode) {
+                        flushCode();
+                        inCode = false;
+                    } else {
+                        inCode = true;
+                    }
+                    continue;
+                }
+
+                if (inCode) {
+                    codeBuffer.push(line);
+                    continue;
+                }
+
+                if (!trimmed) {
+                    flushParagraph();
+                    flushList();
+                    flushTable();
+                    continue;
+                }
+
+                const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
+                if (headingMatch) {
+                    flushParagraph();
+                    flushList();
+                    flushTable();
+                    const level = headingMatch[1].length;
+                    html.push(`<h${level}>${escapeHtml(headingMatch[2])}</h${level}>`);
+                    continue;
+                }
+
+                if (trimmed.includes("|")) {
+                    const tableCells = trimmed.split("|").map(item => item.trim()).filter(Boolean);
+                    const separatorLike = tableCells.length && tableCells.every(cell => /^:?-{3,}:?$/.test(cell));
+                    if (tableCells.length >= 2) {
+                        flushParagraph();
+                        flushList();
+                        if (!separatorLike) {
+                            tableRows.push(tableCells);
+                        }
+                        continue;
+                    }
+                } else {
+                    flushTable();
+                }
+
+                const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+                if (bulletMatch) {
+                    flushParagraph();
+                    flushTable();
+                    if (listItems.length && ordered) {
+                        flushList();
+                    }
+                    ordered = false;
+                    listItems.push(bulletMatch[1]);
+                    continue;
+                }
+
+                const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+                if (orderedMatch) {
+                    flushParagraph();
+                    flushTable();
+                    if (listItems.length && !ordered) {
+                        flushList();
+                    }
+                    ordered = true;
+                    listItems.push(orderedMatch[2]);
+                    continue;
+                }
+
+                flushList();
+                flushTable();
+                paragraph.push(trimmed);
+            }
+
+            flushParagraph();
+            flushList();
+            flushTable();
+            flushCode();
+            return `<div class="md-render">${html.join("")}</div>`;
+        }
+
+        function renderProjectWorkspace(detail) {
+            projectWorkspace.innerHTML = `
+                <div class="detail-layout">
+                    <div class="detail-column">
+                        <div class="monitor-cards">
+                            ${(detail.monitor || []).map(item => `
+                                <div class="monitor-card">
+                                    <strong>${item.value}</strong>
+                                    <span>${item.label}</span>
+                                </div>
+                            `).join("")}
+                        </div>
+                        <div class="detail-box">
+                            <h4>Stage: ${detail.stage} &middot; ${detail.status} &middot; Updated ${detail.updated_label || formatTimestamp(detail.last_updated_at)}</h4>
+                            <p>${detail.summary || "No summary yet."}</p>
+                        </div>
+                        <div class="detail-box">
+                            <h4>Blockers</h4>
+                            ${detail.blockers?.length ? `<ul class="flat-list">${detail.blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<div class="empty">No blockers.</div>`}
+                        </div>
+                        <div class="detail-box">
+                            <h4>Next Steps</h4>
+                            ${detail.next_steps?.length ? `<ul class="flat-list">${detail.next_steps.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<div class="empty">No next steps.</div>`}
+                        </div>
+                        <div class="detail-box">
+                            <h4>Documentation</h4>
+                            ${detail.documents?.length ? `
+                                <div class="doc-list">
+                                    ${detail.documents.map(doc => `
+                                        <button class="doc-item ${doc.id === state.selectedDocumentId ? "active" : ""}" data-doc-id="${doc.id}">
+                                            ${doc.label}/${doc.id}
+                                            <small>${formatTimestamp(doc.updated_at)}</small>
+                                        </button>
+                                    `).join("")}
+                                </div>
+                            ` : `<div class="empty">No documents.</div>`}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            projectWorkspace.querySelectorAll("[data-doc-id]").forEach(node => {
+                node.addEventListener("click", () => loadDocumentPreview(node.dataset.docId));
+            });
+        }
+
+        function renderProjectDocPreview() {
+            const preview = state.documentPreview;
+            projectDocPreview.innerHTML = preview ? `
+                <div class="doc-preview">
+                    <div class="doc-preview-meta">${preview.path} · ${formatTimestamp(preview.updated_at)}</div>
+                    ${renderMarkdown(preview.content)}
+                </div>
+            ` : `<div class="empty">Select a document to preview it here.</div>`;
+        }
+
+        function renderGroupFilters() {
+            const groups = new Map();
+            for (const paper of state.papers) {
+                if (paper.group) {
+                    groups.set(paper.group.key, paper.group.label);
+                }
+            }
+            const chips = [{ key: "all", label: "All Groups" }].concat(Array.from(groups.entries()).map(([key, label]) => ({ key, label })));
+            groupFilterRow.innerHTML = chips.map(chip => `
+                <button class="group-filter-chip ${chip.key === state.selectedPaperGroup ? "active" : ""}" data-group-key="${chip.key}">
+                    ${chip.label}
+                </button>
+            `).join("");
+            groupFilterRow.querySelectorAll("[data-group-key]").forEach(node => {
+                node.addEventListener("click", () => {
+                    state.selectedPaperGroup = node.dataset.groupKey;
+                    renderGroupFilters();
+                    applyPaperFilters();
+                });
+            });
+        }
+
+        const PAGE_SIZE = 50;
+        let currentPage = 0;
+        let sortColumn = "year";
+        let sortDir = "desc";
+
+        const pdfFilter = document.getElementById("pdf-filter");
+        const paperTableBody = document.getElementById("paper-table-body");
+        const tableFooter = document.getElementById("table-footer");
+
+        function applyPaperFilters() {
+            const query = paperSearch.value.trim().toLowerCase();
+            const cardState = cardFilter.value;
+            const pdfState = pdfFilter.value;
+            state.filteredPapers = state.papers.filter(paper => {
+                const haystack = `${paper.title} ${paper.venue} ${paper.arxiv_id}`.toLowerCase();
+                const matchesQuery = !query || haystack.includes(query);
+                const matchesCard = cardState === "all" || paper.card_status === cardState;
+                const matchesPdf = pdfState === "all" || (pdfState === "yes" ? paper.has_pdf : !paper.has_pdf);
+                const matchesGroup = state.selectedPaperGroup === "all" || paper.group?.key === state.selectedPaperGroup;
+                return matchesQuery && matchesCard && matchesPdf && matchesGroup;
+            });
+            sortPapers();
+            currentPage = 0;
+            renderLibrary();
+        }
+
+        function sortPapers() {
+            const col = sortColumn;
+            const dir = sortDir === "asc" ? 1 : -1;
+            state.filteredPapers.sort((a, b) => {
+                let va, vb;
+                if (col === "title") { va = (a.title || "").toLowerCase(); vb = (b.title || "").toLowerCase(); }
+                else if (col === "venue") { va = (a.venue || "").toLowerCase(); vb = (b.venue || "").toLowerCase(); }
+                else if (col === "year") { va = a.year || 0; vb = b.year || 0; }
+                else if (col === "pdf") { va = a.has_pdf ? 1 : 0; vb = b.has_pdf ? 1 : 0; }
+                else if (col === "card") {
+                    const order = { exported: 2, generated: 1, missing: 0 };
+                    va = order[a.card_status] ?? 0; vb = order[b.card_status] ?? 0;
+                }
+                else { va = 0; vb = 0; }
+                if (va < vb) return -1 * dir;
+                if (va > vb) return 1 * dir;
+                return 0;
+            });
+        }
+
+        function cardIcon(status) {
+            if (status === "exported") return `<span class="icon-ok" title="exported">\u2713</span>`;
+            if (status === "generated") return `<span class="icon-gen" title="generated">\u25CB</span>`;
+            return `<span class="icon-miss" title="missing">\u2717</span>`;
+        }
+
+        function pdfIcon(hasPdf) {
+            return hasPdf ? `<span class="icon-ok" title="PDF ready">\u2713</span>` : `<span class="icon-miss" title="no PDF">\u2717</span>`;
+        }
+
+        function formatAffiliations(affiliations) {
+            if (!affiliations || !affiliations.length) return `<span class="cell-aff">-</span>`;
+            const short = affiliations.slice(0, 2).join(", ");
+            const full = affiliations.join(", ");
+            return `<span class="cell-aff" title="${escapeHtml(full)}">${escapeHtml(short)}${affiliations.length > 2 ? " +" + (affiliations.length - 2) : ""}</span>`;
+        }
+
+        function renderLibrary() {
+            const total = state.filteredPapers.length;
+            const start = currentPage * PAGE_SIZE;
+            const page = state.filteredPapers.slice(start, start + PAGE_SIZE);
+
+            if (!total) {
+                paperTableBody.innerHTML = `<tr><td colspan="6" class="empty">No papers match filters.</td></tr>`;
+                tableFooter.innerHTML = "";
+                return;
+            }
+
+            paperTableBody.innerHTML = page.map(paper => `
+                <tr class="${paper.id === state.selectedPaperId ? "active" : ""}" data-paper-id="${paper.id}">
+                    <td class="cell-title">${escapeHtml(paper.title)}</td>
+                    <td class="cell-venue">${escapeHtml(paper.venue || "-")}</td>
+                    <td class="cell-year">${paper.year || "-"}</td>
+                    <td>${pdfIcon(paper.has_pdf)}</td>
+                    <td>${cardIcon(paper.card_status)}</td>
+                    <td>${formatAffiliations(paper.affiliations)}</td>
+                </tr>
+            `).join("");
+
+            paperTableBody.querySelectorAll("[data-paper-id]").forEach(node => {
+                node.addEventListener("click", async () => {
+                    const paperId = Number(node.dataset.paperId);
+                    state.selectedPaperId = paperId;
+                    renderLibrary();
+                    await openCard(paperId);
+                });
+            });
+
+            // Update sort indicators
+            document.querySelectorAll(".paper-table thead th").forEach(th => {
+                th.classList.remove("sorted-asc", "sorted-desc");
+                if (th.dataset.sort === sortColumn) {
+                    th.classList.add(sortDir === "asc" ? "sorted-asc" : "sorted-desc");
+                }
+            });
+
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            if (totalPages > 1) {
+                tableFooter.innerHTML = `
+                    ${currentPage > 0 ? `<button class="group-filter-chip" id="page-prev">\u25C0 Prev</button>` : ""}
+                    <span>${start + 1}\u2013${Math.min(start + PAGE_SIZE, total)} of ${total}</span>
+                    ${currentPage < totalPages - 1 ? `<button class="group-filter-chip" id="page-next">Next \u25B6</button>` : ""}
+                `;
+                document.getElementById("page-prev")?.addEventListener("click", () => { currentPage--; renderLibrary(); });
+                document.getElementById("page-next")?.addEventListener("click", () => { currentPage++; renderLibrary(); });
+            } else {
+                tableFooter.innerHTML = `<span>${total} papers</span>`;
+            }
+        }
+
+        function buildSection(title, content) {
+            return `
+                <section class="card-section">
+                    <h4>${title}</h4>
+                    ${content}
+                </section>
+            `;
+        }
+
+        function formatList(items, emptyText = "No content.") {
+            if (!items || !items.length) {
+                return `<div class="empty">${emptyText}</div>`;
+            }
+            return `<ul>${items.map(item => `<li>${item}</li>`).join("")}</ul>`;
+        }
+
+        function buildMetadataGrid(card) {
+            const fields = [
+                ["Venue", card.venue],
+                ["Year", card.year],
+                ["PDF / Source", card.pdf_path || card.source_url || ""],
+                ["Authors", Array.isArray(card.authors) ? card.authors.join(", ") : card.authors || ""],
+            ];
+            const cells = fields
+                .filter(([, value]) => value)
+                .map(([label, value]) => `
+                    <div class="metadata-item">
+                        <div class="metadata-label">${label}</div>
+                        <div class="metadata-value">${value}</div>
+                    </div>
+                `)
+                .join("");
+            return cells ? `<div class="metadata-grid">${cells}</div>` : `<div class="empty">No metadata available.</div>`;
+        }
+
+        function formatStructuredResults(results) {
+            if (!results || !results.length) {
+                return `<div class="empty">No structured results yet.</div>`;
+            }
+            return `<ul>${results.map(item => `<li>${Object.entries(item).map(([key, value]) => `<strong>${key}</strong>: ${value}`).join(" · ")}</li>`).join("")}</ul>`;
+        }
+
+        function formatEvidenceList(evidence) {
+            if (!evidence || !evidence.length) {
+                return `<div class="empty">No evidence snippets extracted.</div>`;
+            }
+            return `<ul>${evidence.map(line => `<li>${line}</li>`).join("")}</ul>`;
+        }
+
+        function formatArtifactLinks(links) {
+            if (!links || !links.length) {
+                return `<div class="empty">No artifact links captured.</div>`;
+            }
+            return `<div class="artifact-links">${links.map(href => `<a href="${href}" target="_blank" rel="noreferrer">${href}</a>`).join("")}</div>`;
+        }
+
+        function computePipelineStatus() {
+            const papers = state.papers;
+            const total = papers.length;
+            const withPdf = papers.filter(p => p.has_pdf).length;
+            const withCard = papers.filter(p => p.card_status === "exported" || p.card_status === "generated").length;
+            const missingPdf = total - withPdf;
+            const missingCard = total - withCard;
+            const annotated = papers.filter(p => p.status === "annotated").length;
+            const failedPapers = papers.filter(p => !p.has_pdf && p.card_status === "missing");
+            return { total, withPdf, withCard, missingPdf, missingCard, annotated, failedPapers };
+        }
+
+        function renderInspector() {
+            document.querySelectorAll(".inspector-tab").forEach(node => {
+                node.classList.toggle("active", node.dataset.inspector === state.currentInspector);
+            });
+
+            if (state.currentInspector === "pipeline") {
+                document.getElementById("inspector-title").textContent = "Pipeline";
+                const ps = computePipelineStatus();
+                const events = state.pipelineEvents || [];
+                const summary = state.pipelineSummary || {};
+
+                const eventIcon = (type) => {
+                    if (type.endsWith("_ok")) return `<span class="icon-ok">\u2713</span>`;
+                    if (type.endsWith("_fail")) return `<span class="icon-miss">\u2717</span>`;
+                    if (type.endsWith("_start")) return `<span class="icon-gen">\u25CB</span>`;
+                    return "";
+                };
+                const eventLabel = (type) => type.replace(/_/g, " ");
+
+                inspectorBody.innerHTML = `
+                    <div class="pipeline-summary">
+                        <div class="pipeline-counts">
+                            <div class="pipeline-count">
+                                <strong>${ps.total}</strong>
+                                <span>Total</span>
+                            </div>
+                            <div class="pipeline-count ok">
+                                <strong>${ps.withPdf}</strong>
+                                <span>PDF Ready</span>
+                            </div>
+                            <div class="pipeline-count ok">
+                                <strong>${ps.withCard}</strong>
+                                <span>Card Ready</span>
+                            </div>
+                            <div class="pipeline-count ${ps.missingPdf > 0 ? "warn" : "ok"}">
+                                <strong>${ps.missingPdf}</strong>
+                                <span>No PDF</span>
+                            </div>
+                            <div class="pipeline-count ${ps.missingCard > 0 ? "warn" : "ok"}">
+                                <strong>${ps.missingCard}</strong>
+                                <span>No Card</span>
+                            </div>
+                            <div class="pipeline-count">
+                                <strong>${ps.annotated}</strong>
+                                <span>Annotated</span>
+                            </div>
+                        </div>
+                    </div>
+                    ${summary.download_ok || summary.download_fail || summary.annotate_ok ? `
+                        <div class="pipeline-section">
+                            <h4>7-Day Summary</h4>
+                            <div class="pipeline-counts" style="grid-template-columns: repeat(2, 1fr);">
+                                <div class="pipeline-count ok"><strong>${summary.download_ok || 0}</strong><span>Downloaded</span></div>
+                                <div class="pipeline-count ${summary.download_fail ? "warn" : ""}"><strong>${summary.download_fail || 0}</strong><span>Failed</span></div>
+                                <div class="pipeline-count ok"><strong>${summary.annotate_ok || 0}</strong><span>Annotated</span></div>
+                                <div class="pipeline-count ${summary.annotate_fail ? "warn" : ""}"><strong>${summary.annotate_fail || 0}</strong><span>Annot. Failed</span></div>
+                            </div>
+                        </div>
+                    ` : ""}
+                    ${ps.failedPapers.length ? `
+                        <div class="pipeline-section">
+                            <h4>Needs Attention</h4>
+                            <div class="attention-list">
+                                ${ps.failedPapers.slice(0, 10).map(p => `
+                                    <div class="attention-item">
+                                        <div class="item-title">${escapeHtml(p.title?.slice(0, 60) || "Untitled")}${p.title?.length > 60 ? "..." : ""}</div>
+                                        <div class="item-meta">No PDF, No Card \u00B7 ${p.venue || "?"} ${p.year || ""}</div>
+                                    </div>
+                                `).join("")}
+                                ${ps.failedPapers.length > 10 ? `<div class="item-meta">+${ps.failedPapers.length - 10} more</div>` : ""}
+                            </div>
+                        </div>
+                    ` : ""}
+                    <div class="pipeline-section">
+                        <h4>Recent Events</h4>
+                        ${events.length ? `
+                            <div class="activity-list">
+                                ${events.slice(0, 15).map(ev => `
+                                    <div class="activity-item compact">
+                                        <div class="item-head">
+                                            <div class="item-title">${eventIcon(ev.event_type)} ${escapeHtml(ev.paper_title?.slice(0, 40) || "Paper #" + ev.paper_id)}${ev.paper_title?.length > 40 ? "..." : ""}</div>
+                                        </div>
+                                        <div class="item-meta">${eventLabel(ev.event_type)}${ev.detail ? " \u2014 " + escapeHtml(ev.detail.slice(0, 50)) : ""} \u00B7 ${formatTimestamp(ev.created_at)}</div>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        ` : `<div class="empty">No pipeline events yet. Run paper_acquire to populate.</div>`}
+                    </div>
+                    <div style="text-align:center; margin-top:12px;">
+                        <button class="group-filter-chip" id="pipeline-refresh">\u21BB Refresh</button>
+                    </div>
+                `;
+                document.getElementById("pipeline-refresh")?.addEventListener("click", loadPipelineData);
+                return;
+            }
+
+            document.getElementById("inspector-title").textContent = "Paper Card";
+            if (!state.selectedCardPayload) {
+                inspectorBody.innerHTML = `<div class="empty">Open a paper from the library to inspect its card here.</div>`;
+                return;
+            }
+
+            const payload = state.selectedCardPayload;
+            const { paper, card, card_status, card_path } = payload;
+            if (!card) {
+                inspectorBody.innerHTML = `<div class="empty">Card payload could not be loaded.</div>`;
+                return;
+            }
+            const evidence = (card.evidence || []).map(item => `${item.section || "section"}: ${item.snippet || ""}`);
+            inspectorBody.innerHTML = `
+                <div class="detail-box" style="margin-bottom:12px;">
+                    <h4>${paper.title}</h4>
+                    <p>${paper.venue || "Unknown venue"} · ${paper.year || "-"} · card ${card_status}${card_path ? `<br>${card_path}` : ""}</p>
+                </div>
+                <div class="card-sections">
+                    ${buildSection("Paper Metadata", buildMetadataGrid(card))}
+                    ${buildSection("Core Idea", `<p>${card.core_idea || card.motivation || "No summary."}</p>`)}
+                    ${buildSection("Method Summary", `<p>${card.method_summary || "No method summary."}</p>`)}
+                    ${buildSection("Key Results", formatList(card.key_results || [], "No key results."))}
+                    ${buildSection("Structured Results", formatStructuredResults(card.structured_results || []))}
+                    ${buildSection("Limitations", formatList(card.limitations || [], "No limitations extracted."))}
+                    ${buildSection("Evidence", formatEvidenceList(evidence))}
+                    ${buildSection("Artifact Links", formatArtifactLinks(card.artifact_links || []))}
+                </div>
+            `;
+        }
+
+        async function openCard(paperId) {
+            const payload = await fetchJSON(`/api/papers/${paperId}/card`);
+            state.selectedCardPayload = payload;
+            state.selectedPaperId = paperId;
+            state.currentInspector = "card";
+            renderLibrary();
+            renderInspector();
+        }
+
+        async function loadDocumentPreview(docId) {
+            if (!state.projectDetail) return;
+            state.selectedDocumentId = docId;
+            state.documentPreview = await fetchJSON(`/api/projects/${state.selectedProject}/documents/${encodeURIComponent(docId)}`);
+            renderProjectWorkspace(state.projectDetail);
+            renderProjectDocPreview();
+        }
+
+        async function loadProject(projectSlug) {
+            const [detail, papers] = await Promise.all([
+                fetchJSON(`/api/projects/${projectSlug}`),
+                fetchJSON(`/api/projects/${projectSlug}/papers`),
+            ]);
+            state.projectDetail = detail;
+            state.papers = papers;
+            state.selectedPaperGroup = "all";
+            state.selectedDocumentId = detail.documents?.length ? detail.documents[0].id : null;
+            state.documentPreview = state.selectedDocumentId
+                ? await fetchJSON(`/api/projects/${projectSlug}/documents/${encodeURIComponent(state.selectedDocumentId)}`)
+                : null;
+            state.selectedPaperId = papers[0]?.id || null;
+
+            renderProjectWorkspace(detail);
+            renderProjectDocPreview();
+            renderGroupFilters();
+            applyPaperFilters();
+            renderInspector();
+        }
+
+        async function loadPipelineData() {
+            try {
+                const data = await fetchJSON("/api/pipeline/events");
+                state.pipelineEvents = data.events || [];
+                state.pipelineSummary = data.summary || {};
+                if (state.currentInspector === "pipeline") {
+                    renderInspector();
+                }
+            } catch (err) {
+                logger_debug("Pipeline data fetch failed:", err);
+            }
+        }
+
+        function logger_debug(...args) {
+            if (typeof console !== "undefined") console.debug(...args);
+        }
+
+        // Auto-refresh pipeline every 30s when tab is visible and pipeline inspector is active
+        setInterval(() => {
+            if (document.visibilityState === "visible" && state.currentInspector === "pipeline") {
+                loadPipelineData();
+            }
+        }, 30000);
+
+        async function init() {
+            const [themes, overview, projects, activity] = await Promise.all([
+                fetchJSON(`/api/themes`),
+                fetchJSON(`/api/themes/${state.themeSlug}/overview`),
+                fetchJSON(`/api/themes/${state.themeSlug}/projects`),
+                fetchJSON(`/api/activity`),
+            ]);
+
+            state.themes = themes;
+            state.themeOverview = overview;
+            state.projects = projects;
+            state.activity = activity;
+
+            renderThemes();
+            renderShellHeader();
+            renderProjectNav();
+            renderOverview();
+            await loadProject(state.selectedProject);
+            await loadPipelineData();
+            renderInspector();
+        }
+
+        document.querySelectorAll(".view-tab").forEach(node => {
+            node.addEventListener("click", () => switchView(node.dataset.view));
+        });
+
+        document.querySelectorAll(".inspector-tab").forEach(node => {
+            node.addEventListener("click", () => switchInspector(node.dataset.inspector));
+        });
+
+        paperSearch.addEventListener("input", applyPaperFilters);
+        cardFilter.addEventListener("change", applyPaperFilters);
+        pdfFilter.addEventListener("change", applyPaperFilters);
+
+        document.querySelectorAll(".paper-table thead th[data-sort]").forEach(th => {
+            th.addEventListener("click", () => {
+                const col = th.dataset.sort;
+                if (sortColumn === col) {
+                    sortDir = sortDir === "asc" ? "desc" : "asc";
+                } else {
+                    sortColumn = col;
+                    sortDir = col === "title" || col === "venue" ? "asc" : "desc";
+                }
+                sortPapers();
+                currentPage = 0;
+                renderLibrary();
+            });
+        });
+
+        init().catch(error => {
+            document.body.innerHTML = `<div style="padding:20px;"><div class="empty"><strong>Dashboard failed to load</strong><br>${escapeHtml(error.message)}</div></div>`;
+        });
+    </script>
+</body>
+</html>
