@@ -31,5 +31,6 @@ dev = [
 
 [project.scripts]
 rh = "research_harness.cli:main"
+rhub = "research_harness.cli:main"
 research-harness = "research_harness.cli:main"
 claude-admin = "research_harness.claude_admin:main"
