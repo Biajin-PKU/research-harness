@@ -9,131 +9,181 @@
 </p>
 
 <p align="center">
-  <b>Engineering Trust into Autonomous Discovery.</b>
+  An agent harness for scientific literature work — persistent state, typed primitives, stage-gated progression, and provenance on every recorded call.
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"/></a>
-  <img src="https://img.shields.io/badge/tests-987%2B-green.svg" alt="Tests"/>
-  <img src="https://img.shields.io/badge/MCP-112_tools-orange.svg" alt="MCP tools"/>
-  <img src="https://img.shields.io/badge/primitives-69-purple.svg" alt="Primitives"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License"/></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python"/>
-  <img src="https://img.shields.io/badge/status-v0.1.0-yellow.svg" alt="Status"/>
+  <img src="https://img.shields.io/badge/tests-987%2B-green.svg" alt="Tests"/>
+  <img src="https://img.shields.io/badge/primitives-69-purple.svg" alt="Primitives"/>
+  <img src="https://img.shields.io/badge/MCP-112_tools-orange.svg" alt="MCP tools"/>
 </p>
 
 ---
 
-```text
-   init  ─▶  build  ─▶  analyze  ─▶  propose  ─▶  experiment  ─▶  write
-     │         │          │           │              │            │
-     ▼         ▼          ▼           ▼              ▼            ▼
-  ┌──gate──┬──gate──┬───gate───┬───gate───┬────gate────┬──gate──┐
-  │artifact│ claims │   gaps   │ proposal │   results  │ paper  │
-  └────────┴────────┴──────────┴──────────┴────────────┴────────┘
-```
+## What It Is
 
-Every arrow is a **typed evidence gate**. No gate opens without the right artifact.
-No primitive runs without a provenance record. **No number leaves the registry unverified.**
+Research Harness is the execution and state layer underneath an agent that does literature review, proposal writing, experiment coordination, and paper drafting. It runs the loop — gather evidence, act on it, verify the result — and persists every step so the next session (human or agent) can pick up where the last one stopped.
 
----
+Concretely, it is:
 
-## Why Research Harness?
+- a **state layer** — one SQLite `pool.db` holding papers, cards, deep-reading notes, claims, artifacts, and provenance records;
+- a **primitive layer** — 69 typed research operations (`paper_search`, `claim_extract`, `gap_detect`, `adversarial_review`, `section_draft`, `paper_verify_numbers`, …) registered once and exposed as 112 MCP tools, a Python API, and a `rh` CLI;
+- a **control layer** — six stages (`init → build → analyze → propose → experiment → write`), each advancing only when the previous stage has produced typed artifacts that satisfy the gate at the boundary.
 
-The AI-research space keeps shipping the same two things:
+The word *harness* follows Anthropic's engineering framing[^1]: it is the system that turns a model into an agent by orchestrating tool calls, preserving state across turns, and recording what happened. Research Harness applies that framing to research work.
 
-| Pattern | What it gives you | What it misses |
-|---------|-------------------|----------------|
-| 🤖 **The autonomous pipeline** (idea → paper in N stages) | Push-button automation | Black box, hallucinated citations, no checkpoint you can audit |
-| 📚 **The skill library** (folder of markdown/TS prompts) | Composability, no lock-in | No state, no provenance, every session starts from zero |
+[^1]: See Anthropic Engineering, *Demystifying evals for AI agents* (Jan 2026) and *Effective harnesses for long-running agents* (Nov 2025) for the underlying definition of an agent harness.
 
-**Research Harness is neither.** It's the **infrastructure** those apps could run on —
-an engineering framework that makes research reproducible, queryable, and hand-off-able
-between agents *and* humans.
+## Why It Exists
 
-We chose the name on purpose. A harness doesn't climb the mountain. **It makes sure you don't fall.**
+The design targets three recurring needs in literature-heavy research:
 
----
+1. **Continuity.** A paper project runs for weeks or months. Ingested papers, extracted claims, and marked gaps have to survive session boundaries, model swaps, and human hand-offs.
+2. **Auditability.** Every claim that lands in a draft should trace back to something concrete — a paper, an extracted quote, an experiment run, a verified number.
+3. **Reviewability at stage boundaries.** Between literature survey and proposal, between proposal and experiment, between experiment and write-up, a human needs a clean checkpoint: typed artifacts they can review directly.
 
-## The Three Pillars
+Research Harness makes those three requirements first-class: state persists in the database, tracked primitive calls are recorded with provenance, and stages only advance when the required evidence is typed and present.
 
-### 🛡️ 1. Evidence-Gated Orchestration
-Six stages, typed gates between every one. A gate is not a prompt — it's a **contract**:
-it inspects the artifacts produced by the previous stage and refuses to open if the
-proof isn't there. Not a linear pipeline. A state machine with invariants.
+## Who It's For
 
-### 🗄️ 2. A Paper Database That Outlives Your Sessions
-A single **SQLite `pool.db`** that survives projects, restarts, collaborators:
+- **Researchers** running literature-heavy projects (PhD, applied labs, industry research) who want an agent in the loop while keeping the loop reviewable.
+- **Agent engineers** building domain harnesses on top of MCP clients (Claude Code, Codex, custom runners) who need a worked reference for state, gates, and provenance.
+- **Reproducibility-minded teams** that need citation integrity and number-to-experiment traceability on artifacts an agent produced.
 
-- De-duplicated paper records (arXiv, DOI, S2 IDs all merged)
-- Full-text PDFs, paper cards, deep-reading notes, claim extractions
-- Affiliation enrichment, citation-graph expansion, coverage tracking
-- Queryable from `sqlite3`, Pandas, DuckDB, or any SQL tool you already know
+Best fit when a human reviews artifacts at stage boundaries — that is where the design effort is concentrated.
 
-No markdown wiki to rebuild. No "dump folder" that rots.
-**One database for your whole research life.**
+## Quickstart
 
-### 🔬 3. Provenance on Every Call
-Every primitive execution is recorded with model, cost, input/output hashes, and
-artifact lineage (`derived_from`, `consumed_by`). When you ship a paper,
-`paper_verify_numbers` cross-checks every figure against a **verified number registry**
-built from your actual experiment runs. Fabrication is not a failure mode — it's impossible.
-
----
-
-## Feature Highlights
-
-- 🎯 **69 primitives → 112 MCP tools** — search, extract, gate, review, draft, verify
-- ⚖️ **Dual-axis execution** — `workflow_mode` × `autonomy_mode` (dial your risk)
-- 🔁 **Cross-model adversarial review** — independent challenge/response at high-stakes checkpoints
-- 🧩 **Plugin manifest** — add primitives, gates, stages, backends via one YAML file
-- 🌐 **Client-agnostic** — MCP / Python API / CLI, 100% primitive coverage on all three
-- 🎨 **Figure generation** — `figure_plan` + `figure_generate` via fal.ai render paper-ready architecture diagrams straight into your LaTeX
-- 🪶 **Domestic-friendly LLMs** — Kimi / Moonshot built in (Qwen, DeepSeek, GLM on the way)
-- 📊 **Local web dashboard** — `http://127.0.0.1:18080` for live pipeline monitoring
-- ✅ **987+ tests** across three packages
-
----
-
-## Three Ways to Use
-
-Pick your surface. All three share the same database and provenance trail.
-
-| Path | Best for | How to start |
-|------|----------|--------------|
-| 🤖 **MCP client** (Claude Code, Codex) | Agentic sessions, chat-driven workflows | 5-line config — [jump ↓](#mcp-server) |
-| 🐍 **Python API** | Notebooks, pipelines, existing codebases | `from research_harness import ResearchAPI` |
-| ⌨️ **`rh` CLI** | Terminal, shell, CI | `rh topic init "my-topic"` |
-
-> No MCP client required. The Python API and CLI expose 100% of the primitive surface;
-> MCP is just one of three transports.
-
----
-
-## Quick Start
+Requires Python 3.10+. One LLM API key (OpenAI, Anthropic, or Kimi) is enough to start.
 
 ```bash
 git clone https://github.com/your-org/research-harness.git
 cd research-harness
-./setup.sh                          # venv or conda, auto-detected
-cp .env.example .env                # add ONE LLM key (see below)
-rh topic init "my-research-topic"   # you're in
+./setup.sh                    # creates venv, installs the three packages
+cp .env.example .env          # add one API key
+rh topic init "my-topic"      # registers a research topic
 ```
 
-**Minimum API keys — pick any one:**
+Verify the install:
 
 ```bash
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-KIMI_API_KEY=sk-...          # Kimi / Moonshot — works from mainland China
+python -m pytest packages/ -q --ignore=packages/research_harness_eval
+# 987+ passed
+```
+
+See [`docs/quickstart.md`](docs/quickstart.md) for the full setup walkthrough, including Conda, GPU, and offline notes.
+
+## A First End-to-End Run
+
+Same autonomous workflow, three entry points — pick the one that fits your session. All three drive the project through the six stages and pause at the same human-only checkpoints (direction selection, experiment-design approval, finalize). All three write to the same `pool.db`, so you can start in one and resume in another.
+
+Running example below: a two-seed project on *diffusion-bidding*, running `init → build → analyze → propose`, then stopping before `experiment` for human review.
+
+### 1. Vibe-coding — Claude Code / Codex over MCP
+
+With the `research-harness` MCP server configured (see [MCP — Claude Code](#mcp--claude-code)), drive the run in natural language. The agent calls `orchestrator_resume` with `stop_before="experiment"`:
+
+```
+You:   Start a research project "paper-01" under topic "diffusion-bidding".
+       Seed papers: arXiv 2407.15686 and 2404.10702. Run the pipeline up to
+       the experiment stage, then stop for me to review the direction.
+
+Agent: [calls paper_ingest twice, orchestrator_init, orchestrator_resume
+        with mode="standard", stop_before="experiment"]
+       Ran init → build → analyze → propose. Paused before `experiment`.
+       direction_ranking artifact has 3 candidates (scored 4.6 / 4.1 / 3.8);
+       gap_detect found 7 open gaps; adversarial_review raised 2 objections
+       on candidate #1. Want me to open them?
+
+You:   Show candidate #2's artifact, then resume to the next checkpoint.
+
+Agent: [calls orchestrator_artifacts, reads candidate #2, then
+        orchestrator_resume with stop_before="finalize"]
+       ...
+```
+
+This is the canonical flow when the driver is an agent. Every tool call the agent makes is recorded in `pool.db` alongside the artifacts, so a teammate opening the same database later sees the full trail.
+
+### 2. CLI — `rh auto-runner`
+
+Same flow, scripted. No MCP client required — suited for CI, cron, or remote shells.
+
+```bash
+# Seed the topic and ingest starter papers
+rh topic init "diffusion-bidding"
+rh paper ingest --arxiv-id 2407.15686 --topic diffusion-bidding
+rh paper ingest --arxiv-id 2404.10702 --topic diffusion-bidding
+
+# Create the project and launch the autonomous runner
+rh project add --topic diffusion-bidding --name paper-01
+rh auto-runner start --project-id 1 --mode standard \
+  --direction "Hierarchical diffusion planner for cross-channel budget allocation"
+
+# Runner advances init → build → analyze → propose, then pauses at a human
+# checkpoint. Review the artifacts it produced:
+rh auto-runner status     --project-id 1
+rh orchestrator artifacts --topic diffusion-bidding --project paper-01 --stage propose
+
+# Resume — runner continues until the next human checkpoint.
+rh auto-runner resume --project-id 1
+```
+
+### 3. Python — `run_project` directly
+
+Same flow as a function call. Useful inside a notebook, a larger training pipeline, or any code that already imports `research_harness`.
+
+```python
+from research_harness.auto_runner.runner import run_project, resume_project, get_status
+from research_harness.api import ResearchAPI
+
+api = ResearchAPI()                                    # resolves pool.db from env
+topic_id   = api.topic_init("diffusion-bidding")
+api.paper_ingest(arxiv_id="2407.15686", topic_id=topic_id)
+api.paper_ingest(arxiv_id="2404.10702", topic_id=topic_id)
+project_id = api.project_add(topic_id=topic_id, name="paper-01")
+
+result = run_project(
+    project_id,
+    topic_id=topic_id,
+    direction="Hierarchical diffusion planner for cross-channel budget allocation",
+    mode="standard",
+)
+# result = {"status": "paused", "current_stage": "propose", ...}
+
+# human review here — inspect artifacts, edit, decide
+print(get_status(project_id))
+
+# resume to the next checkpoint (or to completion)
+run_again = resume_project(project_id)
 ```
 
 ---
 
-## MCP Server
+What makes this more than a scripted `for`-loop, regardless of entry point:
 
-### Claude Code
+- Each stage writes **typed artifacts** into `pool.db` — gap maps, claim tables, proposals, draft sections — and the runner will not cross a stage boundary unless the gate at that boundary accepts them.
+- Every LLM call routed by the runner goes through `TrackedBackend`, so `rh provenance list` can show exactly which model produced which artifact, at what cost, and from which inputs.
+- The runner is resumable: stop it, swap the model, clone the database to another machine — `resume` picks up at the last checkpoint, whichever entry point launched the run.
 
-Add to `.claude/settings.json` (project) or `~/.claude/settings.json` (global):
+For a purely manual walkthrough (one primitive at a time, no runner), see [`docs/quickstart.md`](docs/quickstart.md).
+
+## Interfaces
+
+All three clients call the same primitive registry against the same `pool.db`. Pick whichever fits the task.
+
+| Surface | Best for | Entry point |
+|---------|----------|-------------|
+| **MCP server** | Claude Code / Codex / any MCP client | `python -m research_harness_mcp` |
+| **Python API** | Notebooks, pipelines, existing code | `from research_harness import ResearchAPI` |
+| **`rh` CLI** | Terminal workflows, scripts, CI | `rh --help` |
+
+Provenance note: MCP server and `rh primitive exec` route calls through `TrackedBackend`, which records every execution. Direct Python API calls go straight to primitive implementations — wrap them in `TrackedBackend` yourself when auditability is required. See [`docs/python-api.md`](docs/python-api.md).
+
+### MCP — Claude Code
+
+`.claude/settings.json` (project) or `~/.claude/settings.json` (global):
 
 ```json
 {
@@ -141,17 +191,15 @@ Add to `.claude/settings.json` (project) or `~/.claude/settings.json` (global):
     "research-harness": {
       "command": "/absolute/path/to/research-harness/.venv/bin/python",
       "args": ["-m", "research_harness_mcp"],
-      "env": {
-        "RESEARCH_HARNESS_DB_PATH": "/absolute/path/to/pool.db"
-      }
+      "env": { "RESEARCH_HARNESS_DB_PATH": "/absolute/path/to/pool.db" }
     }
   }
 }
 ```
 
-### Codex
+### MCP — Codex
 
-Add to `~/.codex/config.toml`:
+`~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.research-harness]
@@ -161,75 +209,170 @@ env = { "RESEARCH_HARNESS_DB_PATH" = "/absolute/path/to/pool.db" }
 startup_timeout_sec = 30.0
 ```
 
-Or via CLI: `codex mcp add research-harness -- /abs/path/python -m research_harness_mcp`
+Or via CLI: `codex mcp add research-harness -- /abs/path/python -m research_harness_mcp`.
 
-Once configured, Claude Code / Codex get direct access to all 112 research tools.
-Nothing else to install.
+## Skills for Vibe Coding
 
----
+In Claude Code or Codex the usual driver is natural language — you describe the task and the agent routes to the right skill, which in turn calls the right MCP tools. Fourteen skills ship in [`codex-skills/`](codex-skills/) as portable Claude Code skill files (standard YAML-frontmatter format); drop the folder into your skills directory and triggers from the table below start working.
 
-## How It Compares
+### Catalog
 
-|  | Autonomous pipelines | Skill libraries | **Research Harness** |
-|---|:---:|:---:|:---:|
-| Orchestration | N-stage run | — | **6 stages + typed gates** |
-| State across sessions | run artifacts | markdown files | **SQLite `pool.db`** |
-| Provenance (cost / model / hash) | partial | — | **every primitive call** |
-| Number verification | registry (anti-hallucination) | — | **registry + strict gate** |
-| Extensibility | fork & edit | fork & edit | **YAML plugin manifest** |
-| Client reach | usually one | depends on agent | **MCP + Python + CLI** |
-| Test suite | — | — | **987+** |
+| Skill | What it does | Example natural-language trigger |
+|-------|--------------|----------------------------------|
+| [`research-harness`](codex-skills/research-harness/SKILL.md) | Router — picks the right sub-skill when intent is broad | "let's start a research workflow" |
+| [`research-init`](codex-skills/research-init/SKILL.md) | Bootstrap a topic and scaffold project files | "initialize a new topic on X" |
+| [`literature-search`](codex-skills/literature-search/SKILL.md) | Broad paper discovery from a query | "find recent work on diffusion bidding" |
+| [`literature-mapping`](codex-skills/literature-mapping/SKILL.md) | Cluster papers, identify baselines, build topic map | "build a literature map of this topic" |
+| [`citation-trace`](codex-skills/citation-trace/SKILL.md) | Expand from seed papers via references and citations | "expand the pool from these three seeds" |
+| [`paper-sync`](codex-skills/paper-sync/SKILL.md) | Health-check the pool: metadata, PDFs, dismissals | "sync my paper pool" |
+| [`paper-verify`](codex-skills/paper-verify/SKILL.md) | Verify a paper exists and matches claimed metadata | "is this DOI real?" |
+| [`claim-extraction`](codex-skills/claim-extraction/SKILL.md) | Extract structured claims from papers | "pull the key claims out of paper 42" |
+| [`gap-analysis`](codex-skills/gap-analysis/SKILL.md) | Surface open questions and missing baselines | "what are the gaps here?" |
+| [`evidence-gating`](codex-skills/evidence-gating/SKILL.md) | Decide whether a stage can advance | "am I ready to move to the propose stage?" |
+| [`section-drafting`](codex-skills/section-drafting/SKILL.md) | Draft paper sections from linked evidence | "draft the related-work section" |
+| [`provenance-review`](codex-skills/provenance-review/SKILL.md) | Audit what was run, recorded, and linked | "review provenance for this project" |
+| [`research-primitives`](codex-skills/research-primitives/SKILL.md) | Reference — every MCP primitive at a glance | "show me the primitive reference" |
+| [`task-taxonomy`](codex-skills/task-taxonomy/SKILL.md) | Reference — model routing and task classification | "which tier should I use for claim extraction?" |
 
-The others are great for push-button runs. We're the layer underneath:
-**infrastructure built to be audited, extended, and trusted.**
+### Examples — natural language to skill routing
 
----
+- "Start a new project on hierarchical diffusion bidding and pull 20–30 recent papers" → `research-init` → `literature-search`
+- "Grow the pool from these two seed arXiv IDs" → `citation-trace`
+- "I've ingested 80 papers — where are the research gaps?" → `claim-extraction` → `gap-analysis`
+- "Draft the related-work section from the extracted claims" → `section-drafting`
+- "Have I recorded enough to advance to the experiment stage?" → `evidence-gating`
+- "Audit what was done on this project last week" → `provenance-review`
 
-## Repository Layout
+### Installing into Claude Code
+
+```bash
+# Option A: symlink the shipped skills into your user-global skills directory
+mkdir -p ~/.claude/skills
+ln -s "$(pwd)/codex-skills"/* ~/.claude/skills/
+
+# Option B: project-local
+mkdir -p .claude/skills
+cp -r codex-skills/* .claude/skills/
+```
+
+Codex picks them up from `codex-skills/` directly. Both clients respect the same `SKILL.md` format — the triggers in the catalog above work in either.
+
+## Trust Model
+
+Three mechanisms, each specified in more detail in [`docs/architecture.md`](docs/architecture.md).
+
+**Provenance.** Calls routed through `TrackedBackend` (MCP server and `rh primitive exec`) are recorded with model, tier, cost, input/output hash, and dependency edges (`derived_from`, `consumed_by`). Inspect via `rh provenance list` or plain SQL. Direct Python API calls go to primitive implementations directly; wrap them in `TrackedBackend` when auditability is required.
+
+**Stage gates.** A stage is a named step in `init → build → analyze → propose → experiment → write`; a gate is the typed check that runs at the stage boundary. Gates inspect the artifacts the current stage produced and keep the pipeline from advancing when required evidence is missing. A gate is a check over artifact types, evaluated by code.
+
+**Verified number registry.** During the `write` stage, numbers appearing in draft text can be checked against a registry built from recorded experiment metrics. `paper_verify_numbers` compares draft numbers to the registry with configurable tolerance and section-specific strictness (strict sections flag unmatched numbers as errors; lenient sections flag as warnings). Always-allowed values (common constants, years, dataset sizes once registered) are excluded from the check. This catches fabricated numerics at review time; it does not replace the reviewer.
+
+## Architecture
 
 ```
-research-harness/
-├── packages/
-│   ├── paperindex/              # PDF understanding engine
-│   ├── research_harness/        # Orchestrator + primitives + provenance + plugins
-│   └── research_harness_mcp/    # 112-tool MCP server (stdio)
-├── docs/                        # agent-guide, architecture, plugin-guide, quickstart
-├── web_dashboard/               # Flask monitor (http://127.0.0.1:18080)
-└── .research-harness/pool.db    # your persistent paper database
+┌──────────────────────────────────────────────────────────────┐
+│   MCP server (112 tools, stdio transport)                    │
+├──────────────────────────────────────────────────────────────┤
+│   Orchestrator                                               │
+│     init → build → analyze → propose → experiment → write    │
+│     gates: approval · coverage · adversarial · review ·      │
+│            experiment                                        │
+├──────────────────────────────────────────────────────────────┤
+│   Primitives (69)      Provenance         Observation        │
+│   typed operations     audit trail        strategy evolution │
+├──────────────────────────────────────────────────────────────┤
+│   Execution backends (LLM routing, local, plugin)            │
+├──────────────────────────────────────────────────────────────┤
+│   SQLite pool.db (papers · artifacts · provenance · tasks)   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
----
+**Dual-axis execution.** Two independent dials:
+
+- `workflow_mode` ∈ {`explore`, `standard`, `strict`, `demo`} — controls depth, coverage, and quality thresholds.
+- `autonomy_mode` ∈ {`supervised`, `autonomous`} — controls who resolves gates. High-risk stages (direction selection, finalize) always require human approval, even in autonomous mode.
+
+**Cross-model adversarial review.** Proposals and drafts pass through an independent challenger model at checkpoints where self-consistency is insufficient (e.g. `propose → experiment`). The challenge, response, and resolution are each recorded as first-class artifacts.
+
+## Extensibility
+
+New capabilities ship as plugins described by a `plugin.yaml` manifest.
+
+```yaml
+# plugin.yaml
+name: my-paper-source
+version: 0.1.0
+description: Custom paper source integration
+author: Your Name
+license: Apache-2.0
+schema_version: 1
+min_harness_version: 0.1.0
+extension_points:
+  primitives:
+    - name: my_search
+      category: RETRIEVAL
+      module: my_plugin.search
+      function: search_impl
+      requires_llm: false
+```
+
+Primitives are registered via `@register_primitive(spec)`; gates subclass `GateEvaluator`; backends implement `ExecutionBackend`. Full manifest schema, extension-point reference, and discovery flow live in [`docs/plugin-guide.md`](docs/plugin-guide.md).
 
 ## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [docs/quickstart.md](docs/quickstart.md) | Detailed setup walkthrough |
-| [docs/agent-guide.md](docs/agent-guide.md) | How Claude Code / Codex should use this |
-| [docs/architecture.md](docs/architecture.md) | System design and gate specs |
-| [docs/python-api.md](docs/python-api.md) | Using the harness without an MCP client |
-| [docs/plugin-guide.md](docs/plugin-guide.md) | Writing custom primitives / gates |
+| Document | What's in it |
+|----------|--------------|
+| [`docs/quickstart.md`](docs/quickstart.md) | Install, API keys, first topic |
+| [`docs/architecture.md`](docs/architecture.md) | Stages, gates, artifact types, storage model |
+| [`docs/agent-guide.md`](docs/agent-guide.md) | Driving the harness from Claude Code / Codex |
+| [`docs/python-api.md`](docs/python-api.md) | Using the harness without an MCP client |
+| [`docs/plugin-guide.md`](docs/plugin-guide.md) | Writing custom primitives, gates, backends |
+| [`docs/PAPER_MANAGEMENT.md`](docs/PAPER_MANAGEMENT.md) | Canonical paper-storage protocol |
 
----
+## Status
 
-## Testing
+**Version 0.1.0** — first public release. 987+ tests across the three packages, 69 primitives, 112 MCP tools, 6 stages. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes.
 
-```bash
-python -m pytest packages/ -q --ignore=packages/research_harness_eval
+Supported LLM providers: OpenAI, Anthropic, Kimi/Moonshot. Qwen, DeepSeek, and GLM through the tier-routing system are on the near-term roadmap.
+
+Known limits:
+
+- The experiment stage requires user-supplied compute; Research Harness does not provision training jobs.
+- `figure_generate` requires a fal.ai API key.
+- Number verification covers values emitted by recorded experiments; numbers originating outside the system (e.g. cited baselines) need to be registered as always-allowed or reviewed manually.
+
+## Citation
+
+If you use Research Harness in academic work, please cite:
+
+```bibtex
+@software{research_harness_2026,
+  title        = {Research Harness: an agent harness for scientific literature},
+  author       = {Research Harness Contributors},
+  year         = {2026},
+  version      = {0.1.0},
+  url          = {https://github.com/your-org/research-harness},
+  license      = {Apache-2.0}
+}
 ```
 
 ## License
 
-[Apache License 2.0](LICENSE) — all contributions licensed under the same.
+[Apache License 2.0](LICENSE). Contributions are licensed under the same.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and PRs welcome.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Issues and PRs are welcome; small fixes can skip RFC, while new primitives, gates, or stages should open an issue first.
 
 ## Acknowledgements
 
-Built on [MCP](https://modelcontextprotocol.io), with gratitude to
-[Semantic Scholar](https://www.semanticscholar.org),
-[OpenAlex](https://openalex.org),
-[arXiv](https://arxiv.org), and
-[Unpaywall](https://unpaywall.org) for the open bibliographic backbone.
+Built on [MCP](https://modelcontextprotocol.io). Literature data from [Semantic Scholar](https://www.semanticscholar.org), [OpenAlex](https://openalex.org), [arXiv](https://arxiv.org), and [Unpaywall](https://unpaywall.org).
+
+## Related Projects
+
+Related work in the agent-harness space — each targets a different workload:
+
+- [`anthropics/claude-code`](https://github.com/anthropics/claude-code) — agentic coding in the terminal.
+- [`SWE-agent/SWE-agent`](https://github.com/SWE-agent/SWE-agent) — issue-solving harness for software benchmarks.
+- [`All-Hands-AI/OpenHands`](https://github.com/All-Hands-AI/OpenHands) — general developer agent platform.
+- [`langchain-ai/langgraph`](https://github.com/langchain-ai/langgraph) — low-level orchestration framework for stateful agents.
