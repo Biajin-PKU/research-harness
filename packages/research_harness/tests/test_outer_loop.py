@@ -152,12 +152,8 @@ class TestOuterLoop:
         tid = _create_topic(db)
         loop = OuterLoop(db, reflection_interval=2)
 
-        loop.log_experiment(
-            tid, "H1", outcome="success", primary_metric_value=0.95
-        )
-        loop.log_experiment(
-            tid, "H2", outcome="success", primary_metric_value=0.96
-        )
+        loop.log_experiment(tid, "H1", outcome="success", primary_metric_value=0.95)
+        loop.log_experiment(tid, "H2", outcome="success", primary_metric_value=0.96)
 
         mock_response = '{"decision": "CONCLUDE", "reasoning": "Strong results, ready to write", "patterns": "Consistent high performance", "next_hypothesis": "", "confidence": 0.9}'
         mock_client = MagicMock()

@@ -47,7 +47,11 @@ def pipeline_db(tmp_path):
         )
         conn.execute(
             "INSERT INTO topics (name, description, contributions) VALUES (?, ?, ?)",
-            ("auto-bidding", "Automated bidding in online advertising", _e2e_contributions),
+            (
+                "auto-bidding",
+                "Automated bidding in online advertising",
+                _e2e_contributions,
+            ),
         )
         # Create papers
         for i, (title, year, venue) in enumerate(

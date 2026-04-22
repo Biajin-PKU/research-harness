@@ -35,7 +35,6 @@ from .types import (
     PaperIngestOutput,
     PaperRef,
     PaperSearchOutput,
-    ProjectSetContributionsOutput,
     TopicSetContributionsOutput,
     SeedPaper,
     SelectSeedsOutput,

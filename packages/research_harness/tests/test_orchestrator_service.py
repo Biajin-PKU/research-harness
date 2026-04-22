@@ -1707,20 +1707,14 @@ class TestAutoLoopbackRules:
         finally:
             conn.close()
 
-        result = svc._try_auto_loopback(
-            run, "analyze", "needs_expansion", actor="test"
-        )
+        result = svc._try_auto_loopback(run, "analyze", "needs_expansion", actor="test")
         assert result is None
 
     def test_loopback_respects_stop_before(self, svc, db, topic_and_project):
         topic_id, _project_id = topic_and_project
         run = svc.init_run(topic_id=topic_id)
-        run = svc.resume_run(
-            topic_id=topic_id, stop_before="build"
-        )
-        result = svc._try_auto_loopback(
-            run, "analyze", "needs_expansion", actor="test"
-        )
+        run = svc.resume_run(topic_id=topic_id, stop_before="build")
+        result = svc._try_auto_loopback(run, "analyze", "needs_expansion", actor="test")
         # target_stage is "build" which is also the stop_before guard.
         assert result is None
 
@@ -1768,9 +1762,7 @@ class TestInvariantSectionCitations:
         _set_stage(db, topic_id, "write")
         # Draft pack has an introduction longer than 200 chars with no \cite
         # / [N] / (Author, Year) pattern at all.
-        long_intro = (
-            "This paper introduces a fascinating new framework. " * 10
-        )
+        long_intro = "This paper introduces a fascinating new framework. " * 10
         svc.record_artifact(
             topic_id=topic_id,
             stage="write",

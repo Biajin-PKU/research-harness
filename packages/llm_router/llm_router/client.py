@@ -156,9 +156,7 @@ _TIER_FALLBACKS: dict[TaskTier, tuple[str, str]] = {
 }
 
 
-def _apply_blocklist(
-    tier: TaskTier, provider_name: str, model: str
-) -> tuple[str, str]:
+def _apply_blocklist(tier: TaskTier, provider_name: str, model: str) -> tuple[str, str]:
     """Replace ``provider_name`` with a safe default when blocked for this tier."""
     blocked = _BLOCKED_PROVIDERS_BY_TIER.get(tier, frozenset())
     if provider_name in blocked:
@@ -607,9 +605,7 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
         # Custom plugin provider: convention is {PROVIDER}_MODEL / {PROVIDER}_API_KEY /
         # {PROVIDER}_BASE_URL env vars. Plugin authors are free to ignore these.
         upper = provider.upper()
-        model = str(
-            overrides.get("model") or os.environ.get(f"{upper}_MODEL") or ""
-        )
+        model = str(overrides.get("model") or os.environ.get(f"{upper}_MODEL") or "")
         api_key = str(
             overrides.get("api_key") or os.environ.get(f"{upper}_API_KEY") or ""
         )

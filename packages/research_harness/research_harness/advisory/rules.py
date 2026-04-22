@@ -159,9 +159,7 @@ class AdvisoryEngine:
             )
         ]
 
-    def _dependency_stale(
-        self, topic_id: int
-    ) -> list[Advisory]:
+    def _dependency_stale(self, topic_id: int) -> list[Advisory]:
         conn = self._db.connect()
         try:
             if not _table_exists(conn, "artifact_dependencies"):
@@ -242,9 +240,7 @@ class AdvisoryEngine:
             )
         ]
 
-    def _claim_contradiction(
-        self, topic_id: int
-    ) -> list[Advisory]:
+    def _claim_contradiction(self, topic_id: int) -> list[Advisory]:
         conn = self._db.connect()
         try:
             rows = conn.execute(

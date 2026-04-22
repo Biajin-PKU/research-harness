@@ -442,9 +442,7 @@ def get_domain(domain_id: int):
             "SELECT * FROM domains WHERE id = ?", (domain_id,)
         ).fetchone()
         if not row:
-            raise HTTPException(
-                status_code=404, detail=f"Domain {domain_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Domain {domain_id} not found")
 
         topic_rows = conn.execute(
             """
@@ -653,9 +651,7 @@ def list_topic_artifacts(
             "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
         if not topic:
-            raise HTTPException(
-                status_code=404, detail=f"Topic {topic_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Topic {topic_id} not found")
 
         conditions = ["topic_id = ?"]
         params: list[Any] = [topic_id]
@@ -694,9 +690,7 @@ def list_topic_events(topic_id: int):
             "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
         if not topic:
-            raise HTTPException(
-                status_code=404, detail=f"Topic {topic_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Topic {topic_id} not found")
 
         rows = conn.execute(
             """
@@ -851,9 +845,7 @@ def list_topic_issues(
             "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
         if not topic:
-            raise HTTPException(
-                status_code=404, detail=f"Topic {topic_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Topic {topic_id} not found")
 
         conditions = ["topic_id = ?"]
         params: list[Any] = [topic_id]

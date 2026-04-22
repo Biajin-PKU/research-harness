@@ -668,7 +668,12 @@ def topic() -> None:
 @click.option("--domain", "domain_name", default=None, help="Assign to a domain")
 @click.pass_context
 def topic_init(
-    ctx: click.Context, name: str, description: str, venue: str, deadline: str, domain_name: str | None
+    ctx: click.Context,
+    name: str,
+    description: str,
+    venue: str,
+    deadline: str,
+    domain_name: str | None,
 ) -> None:
     db = get_db(ctx)
     conn = db.connect()
@@ -2753,9 +2758,7 @@ def review() -> None:
 
 
 @review.command("add")
-@click.option(
-    "--topic", "topic_name", required=True, help="Topic name"
-)
+@click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option(
     "--gate",
     required=True,
@@ -2805,9 +2808,7 @@ def review_add(
 
 
 @review.command("list")
-@click.option(
-    "--topic", "topic_name", required=True, help="Topic name"
-)
+@click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.pass_context
 def review_list(ctx: click.Context, topic_name: str) -> None:
     from .core.review_manager import ReviewManager
@@ -3063,9 +3064,7 @@ def orchestrator() -> None:
     default="standard",
 )
 @click.pass_context
-def orchestrator_init(
-    ctx: click.Context, topic_name: str, mode: str
-) -> None:
+def orchestrator_init(ctx: click.Context, topic_name: str, mode: str) -> None:
     """Initialize an orchestrator run for a topic."""
     from .orchestrator import OrchestratorService
 
@@ -3155,9 +3154,7 @@ def orchestrator_artifacts(
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--actor", default="user", help="Actor name")
 @click.pass_context
-def orchestrator_advance(
-    ctx: click.Context, topic_name: str, actor: str
-) -> None:
+def orchestrator_advance(ctx: click.Context, topic_name: str, actor: str) -> None:
     """Advance the topic to the next stage."""
     from .orchestrator import OrchestratorService
 
@@ -3330,9 +3327,7 @@ def orchestrator_adversarial_resolve(
 @orchestrator.command("adversarial-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.pass_context
-def orchestrator_adversarial_status(
-    ctx: click.Context, topic_name: str
-) -> None:
+def orchestrator_adversarial_status(ctx: click.Context, topic_name: str) -> None:
     """Check adversarial status for the topic."""
     from .orchestrator import OrchestratorService
 
@@ -3599,9 +3594,7 @@ def orchestrator_review_resolve(
 @orchestrator.command("review-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.pass_context
-def orchestrator_review_status(
-    ctx: click.Context, topic_name: str
-) -> None:
+def orchestrator_review_status(ctx: click.Context, topic_name: str) -> None:
     """Show review status summary."""
     from .orchestrator import OrchestratorService
 
@@ -3666,9 +3659,7 @@ def orchestrator_integrity_check(
 @orchestrator.command("finalize")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.pass_context
-def orchestrator_finalize(
-    ctx: click.Context, topic_name: str
-) -> None:
+def orchestrator_finalize(ctx: click.Context, topic_name: str) -> None:
     """Produce final bundle and process summary."""
     from .orchestrator import OrchestratorService
 

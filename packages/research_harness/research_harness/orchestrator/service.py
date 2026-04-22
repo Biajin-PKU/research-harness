@@ -603,9 +603,7 @@ class OrchestratorService:
     # Each entry declares: "when the gate at ``from_stage`` returns
     # ``gate_decision``, automatically loop back to ``target_stage`` up to
     # ``max_rounds`` times before surfacing the gate failure to the caller."
-    AUTO_LOOPBACK_RULES: dict[
-        tuple[str, str], tuple[str, int, str, str]
-    ] = {
+    AUTO_LOOPBACK_RULES: dict[tuple[str, str], tuple[str, int, str, str]] = {
         ("analyze", "needs_expansion"): (
             "build",
             MAX_GAP_LOOPBACKS,
@@ -903,9 +901,7 @@ class OrchestratorService:
             else "linear",
         }
 
-    def check_gate(
-        self, topic_id: int, stage: StageName | None = None
-    ) -> GateDecision:
+    def check_gate(self, topic_id: int, stage: StageName | None = None) -> GateDecision:
         """Evaluate the gate for a stage (defaults to current stage)."""
         if stage is None:
             run = self.get_run(topic_id)

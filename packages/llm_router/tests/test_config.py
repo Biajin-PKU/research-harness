@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -155,9 +154,7 @@ def test_provider_order_respects_plugin_providers(monkeypatch):
 
     snapshot = dict(client_mod._PROVIDER_REGISTRY)
     try:
-        client_mod._PROVIDER_REGISTRY["fake_plugin"] = (
-            lambda prompt, model, **_: "ok"
-        )
+        client_mod._PROVIDER_REGISTRY["fake_plugin"] = lambda prompt, model, **_: "ok"
         cfg = client_mod.resolve_llm_config()
         assert cfg.provider == "fake_plugin"
     finally:

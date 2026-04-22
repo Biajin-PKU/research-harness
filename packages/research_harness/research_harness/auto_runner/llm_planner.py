@@ -288,16 +288,12 @@ def _plan_propose(
     # direction_ranking is not in analyze's tool list; fall back to
     # direction_proposal (auto-recorded by analyze from gap_detect output)
     # or evidence_pack as additional context.
-    directions = _gather_artifact_payload(
-        svc, topic_id, "analyze", "direction_ranking"
-    )
+    directions = _gather_artifact_payload(svc, topic_id, "analyze", "direction_ranking")
     if not directions:
         directions = _gather_artifact_payload(
             svc, topic_id, "analyze", "direction_proposal"
         )
-    baselines = _gather_artifact_payload(
-        svc, topic_id, "analyze", "baseline_identify"
-    )
+    baselines = _gather_artifact_payload(svc, topic_id, "analyze", "baseline_identify")
     meta = _gather_topic_meta(db, topic_id)
 
     prompt = f"""You are a research direction planner. Synthesize gaps, directions, and baselines into a proposal.
@@ -345,9 +341,7 @@ def _plan_experiment(
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
-    proposal = _gather_artifact_payload(
-        svc, topic_id, "propose", "direction_proposal"
-    )
+    proposal = _gather_artifact_payload(svc, topic_id, "propose", "direction_proposal")
     study_spec = _gather_artifact_payload(svc, topic_id, "propose", "study_spec")
 
     prompt = f"""You are an experiment planner. Design an experiment based on the research direction.
@@ -379,9 +373,7 @@ def _plan_write(
     experiment = _gather_artifact_payload(
         svc, topic_id, "experiment", "experiment_result"
     )
-    proposal = _gather_artifact_payload(
-        svc, topic_id, "propose", "direction_proposal"
-    )
+    proposal = _gather_artifact_payload(svc, topic_id, "propose", "direction_proposal")
 
     prompt = f"""You are a paper writing planner. Plan the structure and parameters for drafting a research paper.
 

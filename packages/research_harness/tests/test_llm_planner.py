@@ -453,9 +453,7 @@ class TestB1ProposeMultiArtifact:
 
         captured_types: list[str] = []
 
-        def capture_dispatch(
-            tool_name, *, db, svc, topic_id, stage, context
-        ):
+        def capture_dispatch(tool_name, *, db, svc, topic_id, stage, context):
             captured_types.append(context.get("artifact_type", ""))
             return MagicMock(
                 tool="orchestrator_record_artifact",

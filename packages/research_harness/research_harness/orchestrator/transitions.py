@@ -162,9 +162,7 @@ class GateEvaluator:
 
     MIN_GAP_COUNT = MIN_GAP_COUNT
 
-    def _evaluate_approval_gate(
-        self, topic_id: int, stage: StageName
-    ) -> GateDecision:
+    def _evaluate_approval_gate(self, topic_id: int, stage: StageName) -> GateDecision:
         """Check if required artifacts exist.
 
         For the 'init' stage, also verifies that a topic_brief has scope /
@@ -215,9 +213,7 @@ class GateEvaluator:
                         brief = {}
                     scope_raw = brief.get("scope", "")
                     scope_ok = bool(
-                        scope_raw
-                        if isinstance(scope_raw, str)
-                        else scope_raw
+                        scope_raw if isinstance(scope_raw, str) else scope_raw
                     )
                     has_exclusion = any(
                         brief.get(k)
@@ -288,9 +284,7 @@ class GateEvaluator:
         finally:
             conn.close()
 
-    def _evaluate_coverage_gate(
-        self, topic_id: int, stage: StageName
-    ) -> GateDecision:
+    def _evaluate_coverage_gate(self, topic_id: int, stage: StageName) -> GateDecision:
         """Check required artifacts + minimum corpus quality for Build exit.
 
         Enhanced checks:
@@ -488,7 +482,10 @@ class GateEvaluator:
                     fi = json.loads(fi_row["payload_json"] or "{}")
                 except (TypeError, ValueError):
                     fi = {}
-                if fi.get("passed") is False or int(fi.get("critical_count", 0) or 0) > 0:
+                if (
+                    fi.get("passed") is False
+                    or int(fi.get("critical_count", 0) or 0) > 0
+                ):
                     return "needs_review"
 
             # 5. No hallucinated citations.

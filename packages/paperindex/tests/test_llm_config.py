@@ -263,7 +263,6 @@ def test_llm_client_kimi_uses_anthropic_streaming(monkeypatch):
     assert captured["messages"] == [{"role": "user", "content": "你好，请介绍一下自己"}]
 
 
-
 def test_post_json_retries_transient_errors(monkeypatch):
     attempts = {"count": 0}
 

@@ -36,6 +36,7 @@ jobs:
       - name: Install packages
         run: |
           python -m pip install --upgrade pip
+          pip install -e packages/llm_router[dev]
           pip install -e packages/paperindex[dev]
           pip install -e "packages/research_harness[dev]"
           pip install -e "packages/research_harness_mcp[dev]"
