@@ -156,11 +156,31 @@ _TIER_FALLBACKS: dict[TaskTier, tuple[str, str]] = {
 }
 
 
+def _apply_blocklist(
+    tier: TaskTier, provider_name: str, model: str
+) -> tuple[str, str]:
+    """Replace ``provider_name`` with a safe default when blocked for this tier."""
+    blocked = _BLOCKED_PROVIDERS_BY_TIER.get(tier, frozenset())
+    if provider_name in blocked:
+        fallback = _TIER_FALLBACKS.get(tier, _DEFAULT_ROUTES["medium"])
+        logger.warning(
+            "RED LINE: provider '%s' is blocked for tier '%s' "
+            "(paper-reading tasks must not use expensive APIs). "
+            "Falling back to %s:%s",
+            provider_name,
+            tier,
+            fallback[0],
+            fallback[1],
+        )
+        return fallback
+    return (provider_name, model)
+
+
 def resolve_route(tier: TaskTier) -> tuple[str, str]:
     """Resolve a task tier to (provider_name, model).
 
-    Checks env var LLM_ROUTE_{TIER} first (format: "provider:model"),
-    then falls back to _DEFAULT_ROUTES.
+    Priority: LLM_ROUTE_{TIER} env > config file [routing] tier entry >
+    _DEFAULT_ROUTES.
 
     RED LINE: if the resolved provider is in the blocklist for this tier,
     logs a warning and falls back to the safe default.
@@ -169,21 +189,13 @@ def resolve_route(tier: TaskTier) -> tuple[str, str]:
     env_val = os.environ.get(env_key, "").strip()
     if env_val and ":" in env_val:
         provider_name, model = env_val.split(":", 1)
-        provider_name, model = provider_name.strip(), model.strip()
-        blocked = _BLOCKED_PROVIDERS_BY_TIER.get(tier, frozenset())
-        if provider_name in blocked:
-            fallback = _TIER_FALLBACKS.get(tier, _DEFAULT_ROUTES["medium"])
-            logger.warning(
-                "RED LINE: provider '%s' is blocked for tier '%s' "
-                "(paper-reading tasks must not use expensive APIs). "
-                "Falling back to %s:%s",
-                provider_name,
-                tier,
-                fallback[0],
-                fallback[1],
-            )
-            return fallback
-        return (provider_name, model)
+        return _apply_blocklist(tier, provider_name.strip(), model.strip())
+
+    from .config import get_tier_route
+
+    config_route = get_tier_route(tier)
+    if config_route is not None:
+        return _apply_blocklist(tier, config_route[0], config_route[1])
 
     return _DEFAULT_ROUTES.get(tier, _DEFAULT_ROUTES["medium"])
 
@@ -458,9 +470,13 @@ class ResolvedLLMConfig:
 
 
 def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMConfig:
-    """Resolve LLM config from overrides -> env vars, auto-detecting provider.
+    """Resolve LLM config from overrides -> config file -> env vars.
 
-    Priority: explicit override > cursor_agent > codex > anthropic > openai > kimi
+    Priority for picking the provider:
+      1. ``overrides['provider']`` — explicit caller override
+      2. ``[routing] provider_order`` in config file — walk list, pick first
+         with satisfied credentials (or any registered plugin provider)
+      3. Built-in auto-detect: cursor_agent > codex > anthropic > openai > kimi
     """
     overrides = overrides or {}
     provider_override = str(overrides.get("provider", "")).strip().lower()
@@ -486,23 +502,52 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
     )
     kimi_key = os.environ.get("KIMI_API_KEY", "")
 
+    available_builtin: dict[str, bool] = {
+        "anthropic": bool(anthropic_key),
+        "openai": bool(openai_key),
+        "kimi": bool(kimi_key),
+        "cursor_agent": cursor_enabled,
+        "codex": codex_enabled,
+    }
+
     valid_providers = set(_PROVIDER_REGISTRY)
+    provider: str | None = None
+
     if provider_override in valid_providers:
         provider = provider_override
     elif overrides.get("api_key"):
         provider = "openai"
-    elif cursor_enabled:
-        provider = "cursor_agent"
-    elif codex_enabled:
-        provider = "codex"
-    elif anthropic_key and (not openai_key or os.environ.get("ANTHROPIC_MODEL")):
-        provider = "anthropic"
-    elif openai_key:
-        provider = "openai"
-    elif kimi_key:
-        provider = "kimi"
     else:
-        provider = "cursor_agent" if cursor_enabled else "openai"
+        # Try config-file provider_order first.
+        from .config import get_provider_order
+
+        order = get_provider_order()
+        if order:
+            for candidate in order:
+                if candidate in available_builtin:
+                    if available_builtin[candidate]:
+                        provider = candidate
+                        break
+                elif candidate in valid_providers:
+                    # Plugin-registered provider: trust the user's choice.
+                    provider = candidate
+                    break
+
+        if provider is None:
+            if cursor_enabled:
+                provider = "cursor_agent"
+            elif codex_enabled:
+                provider = "codex"
+            elif anthropic_key and (
+                not openai_key or os.environ.get("ANTHROPIC_MODEL")
+            ):
+                provider = "anthropic"
+            elif openai_key:
+                provider = "openai"
+            elif kimi_key:
+                provider = "kimi"
+            else:
+                provider = "cursor_agent" if cursor_enabled else "openai"
 
     # Resolve model/key/url per provider
     model: str
@@ -543,7 +588,7 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
         base_url = str(
             overrides.get("base_url") or os.environ.get("ANTHROPIC_BASE_URL") or ""
         )
-    else:  # openai
+    elif provider == "openai":
         model = str(
             overrides.get("model")
             or os.environ.get("PAPERINDEX_LLM_MODEL")
@@ -557,6 +602,19 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
             or os.environ.get("OPENAI_BASE_URL")
             or os.environ.get("CHATGPT_BASE_URL")
             or ""
+        )
+    else:
+        # Custom plugin provider: convention is {PROVIDER}_MODEL / {PROVIDER}_API_KEY /
+        # {PROVIDER}_BASE_URL env vars. Plugin authors are free to ignore these.
+        upper = provider.upper()
+        model = str(
+            overrides.get("model") or os.environ.get(f"{upper}_MODEL") or ""
+        )
+        api_key = str(
+            overrides.get("api_key") or os.environ.get(f"{upper}_API_KEY") or ""
+        )
+        base_url = str(
+            overrides.get("base_url") or os.environ.get(f"{upper}_BASE_URL") or ""
         )
 
     return ResolvedLLMConfig(
