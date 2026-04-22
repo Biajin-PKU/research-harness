@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paperindex"
-version = "0.1.0"
+version = "0.2.0"
 description = "Paper understanding engine: PDF -> structure -> knowledge fragments"
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,7 +14,7 @@ dependencies = [
   "pyyaml>=6.0",
   "tiktoken>=0.7.0",
   "click>=8.1",
-  "llm-router>=0.1.0",
+  "llm-router>=0.2.0",
 ]
 
 [project.optional-dependencies]

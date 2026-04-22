@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-22
+
+### Added
+
+- **HTTP API + Web dashboard.** FastAPI-backed service exposing orchestrator
+  state, topics/domains, papers, and artifacts with a React dashboard for
+  navigation. Concurrent paper-search across configured providers.
+- **Orchestrator stage gating.** Hardened gate mechanism — stages cannot
+  advance until their typed evidence artifacts are recorded and verified.
+- **`llm_router` standalone package.** Multi-provider LLM routing lifted out
+  of `paperindex` into its own package. Task-tier routing (`light`/`medium`/
+  `heavy`) is now usable anywhere without a paperindex dependency.
+- **Plugin discovery for custom providers.** Drop a `.py` file in
+  `~/.config/llm_router/plugins/` (or point `$LLM_ROUTER_PLUGINS` at one) and
+  it is auto-loaded on import. Broken plugins are logged, not propagated.
+- **Config file for `llm_router`.** Optional TOML at `$LLM_ROUTER_CONFIG` or
+  `~/.config/llm_router/config.toml` supporting `[routing] provider_order`
+  and tier route entries. Env vars still win when set.
+- **Codex bridge stability hardening.** Pre-flight check, per-backend graded
+  timeouts (codex 180s / anthropic 90s), `stdin=DEVNULL`, and a per-backend
+  circuit breaker so repeat failures stop wasting 300s timeouts.
+
 ### Changed (breaking)
 
 - **Data model: Domain → Topic → Papers.** The standalone `projects` table has been
@@ -26,6 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   navigate Domain → Topic.
 - **MCP tools:** all orchestrator/review/adversarial tools now take `topic_id`
   (no longer accept `project_id`).
+- **Import paths:** LLM client code moved from `paperindex.llm.client` to
+  `llm_router.client`. Update imports (`from llm_router import LLMClient,
+  resolve_llm_config`).
+
+### Fixed
+
+- HTTP API uvicorn reload watcher scoped to the package directory to avoid
+  reloading on unrelated file changes.
 
 ## [0.1.0] — 2026-04-21
 

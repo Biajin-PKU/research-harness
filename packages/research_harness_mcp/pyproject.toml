@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "research-harness-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server exposing research_harness primitives as Claude Code tools"
 requires-python = ">=3.11"
 dependencies = [
