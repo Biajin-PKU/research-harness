@@ -7,6 +7,17 @@ Fallback chain (tried in order):
   1. ``codex`` CLI — preferred, independent cross-model review
   2. Anthropic API (claude-opus-4-6) — when codex CLI is unavailable or times out
 
+Stability hardening (Phase 2):
+  - Pre-flight check skips codex when binary is missing or breaker is tripped,
+    avoiding ``timeout_seconds`` stalls on obviously-dead paths.
+  - Per-backend graded timeouts replace the hardcoded 300s ceiling. Codex gets
+    a larger budget (cold start ~40s); Anthropic gets a tighter one.
+  - ``stdin=subprocess.DEVNULL`` prevents ``codex exec`` from hanging waiting
+    for stdin in environments that don't close it automatically.
+  - A per-backend circuit breaker trips after ``_BREAKER_THRESHOLD`` consecutive
+    failures and cools off for ``_BREAKER_COOL_OFF_SECONDS``. Only codex is
+    skipped when tripped; anthropic is always attempted as last resort.
+
 How to invoke adversarial review in other sessions:
   - From Claude Code: use Agent tool with subagent_type="codex:codex-rescue"
   - From any session: set RESEARCH_HARNESS_ADVERSARIAL_BACKEND=anthropic
@@ -19,12 +30,26 @@ import json
 import logging
 import os
 import subprocess
+import threading
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _ADVERSARIAL_OPUS_MODEL = "claude-opus-4-6"
+
+# Per-backend timeouts. Codex needs a larger budget for cold starts; Anthropic
+# is an HTTP call that almost always returns within a minute.
+_BACKEND_TIMEOUTS: dict[str, int] = {
+    "codex": 180,
+    "anthropic": 90,
+}
+
+# Circuit breaker config: trip after N consecutive failures, cool off for T s.
+_BREAKER_THRESHOLD = 3
+_BREAKER_COOL_OFF_SECONDS = 60.0
 
 # Default codex review prompt template
 ADVERSARIAL_REVIEW_TEMPLATE = """\
@@ -71,6 +96,70 @@ Return your review as structured JSON:
 """
 
 
+# ---------------------------------------------------------------------------
+# Circuit breaker (per-backend)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _BackendState:
+    failures: int = 0
+    tripped_until: float = 0.0
+
+
+class _CircuitBreaker:
+    """Track consecutive failures per backend and skip tripped backends.
+
+    Thread-safe. State is process-local; restarts reset everything.
+    """
+
+    def __init__(
+        self,
+        threshold: int = _BREAKER_THRESHOLD,
+        cool_off_seconds: float = _BREAKER_COOL_OFF_SECONDS,
+    ) -> None:
+        self._threshold = threshold
+        self._cool_off = cool_off_seconds
+        self._state: dict[str, _BackendState] = {}
+        self._lock = threading.Lock()
+
+    def is_open(self, backend: str) -> bool:
+        """True while the backend is in cool-off."""
+        with self._lock:
+            s = self._state.get(backend)
+            if s is None:
+                return False
+            return s.tripped_until > time.time()
+
+    def record_success(self, backend: str) -> None:
+        with self._lock:
+            self._state[backend] = _BackendState()
+
+    def record_failure(self, backend: str) -> None:
+        with self._lock:
+            s = self._state.setdefault(backend, _BackendState())
+            s.failures += 1
+            if s.failures >= self._threshold:
+                s.tripped_until = time.time() + self._cool_off
+
+    def reset(self) -> None:
+        with self._lock:
+            self._state.clear()
+
+
+_BREAKER = _CircuitBreaker()
+
+
+def _reset_breaker_for_tests() -> None:
+    """Reset the module-level breaker. Intended for pytest fixtures only."""
+    _BREAKER.reset()
+
+
+# ---------------------------------------------------------------------------
+# Codex discovery + pre-flight
+# ---------------------------------------------------------------------------
+
+
 def _find_codex() -> str | None:
     """Find the codex CLI binary."""
     try:
@@ -85,6 +174,24 @@ def _find_codex() -> str | None:
     except Exception:
         pass
     return None
+
+
+def _codex_preflight() -> tuple[bool, str]:
+    """Cheap check before spending a 180s timeout on ``codex exec``.
+
+    Returns ``(ok, reason)``. When ``ok`` is False, callers should fall
+    through to the anthropic backend without invoking the subprocess.
+    """
+    if _BREAKER.is_open("codex"):
+        return False, "codex circuit breaker open (recent failures)"
+    if _find_codex() is None:
+        return False, "codex CLI not found in PATH"
+    return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Anthropic backend (fallback and RESEARCH_HARNESS_ADVERSARIAL_BACKEND=anthropic)
+# ---------------------------------------------------------------------------
 
 
 def _adversarial_via_anthropic(
@@ -105,7 +212,7 @@ def _adversarial_via_anthropic(
     except ImportError:
         return {
             "success": False,
-            "error": "paperindex not installed; cannot use Anthropic fallback",
+            "error": "llm_router not installed; cannot use Anthropic fallback",
             "verdict": "",
             "issues": [],
             "scores": {},
@@ -145,9 +252,11 @@ def _adversarial_via_anthropic(
         parsed["raw_output"] = raw
         parsed["backend"] = "anthropic"
         parsed["model"] = model
+        _BREAKER.record_success("anthropic")
         logger.info("Adversarial review completed via Anthropic %s", model)
         return parsed
     except Exception as exc:
+        _BREAKER.record_failure("anthropic")
         return {
             "success": False,
             "error": f"Anthropic adversarial review failed: {exc}",
@@ -159,6 +268,11 @@ def _adversarial_via_anthropic(
         }
 
 
+# ---------------------------------------------------------------------------
+# Main entry: run_codex_review
+# ---------------------------------------------------------------------------
+
+
 def run_codex_review(
     *,
     artifact_path: Path,
@@ -166,7 +280,7 @@ def run_codex_review(
     focus: str,
     evidence_summary: str = "",
     cwd: Path | None = None,
-    timeout_seconds: int = 300,
+    timeout_seconds: int | None = None,
     effort: str = "medium",
 ) -> dict[str, Any]:
     """Run adversarial review on an artifact and return parsed response.
@@ -178,6 +292,9 @@ def run_codex_review(
     Set ``RESEARCH_HARNESS_ADVERSARIAL_BACKEND`` to force a specific backend:
       - ``codex`` (default): try codex CLI first
       - ``anthropic``: use Anthropic API directly
+
+    ``timeout_seconds`` overrides both per-backend defaults. When None, each
+    backend uses its entry in ``_BACKEND_TIMEOUTS``.
 
     Returns a dict with keys: success, verdict, issues, scores, notes,
     raw_output, backend.
@@ -192,11 +309,24 @@ def run_codex_review(
             evidence_summary=evidence_summary,
         )
 
+    ok, reason = _codex_preflight()
+    if not ok:
+        logger.info(
+            "codex pre-flight failed (%s) — using Anthropic API for adversarial review",
+            reason,
+        )
+        return _adversarial_via_anthropic(
+            artifact_path=artifact_path,
+            stage=stage,
+            focus=focus,
+            evidence_summary=evidence_summary,
+        )
+
+    # _codex_preflight already verified the binary exists.
     codex = _find_codex()
     if codex is None:
-        logger.info(
-            "codex CLI not found — falling back to Anthropic API for adversarial review"
-        )
+        # Race: binary disappeared between preflight and here. Treat as fallback.
+        _BREAKER.record_failure("codex")
         return _adversarial_via_anthropic(
             artifact_path=artifact_path,
             stage=stage,
@@ -210,6 +340,8 @@ def run_codex_review(
         focus=focus,
         evidence_summary=evidence_summary[:3000],
     )
+
+    codex_timeout = timeout_seconds or _BACKEND_TIMEOUTS["codex"]
 
     import tempfile
 
@@ -233,8 +365,9 @@ def run_codex_review(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout_seconds,
+            timeout=codex_timeout,
             cwd=str(cwd) if cwd else None,
+            stdin=subprocess.DEVNULL,
         )
         try:
             raw = Path(out_path).read_text(encoding="utf-8").strip()
@@ -244,27 +377,32 @@ def run_codex_review(
             Path(out_path).unlink(missing_ok=True)
 
         if result.returncode != 0 and not raw:
-            return {
-                "success": False,
-                "error": f"codex exited with code {result.returncode}: {result.stderr[:500]}",
-                "verdict": "",
-                "issues": [],
-                "scores": {},
-                "notes": "",
-                "raw_output": raw,
-            }
+            _BREAKER.record_failure("codex")
+            logger.warning(
+                "codex exited with code %s: %s — falling back to Anthropic",
+                result.returncode,
+                (result.stderr or "")[:500],
+            )
+            return _adversarial_via_anthropic(
+                artifact_path=artifact_path,
+                stage=stage,
+                focus=focus,
+                evidence_summary=evidence_summary,
+            )
 
         parsed = _parse_codex_output(raw)
         parsed["success"] = True
         parsed["raw_output"] = raw
         parsed["backend"] = "codex"
+        _BREAKER.record_success("codex")
         return parsed
 
     except subprocess.TimeoutExpired:
         Path(out_path).unlink(missing_ok=True)
+        _BREAKER.record_failure("codex")
         logger.warning(
             "codex timed out after %ds — falling back to Anthropic API",
-            timeout_seconds,
+            codex_timeout,
         )
         return _adversarial_via_anthropic(
             artifact_path=artifact_path,
@@ -274,6 +412,7 @@ def run_codex_review(
         )
     except Exception as exc:
         Path(out_path).unlink(missing_ok=True)
+        _BREAKER.record_failure("codex")
         logger.warning(
             "codex subprocess failed: %s — falling back to Anthropic API",
             exc,
