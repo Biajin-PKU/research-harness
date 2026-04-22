@@ -71,8 +71,8 @@ def test_list_by_category() -> None:
         "meta_reflect",
         "competitive_learning",
         "direction_ranking",
-        "project_set_contributions",
-        "project_get_contributions",
+        "topic_set_contributions",
+        "topic_get_contributions",
         "design_gap_probe",
     }
     assert {spec.name for spec in list_by_category(PrimitiveCategory.GENERATION)} == {

@@ -306,7 +306,7 @@ class TestWritingPrimitives:
         from research_harness.primitives.writing_impls import latex_compile
 
         _result = latex_compile(
-            project_id=1,
+            topic_id=1,
             output_dir=str(tmp_path / "output"),
             template="generic",
             sections={
@@ -329,7 +329,7 @@ class TestWritingPrimitives:
         from research_harness.primitives.writing_impls import latex_compile
 
         _result = latex_compile(
-            project_id=1,
+            topic_id=1,
             output_dir=str(tmp_path / "output"),
             sections={"introduction": "See \\cite{test2024}."},
             title="T",

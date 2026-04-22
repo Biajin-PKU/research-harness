@@ -116,47 +116,44 @@ rh topic init "diffusion-bidding"
 rh paper ingest --arxiv-id 2407.15686 --topic diffusion-bidding
 rh paper ingest --arxiv-id 2404.10702 --topic diffusion-bidding
 
-# Create the project and launch the autonomous runner
-rh project add --topic diffusion-bidding --name paper-01
-rh auto-runner start --project-id 1 --mode standard \
+# Launch the autonomous runner (topic_id=1 from `rh topic list`)
+rh auto-runner start --topic-id 1 --mode standard \
   --direction "Hierarchical diffusion planner for cross-channel budget allocation"
 
 # Runner advances init → build → analyze → propose, then pauses at a human
 # checkpoint. Review the artifacts it produced:
-rh auto-runner status     --project-id 1
-rh orchestrator artifacts --topic diffusion-bidding --project paper-01 --stage propose
+rh auto-runner status     --topic-id 1
+rh orchestrator artifacts --topic diffusion-bidding --stage propose
 
 # Resume — runner continues until the next human checkpoint.
-rh auto-runner resume --project-id 1
+rh auto-runner resume --topic-id 1
 ```
 
-### 3. Python — `run_project` directly
+### 3. Python — `run_topic` directly
 
 Same flow as a function call. Useful inside a notebook, a larger training pipeline, or any code that already imports `research_harness`.
 
 ```python
-from research_harness.auto_runner.runner import run_project, resume_project, get_status
+from research_harness.auto_runner.runner import run_topic, resume_topic, get_status
 from research_harness.api import ResearchAPI
 
 api = ResearchAPI()                                    # resolves pool.db from env
-topic_id   = api.topic_init("diffusion-bidding")
+topic_id = api.topic_init("diffusion-bidding")
 api.paper_ingest(arxiv_id="2407.15686", topic_id=topic_id)
 api.paper_ingest(arxiv_id="2404.10702", topic_id=topic_id)
-project_id = api.project_add(topic_id=topic_id, name="paper-01")
 
-result = run_project(
-    project_id,
-    topic_id=topic_id,
+result = run_topic(
+    topic_id,
     direction="Hierarchical diffusion planner for cross-channel budget allocation",
     mode="standard",
 )
 # result = {"status": "paused", "current_stage": "propose", ...}
 
 # human review here — inspect artifacts, edit, decide
-print(get_status(project_id))
+print(get_status(topic_id))
 
 # resume to the next checkpoint (or to completion)
-run_again = resume_project(project_id)
+run_again = resume_topic(topic_id)
 ```
 
 ---

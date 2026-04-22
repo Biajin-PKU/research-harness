@@ -2,6 +2,12 @@
 
 Updated: 2026-04-07
 
+> **Schema note (v0.2):** this plan was written with `project_id` as the primary key
+> for orchestrator state. As of migration 037/038, the `projects` table has been merged
+> into `topics` (Domain → Topic → Papers hierarchy). All code now uses `topic_id`.
+> In the sections below, read `project_id` as `topic_id`; the `project_id` columns
+> still exist in SQLite for backward compat but are no longer written by new code.
+
 ## Purpose
 
 This document turns [`06_orchestrator.md`](06_orchestrator.md) into an implementation-oriented plan for the current repository.

@@ -83,6 +83,29 @@ class PaginatedResponse(BaseModel):
     pagination: PaginationMeta
 
 
+class DomainSummary(BaseModel):
+    id: int
+    name: str
+    description: str
+    status: str
+    topic_count: int
+    created_at: str
+
+
+class DomainDetail(BaseModel):
+    id: int
+    name: str
+    description: str
+    status: str
+    created_at: str
+    topics: list  # list[TopicSummary] — forward-ref resolved below
+
+
+class CreateDomainRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
 class TopicSummary(BaseModel):
     id: int
     name: str
@@ -92,6 +115,8 @@ class TopicSummary(BaseModel):
     deadline: str
     created_at: str
     paper_count: int
+    domain_id: int | None
+    domain_name: str | None
 
 
 class TopicDetail(BaseModel):
@@ -103,47 +128,23 @@ class TopicDetail(BaseModel):
     deadline: str
     created_at: str
     paper_count: int
-    project_count: int
     annotation_count: int
-    stages: dict[str, int]  # stage -> artifact count
-
-
-class ProjectSummary(BaseModel):
-    id: int
-    topic_id: int
-    topic_name: str
-    name: str
-    description: str
-    status: str
-    target_venue: str
-    deadline: str
-    created_at: str
-    updated_at: str
+    domain_id: int | None
+    domain_name: str | None
+    # Orchestrator workflow fields
     current_stage: str | None
     stage_status: str | None
     gate_status: str | None
-
-
-class ProjectDetail(BaseModel):
-    id: int
-    topic_id: int
-    topic_name: str
-    name: str
-    description: str
-    status: str
-    target_venue: str
-    deadline: str
     contributions: str
-    created_at: str
-    updated_at: str
-    current_stage: str | None
-    stage_status: str | None
-    gate_status: str | None
     mode: str | None
     stop_before: str | None
     blocking_issue_count: int
     unresolved_issue_count: int
     artifact_counts: dict[str, int]
+
+
+# Resolve forward reference in DomainDetail
+DomainDetail.model_rebuild()
 
 
 class PaperDetail(BaseModel):
@@ -168,7 +169,7 @@ class PaperDetail(BaseModel):
 class DashboardStats(BaseModel):
     total_papers: int
     total_topics: int
-    total_projects: int
+    total_domains: int
     total_artifacts: int
     total_provenance_records: int
     papers_with_pdf: int
@@ -223,17 +224,32 @@ def health_check():
 
 
 @app.get("/api/topics", response_model=list[TopicSummary])
-def list_topics():
+def list_topics(
+    domain_id: int | None = Query(None, description="Filter by domain"),
+):
     with get_db() as conn:
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if domain_id is not None:
+            conditions.append("t.domain_id = ?")
+            params.append(domain_id)
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
         rows = conn.execute(
-            """
+            f"""
             SELECT t.*,
+                   d.name AS domain_name,
                    COUNT(pt.paper_id) AS paper_count
             FROM topics t
+            LEFT JOIN domains d ON d.id = t.domain_id
             LEFT JOIN paper_topics pt ON pt.topic_id = t.id
+            {where_clause}
             GROUP BY t.id
             ORDER BY t.id
-            """
+            """,
+            params,
         ).fetchall()
     return [
         TopicSummary(
@@ -245,6 +261,8 @@ def list_topics():
             deadline=r["deadline"] or "",
             created_at=r["created_at"] or "",
             paper_count=r["paper_count"],
+            domain_id=r["domain_id"],
+            domain_name=r["domain_name"],
         )
         for r in rows
     ]
@@ -253,16 +271,20 @@ def list_topics():
 @app.get("/api/topics/{topic_id}", response_model=TopicDetail)
 def get_topic(topic_id: int):
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM topics WHERE id = ?", (topic_id,)).fetchone()
+        row = conn.execute(
+            """
+            SELECT t.*, d.name AS domain_name
+            FROM topics t
+            LEFT JOIN domains d ON d.id = t.domain_id
+            WHERE t.id = ?
+            """,
+            (topic_id,),
+        ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Topic {topic_id} not found")
 
         paper_count = conn.execute(
             "SELECT COUNT(*) AS c FROM paper_topics WHERE topic_id = ?", (topic_id,)
-        ).fetchone()["c"]
-
-        project_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM projects WHERE topic_id = ?", (topic_id,)
         ).fetchone()["c"]
 
         annotation_count = conn.execute(
@@ -275,7 +297,18 @@ def get_topic(topic_id: int):
             (topic_id,),
         ).fetchone()["c"]
 
-        # Artifact counts per stage for projects under this topic
+        # Orchestrator workflow info
+        orch = conn.execute(
+            """
+            SELECT current_stage, stage_status, gate_status, mode, stop_before,
+                   blocking_issue_count, unresolved_issue_count
+            FROM orchestrator_runs
+            WHERE topic_id = ?
+            """,
+            (topic_id,),
+        ).fetchone()
+
+        # Artifact counts per stage
         stage_rows = conn.execute(
             """
             SELECT pa.stage, COUNT(*) AS cnt
@@ -285,7 +318,7 @@ def get_topic(topic_id: int):
             """,
             (topic_id,),
         ).fetchall()
-        stages = {r["stage"]: r["cnt"] for r in stage_rows}
+        artifact_counts = {r["stage"]: r["cnt"] for r in stage_rows}
 
     return TopicDetail(
         id=row["id"],
@@ -296,9 +329,18 @@ def get_topic(topic_id: int):
         deadline=row["deadline"] or "",
         created_at=row["created_at"] or "",
         paper_count=paper_count,
-        project_count=project_count,
         annotation_count=annotation_count,
-        stages=stages,
+        domain_id=row["domain_id"],
+        domain_name=row["domain_name"],
+        current_stage=orch["current_stage"] if orch else None,
+        stage_status=orch["stage_status"] if orch else None,
+        gate_status=orch["gate_status"] if orch else None,
+        contributions=row["contributions"] or "",
+        mode=orch["mode"] if orch else None,
+        stop_before=orch["stop_before"] if orch else None,
+        blocking_issue_count=orch["blocking_issue_count"] if orch else 0,
+        unresolved_issue_count=orch["unresolved_issue_count"] if orch else 0,
+        artifact_counts=artifact_counts,
     )
 
 
@@ -363,104 +405,109 @@ def list_topic_papers(
 
 
 # ---------------------------------------------------------------------------
-# Projects
+# Domains
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/projects", response_model=list[ProjectSummary])
-def list_projects():
+@app.get("/api/domains", response_model=list[DomainSummary])
+def list_domains():
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT p.*,
-                   t.name AS topic_name,
-                   o.current_stage,
-                   o.stage_status,
-                   o.gate_status
-            FROM projects p
-            JOIN topics t ON t.id = p.topic_id
-            LEFT JOIN orchestrator_runs o ON o.project_id = p.id
-            ORDER BY p.updated_at DESC
+            SELECT d.*,
+                   COUNT(t.id) AS topic_count
+            FROM domains d
+            LEFT JOIN topics t ON t.domain_id = d.id
+            GROUP BY d.id
+            ORDER BY d.id
             """
         ).fetchall()
     return [
-        ProjectSummary(
+        DomainSummary(
             id=r["id"],
-            topic_id=r["topic_id"],
-            topic_name=r["topic_name"],
             name=r["name"],
             description=r["description"] or "",
-            status=r["status"] or "planning",
-            target_venue=r["target_venue"] or "",
-            deadline=r["deadline"] or "",
+            status=r["status"] or "active",
+            topic_count=r["topic_count"],
             created_at=r["created_at"] or "",
-            updated_at=r["updated_at"] or "",
-            current_stage=r["current_stage"],
-            stage_status=r["stage_status"],
-            gate_status=r["gate_status"],
         )
         for r in rows
     ]
 
 
-@app.get("/api/projects/{project_id}", response_model=ProjectDetail)
-def get_project(project_id: int):
+@app.get("/api/domains/{domain_id}", response_model=DomainDetail)
+def get_domain(domain_id: int):
     with get_db() as conn:
         row = conn.execute(
-            """
-            SELECT p.*,
-                   t.name AS topic_name,
-                   o.current_stage,
-                   o.stage_status,
-                   o.gate_status,
-                   o.mode,
-                   o.stop_before,
-                   o.blocking_issue_count,
-                   o.unresolved_issue_count
-            FROM projects p
-            JOIN topics t ON t.id = p.topic_id
-            LEFT JOIN orchestrator_runs o ON o.project_id = p.id
-            WHERE p.id = ?
-            """,
-            (project_id,),
+            "SELECT * FROM domains WHERE id = ?", (domain_id,)
         ).fetchone()
         if not row:
             raise HTTPException(
-                status_code=404, detail=f"Project {project_id} not found"
+                status_code=404, detail=f"Domain {domain_id} not found"
             )
 
-        # Artifact counts per stage
-        art_rows = conn.execute(
+        topic_rows = conn.execute(
             """
-            SELECT stage, COUNT(*) AS cnt
-            FROM project_artifacts
-            WHERE project_id = ?
-            GROUP BY stage
+            SELECT t.*,
+                   d.name AS domain_name,
+                   COUNT(pt.paper_id) AS paper_count
+            FROM topics t
+            LEFT JOIN domains d ON d.id = t.domain_id
+            LEFT JOIN paper_topics pt ON pt.topic_id = t.id
+            WHERE t.domain_id = ?
+            GROUP BY t.id
+            ORDER BY t.id
             """,
-            (project_id,),
+            (domain_id,),
         ).fetchall()
-        artifact_counts = {r["stage"]: r["cnt"] for r in art_rows}
 
-    return ProjectDetail(
+    topics = [
+        TopicSummary(
+            id=r["id"],
+            name=r["name"],
+            description=r["description"] or "",
+            status=r["status"] or "active",
+            target_venue=r["target_venue"] or "",
+            deadline=r["deadline"] or "",
+            created_at=r["created_at"] or "",
+            paper_count=r["paper_count"],
+            domain_id=r["domain_id"],
+            domain_name=r["domain_name"],
+        )
+        for r in topic_rows
+    ]
+
+    return DomainDetail(
         id=row["id"],
-        topic_id=row["topic_id"],
-        topic_name=row["topic_name"],
         name=row["name"],
         description=row["description"] or "",
-        status=row["status"] or "planning",
-        target_venue=row["target_venue"] or "",
-        deadline=row["deadline"] or "",
-        contributions=row["contributions"] or "",
+        status=row["status"] or "active",
         created_at=row["created_at"] or "",
-        updated_at=row["updated_at"] or "",
-        current_stage=row["current_stage"],
-        stage_status=row["stage_status"],
-        gate_status=row["gate_status"],
-        mode=row["mode"],
-        stop_before=row["stop_before"],
-        blocking_issue_count=row["blocking_issue_count"] or 0,
-        unresolved_issue_count=row["unresolved_issue_count"] or 0,
-        artifact_counts=artifact_counts,
+        topics=topics,
+    )
+
+
+@app.post("/api/domains", response_model=DomainSummary)
+def create_domain(body: CreateDomainRequest):
+    """Create a new domain."""
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO domains (name, description, status, created_at)
+            VALUES (?, ?, 'active', ?)
+            """,
+            (body.name, body.description, now),
+        )
+        conn.commit()
+        domain_id = cur.lastrowid
+    return DomainSummary(
+        id=domain_id,
+        name=body.name,
+        description=body.description,
+        status="active",
+        topic_count=0,
+        created_at=now,
     )
 
 
@@ -592,26 +639,26 @@ def get_paper(paper_id: int):
 
 
 # ---------------------------------------------------------------------------
-# Orchestrator
+# Topic Orchestrator — Artifacts & Events
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/projects/{project_id}/artifacts")
-def list_project_artifacts(
-    project_id: int,
+@app.get("/api/topics/{topic_id}/artifacts")
+def list_topic_artifacts(
+    topic_id: int,
     stage: str | None = Query(None, description="Filter by stage"),
 ):
     with get_db() as conn:
-        proj = conn.execute(
-            "SELECT id FROM projects WHERE id = ?", (project_id,)
+        topic = conn.execute(
+            "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
-        if not proj:
+        if not topic:
             raise HTTPException(
-                status_code=404, detail=f"Project {project_id} not found"
+                status_code=404, detail=f"Topic {topic_id} not found"
             )
 
-        conditions = ["project_id = ?"]
-        params: list[Any] = [project_id]
+        conditions = ["topic_id = ?"]
+        params: list[Any] = [topic_id]
         if stage:
             conditions.append("stage = ?")
             params.append(stage)
@@ -637,29 +684,28 @@ def list_project_artifacts(
         d["metadata"] = _parse_json_field(d.pop("metadata_json", None), {})
         grouped.setdefault(d["stage"], []).append(d)
 
-    return {"project_id": project_id, "artifacts_by_stage": grouped}
+    return {"topic_id": topic_id, "artifacts_by_stage": grouped}
 
 
-@app.get("/api/projects/{project_id}/events")
-def list_project_events(project_id: int):
+@app.get("/api/topics/{topic_id}/events")
+def list_topic_events(topic_id: int):
     with get_db() as conn:
-        proj = conn.execute(
-            "SELECT id FROM projects WHERE id = ?", (project_id,)
+        topic = conn.execute(
+            "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
-        if not proj:
+        if not topic:
             raise HTTPException(
-                status_code=404, detail=f"Project {project_id} not found"
+                status_code=404, detail=f"Topic {topic_id} not found"
             )
 
         rows = conn.execute(
             """
             SELECT e.*
             FROM orchestrator_stage_events e
-            JOIN orchestrator_runs r ON r.id = e.run_id
-            WHERE r.project_id = ?
+            WHERE e.topic_id = ?
             ORDER BY e.created_at DESC
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchall()
 
     events = []
@@ -668,7 +714,7 @@ def list_project_events(project_id: int):
         d["payload"] = _parse_json_field(d.pop("payload_json", None), {})
         events.append(d)
 
-    return {"project_id": project_id, "events": events}
+    return {"topic_id": topic_id, "events": events}
 
 
 # ---------------------------------------------------------------------------
@@ -681,7 +727,7 @@ def dashboard_stats():
     with get_db() as conn:
         total_papers = conn.execute("SELECT COUNT(*) AS c FROM papers").fetchone()["c"]
         total_topics = conn.execute("SELECT COUNT(*) AS c FROM topics").fetchone()["c"]
-        total_projects = conn.execute("SELECT COUNT(*) AS c FROM projects").fetchone()[
+        total_domains = conn.execute("SELECT COUNT(*) AS c FROM domains").fetchone()[
             "c"
         ]
         total_artifacts = conn.execute(
@@ -705,7 +751,7 @@ def dashboard_stats():
 
         recent_events = conn.execute(
             """
-            SELECT e.id, e.project_id, e.from_stage, e.to_stage,
+            SELECT e.id, e.topic_id, e.from_stage, e.to_stage,
                    e.event_type, e.status, e.actor, e.created_at
             FROM orchestrator_stage_events e
             ORDER BY e.created_at DESC
@@ -716,7 +762,7 @@ def dashboard_stats():
     return DashboardStats(
         total_papers=total_papers,
         total_topics=total_topics,
-        total_projects=total_projects,
+        total_domains=total_domains,
         total_artifacts=total_artifacts,
         total_provenance_records=total_provenance,
         papers_with_pdf=papers_with_pdf,
@@ -792,25 +838,25 @@ def provenance_summary():
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/projects/{project_id}/issues")
-def list_project_issues(
-    project_id: int,
+@app.get("/api/topics/{topic_id}/issues")
+def list_topic_issues(
+    topic_id: int,
     status: str | None = Query(
         None, description="Filter: open, in_progress, resolved, wontfix"
     ),
     blocking_only: bool = Query(False),
 ):
     with get_db() as conn:
-        proj = conn.execute(
-            "SELECT id FROM projects WHERE id = ?", (project_id,)
+        topic = conn.execute(
+            "SELECT id FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
-        if not proj:
+        if not topic:
             raise HTTPException(
-                status_code=404, detail=f"Project {project_id} not found"
+                status_code=404, detail=f"Topic {topic_id} not found"
             )
 
-        conditions = ["project_id = ?"]
-        params: list[Any] = [project_id]
+        conditions = ["topic_id = ?"]
+        params: list[Any] = [topic_id]
 
         if status:
             conditions.append("status = ?")
@@ -830,7 +876,7 @@ def list_project_issues(
             params,
         ).fetchall()
 
-    return {"project_id": project_id, "issues": _rows_to_list(rows)}
+    return {"topic_id": topic_id, "issues": _rows_to_list(rows)}
 
 
 # ===========================================================================
@@ -863,94 +909,82 @@ class CreateTopicRequest(BaseModel):
     description: str = ""
     target_venue: str = ""
     deadline: str = ""
+    domain_id: int | None = None
 
 
 @app.post("/api/topics")
 def create_topic(body: CreateTopicRequest):
-    """Create a new research topic."""
+    """Create a new research topic and bootstrap its orchestrator run."""
     now = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
-        cur = conn.execute(
-            """
-            INSERT INTO topics (name, description, status, target_venue, deadline, created_at)
-            VALUES (?, ?, 'active', ?, ?, ?)
-            """,
-            (body.name, body.description, body.target_venue, body.deadline, now),
-        )
-        conn.commit()
-        topic_id = cur.lastrowid
-        row = conn.execute("SELECT * FROM topics WHERE id = ?", (topic_id,)).fetchone()
-    return _row_to_dict(row)
-
-
-# ---------------------------------------------------------------------------
-# Project creation
-# ---------------------------------------------------------------------------
-
-
-class CreateProjectRequest(BaseModel):
-    topic_id: int
-    name: str
-    description: str = ""
-    target_venue: str = ""
-    deadline: str = ""
-
-
-@app.post("/api/projects")
-def create_project(body: CreateProjectRequest):
-    """Create a new project and bootstrap its orchestrator run."""
-    now = datetime.now(timezone.utc).isoformat()
-    with get_db() as conn:
-        # Verify topic exists
-        topic = conn.execute(
-            "SELECT id FROM topics WHERE id = ?", (body.topic_id,)
-        ).fetchone()
-        if not topic:
-            raise HTTPException(
-                status_code=404, detail=f"Topic {body.topic_id} not found"
-            )
+        # Verify domain exists if provided
+        if body.domain_id is not None:
+            domain = conn.execute(
+                "SELECT id FROM domains WHERE id = ?", (body.domain_id,)
+            ).fetchone()
+            if not domain:
+                raise HTTPException(
+                    status_code=404, detail=f"Domain {body.domain_id} not found"
+                )
 
         cur = conn.execute(
             """
-            INSERT INTO projects (topic_id, name, description, status, target_venue, deadline,
-                                  created_at, updated_at)
-            VALUES (?, ?, ?, 'planning', ?, ?, ?, ?)
+            INSERT INTO topics (name, description, status, target_venue, deadline,
+                                domain_id, created_at)
+            VALUES (?, ?, 'active', ?, ?, ?, ?)
             """,
             (
-                body.topic_id,
                 body.name,
                 body.description,
                 body.target_venue,
                 body.deadline,
-                now,
+                body.domain_id,
                 now,
             ),
         )
         conn.commit()
-        project_id = cur.lastrowid
+        topic_id = cur.lastrowid
 
     # Bootstrap orchestrator run
-    orch_result = _run_tool(
-        "orchestrator_resume",
-        {"project_id": project_id, "topic_id": body.topic_id},
-    )
+    orch_result = _run_tool("orchestrator_resume", {"topic_id": topic_id})
 
     with get_db() as conn:
         row = conn.execute(
             """
-            SELECT p.*, t.name AS topic_name,
-                   o.current_stage, o.stage_status, o.gate_status
-            FROM projects p
-            JOIN topics t ON t.id = p.topic_id
-            LEFT JOIN orchestrator_runs o ON o.project_id = p.id
-            WHERE p.id = ?
+            SELECT t.*, d.name AS domain_name
+            FROM topics t
+            LEFT JOIN domains d ON d.id = t.domain_id
+            WHERE t.id = ?
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchone()
 
     result = _row_to_dict(row)
     result["orchestrator"] = orch_result
     return result
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator actions
+# ---------------------------------------------------------------------------
+
+
+class AdvanceRequest(BaseModel):
+    actor: str = "web_ui"
+
+
+@app.post("/api/topics/{topic_id}/advance")
+def advance_topic(topic_id: int, body: AdvanceRequest):
+    """Advance the topic to the next orchestrator stage."""
+    return _run_tool(
+        "orchestrator_advance", {"topic_id": topic_id, "actor": body.actor}
+    )
+
+
+@app.get("/api/topics/{topic_id}/gate")
+def check_gate(topic_id: int):
+    """Check the gate for the current orchestrator stage."""
+    return _run_tool("orchestrator_gate_check", {"topic_id": topic_id})
 
 
 # ---------------------------------------------------------------------------
@@ -986,29 +1020,6 @@ def ingest_paper(body: PaperIngestRequest):
     if body.topic_id is not None:
         args["topic_id"] = body.topic_id
     return _run_tool("paper_ingest", args)
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator actions
-# ---------------------------------------------------------------------------
-
-
-class AdvanceRequest(BaseModel):
-    actor: str = "web_ui"
-
-
-@app.post("/api/projects/{project_id}/advance")
-def advance_project(project_id: int, body: AdvanceRequest):
-    """Advance the project to the next orchestrator stage."""
-    return _run_tool(
-        "orchestrator_advance", {"project_id": project_id, "actor": body.actor}
-    )
-
-
-@app.get("/api/projects/{project_id}/gate")
-def check_gate(project_id: int):
-    """Check the gate for the current orchestrator stage."""
-    return _run_tool("orchestrator_gate_check", {"project_id": project_id})
 
 
 # ---------------------------------------------------------------------------
@@ -1062,18 +1073,16 @@ def rank_directions(topic_id: int, body: DirectionRankingRequest):
 
 
 class OutlineGenerateRequest(BaseModel):
-    topic_id: int
     template: str = "neurips"
 
 
-@app.post("/api/projects/{project_id}/outline")
-def generate_outline(project_id: int, body: OutlineGenerateRequest):
+@app.post("/api/topics/{topic_id}/outline")
+def generate_outline(topic_id: int, body: OutlineGenerateRequest):
     """Generate a paper outline from contributions and evidence."""
     return _run_tool(
         "outline_generate",
         {
-            "topic_id": body.topic_id,
-            "project_id": project_id,
+            "topic_id": topic_id,
             "template": body.template,
         },
     )

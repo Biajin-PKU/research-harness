@@ -38,7 +38,6 @@ def test_unknown_tool_returns_error(db, svc):
         "nonexistent_tool",
         db=db,
         svc=svc,
-        project_id=1,
         topic_id=1,
         stage="init",
         context={},
@@ -48,21 +47,19 @@ def test_unknown_tool_returns_error(db, svc):
 
 
 def test_orchestrator_status_dispatches(db, svc):
-    # Create a project first
+    # Create a topic first
     conn = db.connect()
     try:
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 'test-topic')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'test')")
         conn.commit()
     finally:
         conn.close()
-    svc.resume_run(1, 1)
+    svc.resume_run(1)
 
     result = dispatch(
         "orchestrator_status",
         db=db,
         svc=svc,
-        project_id=1,
         topic_id=1,
         stage="init",
         context={},
@@ -89,7 +86,6 @@ def test_paper_list_query(db, svc):
         "paper_list",
         db=db,
         svc=svc,
-        project_id=1,
         topic_id=1,
         stage="build",
         context={},
@@ -102,16 +98,14 @@ def test_dispatch_stage_tools_runs_multiple(db, svc):
     conn = db.connect()
     try:
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 'test-topic')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'test')")
         conn.commit()
     finally:
         conn.close()
-    svc.resume_run(1, 1)
+    svc.resume_run(1)
 
     result = dispatch_stage_tools(
         db=db,
         svc=svc,
-        project_id=1,
         topic_id=1,
         stage="init",
         tools=("orchestrator_status", "orchestrator_gate_check"),

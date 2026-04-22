@@ -37,12 +37,7 @@ def pipeline_db(tmp_path):
     db.migrate()
     conn = db.connect()
     try:
-        # Create topic
-        conn.execute(
-            "INSERT INTO topics (name, description) VALUES (?, ?)",
-            ("auto-bidding", "Automated bidding in online advertising"),
-        )
-        # Create a project with contributions so outline_generate's
+        # Create topic with contributions so outline_generate's
         # fail-fast guard is satisfied in e2e tests.
         _e2e_contributions = (
             "Paper title: DeepBid\n"
@@ -51,9 +46,8 @@ def pipeline_db(tmp_path):
             "3. Empirical evaluation showing +5% revenue vs. prior art."
         )
         conn.execute(
-            """INSERT INTO projects (topic_id, name, description, contributions)
-               VALUES (1, 'e2e-test', 'E2E project', ?)""",
-            (_e2e_contributions,),
+            "INSERT INTO topics (name, description, contributions) VALUES (?, ?, ?)",
+            ("auto-bidding", "Automated bidding in online advertising", _e2e_contributions),
         )
         # Create papers
         for i, (title, year, venue) in enumerate(
@@ -472,22 +466,11 @@ class TestToolDispatchIntegration:
 
         svc = OrchestratorService(pipeline_db)
 
-        # Create project and orchestrator run
-        conn = pipeline_db.connect()
-        try:
-            conn.execute(
-                "INSERT INTO projects (topic_id, name, description) VALUES (1, 'test', 'test')"
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
         monitor = BudgetMonitor(BudgetLimits(max_cost_usd=100.0))
 
         result = dispatch_stage_tools(
             db=pipeline_db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="build",
             tools=("paper_list",),
@@ -509,7 +492,6 @@ class TestToolDispatchIntegration:
             "paper_list",
             db=pipeline_db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="build",
             context={},
@@ -528,7 +510,6 @@ class TestToolDispatchIntegration:
             "nonexistent_tool",
             db=pipeline_db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="build",
             context={},

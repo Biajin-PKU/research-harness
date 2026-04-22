@@ -50,7 +50,6 @@ def execute_stage(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     mode: str,
@@ -83,7 +82,7 @@ def execute_stage(
     # Preserve only cross-stage keys that are explicitly carried forward.
     prev_ctx = checkpoint_data.get("stage_context", {})
     fresh_ctx: dict[str, Any] = {}
-    for keep_key in ("direction", "project_id"):
+    for keep_key in ("direction", "topic_id"):
         if keep_key in prev_ctx:
             fresh_ctx[keep_key] = prev_ctx[keep_key]
     checkpoint_data["stage_context"] = fresh_ctx
@@ -95,7 +94,6 @@ def execute_stage(
         planned = plan_stage(
             db=db,
             svc=svc,
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             checkpoint_data=checkpoint_data,
@@ -119,7 +117,6 @@ def execute_stage(
         result = _execute_stage_tools(
             db=db,
             svc=svc,
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             checkpoint_data=checkpoint_data,
@@ -199,7 +196,6 @@ def execute_stage(
         codex_result = _maybe_run_codex(
             stage=stage,
             mode=mode,
-            project_id=project_id,
             topic_id=topic_id,
             svc=svc,
             checkpoint_data=checkpoint_data,
@@ -246,7 +242,6 @@ def _execute_stage_tools(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     checkpoint_data: dict[str, Any],
@@ -268,7 +263,6 @@ def _execute_stage_tools(
     return dispatch_stage_tools(
         db=db,
         svc=svc,
-        project_id=project_id,
         topic_id=topic_id,
         stage=stage,
         tools=policy.tools,
@@ -281,7 +275,6 @@ def _maybe_run_codex(
     *,
     stage: str,
     mode: str,
-    project_id: int,
     topic_id: int,
     svc: OrchestratorService,
     checkpoint_data: dict[str, Any],
@@ -295,7 +288,7 @@ def _maybe_run_codex(
     if handoff.get("verdict") and handoff.get("stage") == stage:
         return None  # Continue with existing verdict
 
-    h_dir = ckpt.handoff_dir(base_dir, project_id, stage)
+    h_dir = ckpt.handoff_dir(base_dir, topic_id, stage)
 
     # Check for existing response from a previous interrupted run
     existing = load_handoff_response(h_dir)

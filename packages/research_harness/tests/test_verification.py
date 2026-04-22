@@ -346,9 +346,8 @@ class TestVerificationPrimitives:
         db.migrate()
         conn = db.connect()
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 't')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'p')")
         conn.execute(
-            "INSERT INTO verified_numbers (project_id, source, number_original, number_rounded) VALUES (?, ?, ?, ?)",
+            "INSERT INTO verified_numbers (topic_id, source, number_original, number_rounded) VALUES (?, ?, ?, ?)",
             (1, "metric:accuracy", 0.9134, 0.91),
         )
         conn.commit()
@@ -356,7 +355,7 @@ class TestVerificationPrimitives:
 
         result = paper_verify_numbers(
             db=db,
-            project_id=1,
+            topic_id=1,
             text="Our model achieves 0.9134 accuracy.",
             section="results",
         )
@@ -371,13 +370,12 @@ class TestVerificationPrimitives:
         db.migrate()
         conn = db.connect()
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 't')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'p')")
         conn.commit()
         conn.close()
 
         result = paper_verify_numbers(
             db=db,
-            project_id=1,
+            topic_id=1,
             text="Our method achieves 0.97 accuracy.",
             section="results",
         )
@@ -406,11 +404,10 @@ class TestVerificationPrimitives:
         db.migrate()
         conn = db.connect()
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 't')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'p')")
         conn.commit()
         conn.close()
 
-        result = evidence_trace(db=db, project_id=1, topic_id=1)
+        result = evidence_trace(db=db, topic_id=1)
         assert result.total_claims == 0
         assert result.coverage_ratio == 0.0
 
@@ -423,7 +420,6 @@ class TestVerificationPrimitives:
         db.migrate()
         conn = db.connect()
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 't')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'p')")
         # Add a paper
         conn.execute(
             "INSERT INTO papers (id, title, doi, arxiv_id, s2_id) VALUES (1, 'Test Paper', '10.1000/test', '', '')"
@@ -431,17 +427,17 @@ class TestVerificationPrimitives:
         conn.execute(
             "INSERT INTO paper_topics (paper_id, topic_id, relevance) VALUES (1, 1, 'high')"
         )
-        # Add verified numbers
+        # Add verified numbers (topic_id column required for evidence_trace query)
         conn.execute(
-            "INSERT INTO verified_numbers (project_id, source, number_original, number_rounded) VALUES (1, 'test', 0.95, 0.95)"
+            "INSERT INTO verified_numbers (topic_id, source, number_original, number_rounded) VALUES (1, 'test', 0.95, 0.95)"
         )
         # Add claims artifact
         claims_payload = json.dumps(
             {"claims": [{"claim_id": "claim_abc123", "content": "Test claim"}]}
         )
         conn.execute(
-            """INSERT INTO project_artifacts (project_id, topic_id, stage, artifact_type, payload_json, status)
-               VALUES (1, 1, 'analyze', 'claims', ?, 'active')""",
+            """INSERT INTO project_artifacts (topic_id, stage, artifact_type, payload_json, status)
+               VALUES (1, 'analyze', 'claims', ?, 'active')""",
             (claims_payload,),
         )
         # Add evidence link artifact
@@ -449,14 +445,14 @@ class TestVerificationPrimitives:
             {"claim_id": "claim_abc123", "source_type": "paper", "source_id": "1"}
         )
         conn.execute(
-            """INSERT INTO project_artifacts (project_id, topic_id, stage, artifact_type, payload_json, status)
-               VALUES (1, 1, 'analyze', 'evidence_links', ?, 'active')""",
+            """INSERT INTO project_artifacts (topic_id, stage, artifact_type, payload_json, status)
+               VALUES (1, 'analyze', 'evidence_links', ?, 'active')""",
             (link_payload,),
         )
         conn.commit()
         conn.close()
 
-        result = evidence_trace(db=db, project_id=1, topic_id=1)
+        result = evidence_trace(db=db, topic_id=1)
         assert result.total_claims == 1
         assert result.traced_claims == 1
         assert result.fully_traced == 1

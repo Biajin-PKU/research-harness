@@ -180,21 +180,21 @@ def _get_client(
 _token_acc_local = _threading.local()
 
 
-def _get_project_contributions(db: Database, project_id: int) -> str:
-    """Return stored ``projects.contributions`` for a project_id, or empty.
+def _get_topic_contributions(db: Database, topic_id: int) -> str:
+    """Return stored ``topics.contributions`` for a topic_id, or empty.
 
     Used by writing primitives (outline_generate, writing_architecture,
     figure_plan, competitive_learning) as a fallback when the caller omits
-    the ``contributions`` argument. Makes contributions a project-level
+    the ``contributions`` argument. Makes contributions a topic-level
     config rather than a repeated per-call parameter.
     """
-    if not project_id:
+    if not topic_id:
         return ""
     conn = db.connect()
     try:
         row = conn.execute(
-            "SELECT contributions FROM projects WHERE id = ?",
-            (project_id,),
+            "SELECT contributions FROM topics WHERE id = ?",
+            (topic_id,),
         ).fetchone()
     finally:
         conn.close()
@@ -204,31 +204,14 @@ def _get_project_contributions(db: Database, project_id: int) -> str:
 
 
 def _get_topic_latest_project_contributions(db: Database, topic_id: int) -> str:
-    """Return contributions from the most recently updated project of a topic.
+    """Return contributions from the topic.
 
-    Used when the primitive only has ``topic_id`` (no ``project_id``), e.g.
-    writing_architecture / figure_plan / competitive_learning — they operate
-    at the topic layer but the contributions live on the project.
+    Used when the primitive only has ``topic_id`` — reads directly from
+    the ``topics.contributions`` column.
     """
     if not topic_id:
         return ""
-    conn = db.connect()
-    try:
-        row = conn.execute(
-            """
-            SELECT contributions FROM projects
-            WHERE topic_id = ?
-              AND contributions IS NOT NULL AND contributions != ''
-            ORDER BY datetime(updated_at) DESC, id DESC
-            LIMIT 1
-            """,
-            (topic_id,),
-        ).fetchone()
-    finally:
-        conn.close()
-    if not row:
-        return ""
-    return (row["contributions"] or "").strip()
+    return _get_topic_contributions(db, topic_id)
 
 
 def _reset_token_accumulator() -> None:
@@ -1410,8 +1393,8 @@ def competitive_learning(
     Otherwise, selects the highest-cited recent papers from the topic pool
     that match the target venue.
 
-    ``contributions`` is optional: if omitted, auto-loaded from the most
-    recently updated project's ``projects.contributions`` for this topic.
+    ``contributions`` is optional: if omitted, auto-loaded from the
+    ``topics.contributions`` for this topic.
     """
     if not contributions.strip():
         contributions = _get_topic_latest_project_contributions(db, topic_id)
@@ -1772,7 +1755,6 @@ def outline_generate(
     *,
     db: Database,
     topic_id: int,
-    project_id: int,
     template: str = "neurips",
     contributions: str = "",
     _model: str | None = None,
@@ -1782,16 +1764,16 @@ def outline_generate(
 
     ``contributions`` fallback order:
       1. Explicit argument (caller-provided).
-      2. ``projects.contributions`` for this project_id (project-level config).
-      3. Latest ``writing_architecture`` artifact for this project+topic.
+      2. ``topics.contributions`` for this topic_id (topic-level config).
+      3. Latest ``writing_architecture`` artifact for this topic.
     If none of the above yield a non-empty string, this primitive REFUSES to
     run rather than letting the LLM invent a paper from topic literature.
     """
     summary, _ = _get_topic_literature_summary(db, topic_id, task_type="section_draft")
 
-    # Fallback 2: project-level config
+    # Fallback 2: topic-level config
     if not contributions.strip():
-        contributions = _get_project_contributions(db, project_id)
+        contributions = _get_topic_contributions(db, topic_id)
 
     # Gather claims if available
     conn = db.connect()
@@ -1809,12 +1791,12 @@ def outline_generate(
             arch_rows = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND topic_id = ?
+                WHERE topic_id = ?
                   AND artifact_type = 'writing_architecture'
                   AND status = 'active'
                 ORDER BY created_at DESC LIMIT 1
                 """,
-                (project_id, topic_id),
+                (topic_id,),
             ).fetchall()
             if arch_rows:
                 try:
@@ -1848,9 +1830,9 @@ def outline_generate(
         raise ValueError(
             "outline_generate requires paper contributions but none were found. "
             "Resolution order checked: (1) `contributions` argument, "
-            f"(2) projects.contributions for project_id={project_id}, "
+            f"(2) topics.contributions for topic_id={topic_id}, "
             "(3) writing_architecture artifact. "
-            "Fix by calling `project_set_contributions(project_id, contributions=...)` "
+            "Fix by calling `topic_set_contributions(topic_id, contributions=...)` "
             "or running `writing_architecture` first, or pass contributions explicitly. "
             "Refusing to generate to avoid hallucinating an unrelated paper from topic literature."
         )
@@ -2788,7 +2770,7 @@ def figure_interpret(
 def rebuttal_format(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     **_: Any,
 ) -> "RebuttalFormatOutput":
     """Format a rebuttal letter from review issues and author responses."""
@@ -2801,12 +2783,12 @@ def rebuttal_format(
             """
             SELECT ri.severity, ri.category, ri.summary, ri.details, ri.recommended_action
             FROM review_issues ri
-            WHERE ri.project_id = ? AND ri.status != 'resolved'
+            WHERE ri.topic_id = ? AND ri.status != 'resolved'
             ORDER BY
                 CASE ri.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
                 ri.created_at
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchall()
 
         # Gather responses
@@ -2815,19 +2797,19 @@ def rebuttal_format(
             SELECT rr.response_type, rr.response_text, ri.summary as issue_summary
             FROM review_responses rr
             JOIN review_issues ri ON ri.id = rr.issue_id
-            WHERE rr.project_id = ?
+            WHERE rr.topic_id = ?
             ORDER BY rr.created_at
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchall()
     finally:
         conn.close()
 
     if not issues:
         return RebuttalFormatOutput(
-            rebuttal_text="No review issues found for this project.",
+            rebuttal_text="No review issues found for this topic.",
             issues_addressed=0,
-            project_id=project_id,
+            topic_id=topic_id,
         )
 
     # Build issue text
@@ -2859,7 +2841,7 @@ def rebuttal_format(
     return RebuttalFormatOutput(
         rebuttal_text=rebuttal.strip(),
         issues_addressed=len(issues),
-        project_id=project_id,
+        topic_id=topic_id,
     )
 
 
@@ -3566,15 +3548,15 @@ def writing_architecture(
 ) -> WritingArchitectureOutput:
     """Design optimal paper structure based on contributions and venue patterns.
 
-    ``contributions`` is optional: if omitted, auto-loaded from the most
-    recently updated project's ``projects.contributions`` for this topic.
+    ``contributions`` is optional: if omitted, auto-loaded from
+    ``topics.contributions`` for this topic.
     """
     if not contributions.strip():
         contributions = _get_topic_latest_project_contributions(db, topic_id)
     if not contributions.strip():
         raise ValueError(
             "writing_architecture requires contributions either passed "
-            "explicitly or set on the project via project_set_contributions."
+            "explicitly or set on the topic via topic_set_contributions."
         )
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("writing_architecture"))
     raw = _client_chat(
@@ -3630,8 +3612,8 @@ def figure_plan(
 ) -> "FigurePlanOutput":
     """Plan figures and tables for a paper.
 
-    ``contributions`` is optional: if omitted, auto-loaded from the most
-    recently updated project's ``projects.contributions`` for this topic.
+    ``contributions`` is optional: if omitted, auto-loaded from
+    ``topics.contributions`` for this topic.
     """
     from ..primitives.types import FigurePlanItem, FigurePlanOutput
 
@@ -3640,7 +3622,7 @@ def figure_plan(
     if not contributions.strip():
         raise ValueError(
             "figure_plan requires contributions either passed explicitly "
-            "or set on the project via project_set_contributions."
+            "or set on the topic via topic_set_contributions."
         )
 
     evidence_text, _ = _build_numbered_evidence(
@@ -4263,7 +4245,6 @@ def algorithm_design_loop(
     *,
     db: Database,
     topic_id: int,
-    project_id: int,
     direction: str,
     max_rounds: int = 3,
     constraints: list[str] | None = None,

@@ -35,11 +35,11 @@ interface WriteResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function advanceProject(
-  projectId: number,
+async function advanceTopic(
+  topicId: number,
   params?: { actor?: string }
 ): Promise<WriteResponse> {
-  const res = await fetch(`${API_BASE}/api/projects/${projectId}/advance`, {
+  const res = await fetch(`${API_BASE}/api/topics/${topicId}/advance`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params ?? {}),
@@ -51,9 +51,9 @@ async function advanceProject(
   return res.json();
 }
 
-async function checkGate(projectId: number): Promise<WriteResponse> {
+async function checkTopicGate(topicId: number): Promise<WriteResponse> {
   const res = await fetch(
-    `${API_BASE}/api/projects/${projectId}/gate-check`,
+    `${API_BASE}/api/topics/${topicId}/gate-check`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,14 +72,14 @@ async function checkGate(projectId: number): Promise<WriteResponse> {
 // ---------------------------------------------------------------------------
 
 interface ActionToolbarProps {
-  projectId: number;
+  topicId: number;
   currentStage: ResearchStage | null;
   stageStatus: string | null;
   onRefresh: () => void;
 }
 
 export function ActionToolbar({
-  projectId,
+  topicId,
   currentStage,
   stageStatus,
   onRefresh,
@@ -100,7 +100,7 @@ export function ActionToolbar({
 
   // Advance mutation
   const advanceMut = useMutation({
-    mutationFn: () => advanceProject(projectId, { actor: "web_ui" }),
+    mutationFn: () => advanceTopic(topicId, { actor: "web_ui" }),
     onSuccess: (data) => {
       showFeedback(
         data.status === "error" ? "error" : "success",
@@ -115,7 +115,7 @@ export function ActionToolbar({
 
   // Gate check mutation
   const gateMut = useMutation({
-    mutationFn: () => checkGate(projectId),
+    mutationFn: () => checkTopicGate(topicId),
     onSuccess: (data) => {
       const gateStatus =
         typeof data.output === "object" && data.output !== null

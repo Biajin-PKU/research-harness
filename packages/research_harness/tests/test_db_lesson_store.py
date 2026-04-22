@@ -115,7 +115,7 @@ class TestDBLessonStore:
             Lesson(stage="build", content="auto-extracted lesson"),
             source="extracted",
             source_session_id="sess-001",
-            source_project_id=5,
+            source_topic_id=5,
             topic_id=1,
         )
         assert rid > 0

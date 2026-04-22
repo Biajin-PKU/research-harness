@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  FolderKanban,
+  Globe,
+  BookOpen,
   Library,
   FlaskConical,
   PanelLeftClose,
@@ -24,7 +25,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Projects", href: "/projects", icon: FolderKanban },
+  { label: "Domains", href: "/domains", icon: Globe },
+  { label: "Topics", href: "/topics", icon: BookOpen },
   { label: "Library", href: "/library", icon: Library },
 ];
 

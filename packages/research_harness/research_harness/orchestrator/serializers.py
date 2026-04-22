@@ -14,7 +14,6 @@ from .models import (
 def serialize_run(run: OrchestratorRun) -> dict[str, Any]:
     return {
         "id": run.id,
-        "project_id": run.project_id,
         "topic_id": run.topic_id,
         "mode": run.mode,
         "current_stage": run.current_stage,
@@ -32,7 +31,6 @@ def serialize_run(run: OrchestratorRun) -> dict[str, Any]:
 def serialize_artifact(artifact: ProjectArtifact) -> dict[str, Any]:
     return {
         "id": artifact.id,
-        "project_id": artifact.project_id,
         "topic_id": artifact.topic_id,
         "stage": artifact.stage,
         "artifact_type": artifact.artifact_type,
@@ -53,7 +51,6 @@ def serialize_event(event: StageEvent) -> dict[str, Any]:
     return {
         "id": event.id,
         "run_id": event.run_id,
-        "project_id": event.project_id,
         "topic_id": event.topic_id,
         "from_stage": event.from_stage,
         "to_stage": event.to_stage,

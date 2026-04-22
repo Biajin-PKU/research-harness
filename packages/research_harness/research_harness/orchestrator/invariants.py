@@ -73,17 +73,17 @@ class InvariantChecker:
     def __init__(self, db: Database):
         self._db = db
 
-    def check_all(self, project_id: int, stage: str) -> list[InvariantViolation]:
+    def check_all(self, topic_id: int, stage: str) -> list[InvariantViolation]:
         """Run all invariant checks for a stage. Returns list of violations."""
         violations: list[InvariantViolation] = []
-        violations.extend(self.check_artifact_schemas(project_id, stage))
-        violations.extend(self.check_no_stale_artifacts(project_id, stage))
-        violations.extend(self.check_provenance_linkage(project_id, stage))
-        violations.extend(self.check_section_citations(project_id, stage))
+        violations.extend(self.check_artifact_schemas(topic_id, stage))
+        violations.extend(self.check_no_stale_artifacts(topic_id, stage))
+        violations.extend(self.check_provenance_linkage(topic_id, stage))
+        violations.extend(self.check_section_citations(topic_id, stage))
         return violations
 
     def check_artifact_schemas(
-        self, project_id: int, stage: str
+        self, topic_id: int, stage: str
     ) -> list[InvariantViolation]:
         """Validate that artifact payloads match their type schemas."""
         violations: list[InvariantViolation] = []
@@ -93,9 +93,9 @@ class InvariantChecker:
                 """
                 SELECT id, artifact_type, payload_json, title
                 FROM project_artifacts
-                WHERE project_id = ? AND status = 'active'
+                WHERE topic_id = ? AND status = 'active'
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
 
             for row in rows:
@@ -136,7 +136,7 @@ class InvariantChecker:
         return violations
 
     def check_no_stale_artifacts(
-        self, project_id: int, stage: str
+        self, topic_id: int, stage: str
     ) -> list[InvariantViolation]:
         """Verify no stale artifacts are being counted for gate evaluation."""
         violations: list[InvariantViolation] = []
@@ -146,9 +146,9 @@ class InvariantChecker:
                 """
                 SELECT id, artifact_type, stale, stale_reason
                 FROM project_artifacts
-                WHERE project_id = ? AND status = 'active' AND stale = 1
+                WHERE topic_id = ? AND status = 'active' AND stale = 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
 
             for row in rows:
@@ -169,7 +169,7 @@ class InvariantChecker:
         return violations
 
     def check_provenance_linkage(
-        self, project_id: int, stage: str
+        self, topic_id: int, stage: str
     ) -> list[InvariantViolation]:
         """Check that critical artifacts have provenance records."""
         violations: list[InvariantViolation] = []
@@ -190,10 +190,10 @@ class InvariantChecker:
                 """
                 SELECT id, artifact_type, provenance_record_id
                 FROM project_artifacts
-                WHERE project_id = ? AND status = 'active'
+                WHERE topic_id = ? AND status = 'active'
                   AND artifact_type IN ({})
                 """.format(",".join("?" * len(critical_types))),
-                (project_id, *critical_types),
+                (topic_id, *critical_types),
             ).fetchall()
 
             for row in rows:
@@ -215,7 +215,7 @@ class InvariantChecker:
         return violations
 
     def check_section_citations(
-        self, project_id: int, stage: str
+        self, topic_id: int, stage: str
     ) -> list[InvariantViolation]:
         """Check that draft sections contain citation markers."""
         violations: list[InvariantViolation] = []
@@ -228,11 +228,11 @@ class InvariantChecker:
                 """
                 SELECT id, artifact_type, payload_json
                 FROM project_artifacts
-                WHERE project_id = ? AND status = 'active'
+                WHERE topic_id = ? AND status = 'active'
                   AND artifact_type = 'draft_pack'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
 
             for row in rows:

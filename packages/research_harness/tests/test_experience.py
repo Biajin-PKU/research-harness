@@ -25,7 +25,6 @@ class TestExperienceRecord:
         assert rec.diff_summary == ""
         assert rec.quality_delta == 0.0
         assert rec.topic_id is None
-        assert rec.project_id is None
         assert rec.paper_id is None
         assert rec.metadata == {}
         assert rec.gate_verdict == "pending"
@@ -61,7 +60,6 @@ class TestExperienceStore:
             after_text="Draft v2",
             diff_summary="Added motivation paragraph",
             topic_id=1,
-            project_id=1,
         )
         record_id = store.ingest(rec)
         assert isinstance(record_id, int)
@@ -99,7 +97,6 @@ class TestExperienceStore:
             diff_summary="Gold paper has better ablation structure",
             quality_delta=0.35,
             topic_id=2,
-            project_id=3,
             paper_id=42,
             metadata={"gold_paper_id": 99, "venue": "NeurIPS"},
         )
@@ -112,7 +109,6 @@ class TestExperienceStore:
         assert retrieved.after_text == "Gold standard text"
         assert retrieved.quality_delta == pytest.approx(0.35)
         assert retrieved.topic_id == 2
-        assert retrieved.project_id == 3
         assert retrieved.paper_id == 42
         assert retrieved.metadata["gold_paper_id"] == 99
 

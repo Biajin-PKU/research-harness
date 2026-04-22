@@ -63,7 +63,6 @@ class ReviewManager:
 
     def create_bundle(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         integrity_report_id: int | None = None,
@@ -86,7 +85,7 @@ class ReviewManager:
                 )
 
         # Count existing bundles for cycle tracking
-        cycle_number = self._count_bundles(project_id) + 1
+        cycle_number = self._count_bundles(topic_id) + 1
         if cycle_number > MAX_REVIEW_CYCLES:
             raise ValueError(f"Maximum review cycles ({MAX_REVIEW_CYCLES}) exceeded")
 
@@ -98,7 +97,6 @@ class ReviewManager:
         }
 
         return self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             artifact_type="review_bundle",
@@ -111,7 +109,6 @@ class ReviewManager:
 
     def add_issue(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         review_type: str,
@@ -145,7 +142,7 @@ class ReviewManager:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
                 """,
                 (
-                    project_id,
+                    topic_id,
                     topic_id,
                     stage,
                     review_type,
@@ -171,14 +168,14 @@ class ReviewManager:
 
     def list_issues(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str | None = None,
         status: str | None = None,
         blocking_only: bool = False,
     ) -> list[ReviewIssue]:
         """Query review issues with optional filters."""
-        clauses = ["project_id = ?"]
-        params: list[Any] = [project_id]
+        clauses = ["topic_id = ?"]
+        params: list[Any] = [topic_id]
         if stage is not None:
             clauses.append("stage = ?")
             params.append(stage)
@@ -232,7 +229,7 @@ class ReviewManager:
     def add_response(
         self,
         issue_id: int,
-        project_id: int,
+        topic_id: int,
         response_type: str,
         response_text: str,
         artifact_id: int | None = None,
@@ -254,7 +251,7 @@ class ReviewManager:
                 """,
                 (
                     issue_id,
-                    project_id,
+                    topic_id,
                     response_type,
                     response_text,
                     artifact_id,
@@ -296,14 +293,14 @@ class ReviewManager:
 
     def get_review_summary(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str | None = None,
     ) -> dict[str, Any]:
         """Aggregate review status: counts, decision, cycle info."""
         conn = self._db.connect()
         try:
-            clauses = ["project_id = ?"]
-            params: list[Any] = [project_id]
+            clauses = ["topic_id = ?"]
+            params: list[Any] = [topic_id]
             if stage is not None:
                 clauses.append("stage = ?")
                 params.append(stage)
@@ -348,10 +345,10 @@ class ReviewManager:
                     decision = SEVERITY_DECISION_MAP[sev]
                     break
 
-            cycle_number = self._count_bundles(project_id)
+            cycle_number = self._count_bundles(topic_id)
 
             return {
-                "project_id": project_id,
+                "topic_id": topic_id,
                 "stage": stage,
                 "cycle_number": cycle_number,
                 "max_cycles": MAX_REVIEW_CYCLES,
@@ -367,16 +364,16 @@ class ReviewManager:
 
     # -- Internal helpers ----------------------------------------------------
 
-    def _count_bundles(self, project_id: int) -> int:
+    def _count_bundles(self, topic_id: int) -> int:
         """Count all review_bundle artifacts (any status) for cycle tracking."""
         conn = self._db.connect()
         try:
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'review_bundle'
+                WHERE topic_id = ? AND artifact_type = 'review_bundle'
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             return row["cnt"] if row else 0
         finally:
@@ -386,7 +383,6 @@ class ReviewManager:
     def _row_to_issue(row: Any) -> ReviewIssue:
         return ReviewIssue(
             id=row["id"],
-            project_id=row["project_id"],
             topic_id=row["topic_id"],
             review_artifact_id=row["review_artifact_id"],
             stage=row["stage"],
@@ -416,7 +412,7 @@ class ReviewManager:
         return ReviewResponse(
             id=row["id"],
             issue_id=row["issue_id"],
-            project_id=row["project_id"],
+            topic_id=row["project_id"],
             response_type=row["response_type"],
             status=row["status"],
             artifact_id=row["artifact_id"],

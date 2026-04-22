@@ -39,9 +39,8 @@ from research_harness.auto_runner.stage_policy import (
 
 class TestCheckpoint:
     def test_new_checkpoint(self):
-        cp = new_checkpoint(1, 2, mode="standard")
-        assert cp["project_id"] == 1
-        assert cp["topic_id"] == 2
+        cp = new_checkpoint(1, mode="standard")
+        assert cp["topic_id"] == 1
         assert cp["mode"] == "standard"
         assert cp["current_stage"] == "init"
         assert cp["stage_state"] == "pending"
@@ -49,11 +48,11 @@ class TestCheckpoint:
 
     def test_save_and_load(self, tmp_path):
         path = tmp_path / "test_cp.json"
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         save_checkpoint(path, cp)
         loaded = load_checkpoint(path)
         assert loaded is not None
-        assert loaded["project_id"] == 1
+        assert loaded["topic_id"] == 1
         assert "updated_at" in loaded
 
     def test_load_missing(self, tmp_path):
@@ -61,13 +60,13 @@ class TestCheckpoint:
         assert load_checkpoint(path) is None
 
     def test_record_event(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         record_event(cp, stage="topic_framing", event="stage_start", detail="test")
         assert len(cp["history"]) == 1
         assert cp["history"][0]["event"] == "stage_start"
 
     def test_record_artifact(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         record_artifact(
             cp,
             stage="topic_framing",
@@ -78,7 +77,7 @@ class TestCheckpoint:
         assert cp["artifacts"]["topic_framing"]["topic_brief"]["artifact_id"] == 5
 
     def test_record_and_clear_error(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         record_error(cp, kind="api", message="rate limited", tool_name="paper_search")
         assert cp["last_error"]["kind"] == "api"
         assert cp["last_error"]["retry_count"] == 1
@@ -88,7 +87,7 @@ class TestCheckpoint:
         assert cp["last_error"]["retry_count"] == 0
 
     def test_update_stage(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         update_stage(
             cp, stage="literature_mapping", state="running", summary_md="searching..."
         )
@@ -96,7 +95,7 @@ class TestCheckpoint:
         assert cp["stage_state"] == "running"
 
     def test_codex_handoff(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         set_codex_handoff(
             cp,
             stage="adversarial_optimization",
@@ -109,7 +108,7 @@ class TestCheckpoint:
         assert cp["codex_handoff"]["verdict"] == "approve"
 
     def test_history_bounded(self):
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         for i in range(250):
             record_event(cp, stage="test", event=f"e{i}")
         assert len(cp["history"]) == 200
@@ -278,7 +277,7 @@ class TestStageExecutorIntegration:
         finally:
             conn.close()
         svc = OrchestratorService(db)
-        svc.resume_run(1, 1)
+        svc.resume_run(1)
         return db, svc, tmp_path
 
     def test_all_tools_failed_triggers_recovery(self, setup_db):
@@ -288,7 +287,7 @@ class TestStageExecutorIntegration:
         from research_harness.auto_runner.stage_executor import execute_stage
 
         db, svc, tmp_path = setup_db
-        checkpoint_data = ckpt.new_checkpoint(1, 1)
+        checkpoint_data = ckpt.new_checkpoint(1)
 
         def fake_dispatch_all_fail(**kwargs):
             return {
@@ -307,7 +306,6 @@ class TestStageExecutorIntegration:
             result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="build",
                 mode="standard",
@@ -327,7 +325,7 @@ class TestStageExecutorIntegration:
         from research_harness.auto_runner.stage_executor import execute_stage
 
         db, svc, tmp_path = setup_db
-        checkpoint_data = ckpt.new_checkpoint(1, 1)
+        checkpoint_data = ckpt.new_checkpoint(1)
 
         def fake_dispatch_ok(**kwargs):
             return {
@@ -345,7 +343,6 @@ class TestStageExecutorIntegration:
             result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="analyze",
                 mode="standard",
@@ -360,18 +357,18 @@ class TestStageExecutorIntegration:
 class TestCheckpointAtomicity:
     def test_atomic_write_produces_valid_json(self, tmp_path):
         path = tmp_path / "atomic_test.json"
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         save_checkpoint(path, cp)
         loaded = load_checkpoint(path)
         assert loaded is not None
-        assert loaded["project_id"] == 1
+        assert loaded["topic_id"] == 1
 
     def test_no_partial_write_on_disk(self, tmp_path):
         """Verify no .tmp files remain after successful write."""
         import glob
 
         path = tmp_path / "atomic_test2.json"
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         save_checkpoint(path, cp)
         tmp_files = glob.glob(str(tmp_path / "*.tmp"))
         assert len(tmp_files) == 0
@@ -442,8 +439,8 @@ class TestDeferredToolsExclusion:
         finally:
             conn.close()
         svc = OrchestratorService(db)
-        svc.resume_run(1, 1)
-        checkpoint_data = ckpt.new_checkpoint(1, 1)
+        svc.resume_run(1)
+        checkpoint_data = ckpt.new_checkpoint(1)
 
         def fake_dispatch_mixed(**kwargs):
             return {
@@ -470,7 +467,6 @@ class TestDeferredToolsExclusion:
             result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 mode="standard",
@@ -505,7 +501,7 @@ class TestCodexScopedByStage:
             set_codex_handoff,
         )
 
-        cp = new_checkpoint(1, 2)
+        cp = new_checkpoint(1)
         set_codex_handoff(
             cp,
             stage="propose",
@@ -545,8 +541,8 @@ class TestCodexReviseVerdictBlocks:
         finally:
             conn.close()
         svc = OrchestratorService(db)
-        svc.resume_run(1, 1)
-        checkpoint_data = ckpt.new_checkpoint(1, 1)
+        svc.resume_run(1)
+        checkpoint_data = ckpt.new_checkpoint(1)
 
         # Record a fake artifact so codex has something to review
         ckpt.record_artifact(
@@ -608,7 +604,6 @@ class TestCodexReviseVerdictBlocks:
             result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 mode="standard",
@@ -644,8 +639,8 @@ class TestCodexReviseVerdictBlocks:
         finally:
             conn.close()
         svc = OrchestratorService(db)
-        svc.resume_run(1, 1)
-        checkpoint_data = ckpt.new_checkpoint(1, 1)
+        svc.resume_run(1)
+        checkpoint_data = ckpt.new_checkpoint(1)
 
         ckpt.record_artifact(
             checkpoint_data,
@@ -694,7 +689,6 @@ class TestCodexReviseVerdictBlocks:
             result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 mode="standard",

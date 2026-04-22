@@ -110,7 +110,6 @@ FeedbackPolarity = Literal["positive", "negative", "mixed"]
 
 class ContextFeatures(TypedDict, total=False):
     topic_id: int
-    project_id: int
     artifact_id: int
     provenance_id: int
     target_venue: str

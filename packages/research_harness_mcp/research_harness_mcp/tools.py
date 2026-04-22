@@ -101,18 +101,11 @@ def _try_get_orch_state(db: Database, topic_id: int | None) -> dict[str, Any] | 
         from research_harness.orchestrator import OrchestratorService
 
         svc = OrchestratorService(db)
-        # Find project by topic_id
-        conn = db.connect()
-        try:
-            row = conn.execute(
-                "SELECT project_id FROM orchestrator_runs WHERE topic_id = ? LIMIT 1",
-                (topic_id,),
-            ).fetchone()
-        finally:
-            conn.close()
-        if row is None:
+        status = svc.get_status(topic_id)
+        # get_status returns {"error": ...} when no run exists
+        if "error" in status:
             return None
-        return svc.get_status(row["project_id"])
+        return status
     except Exception:
         return None
 
@@ -261,18 +254,6 @@ def _record_iterative_retrieval_artifact(
     if topic_id is None:
         return
     try:
-        conn = db.connect()
-        try:
-            row = conn.execute(
-                "SELECT project_id FROM orchestrator_runs WHERE topic_id = ? LIMIT 1",
-                (int(topic_id),),
-            ).fetchone()
-        finally:
-            conn.close()
-        if row is None:
-            return
-        project_id = int(row["project_id"])
-
         output = result.output
         if output is None:
             return
@@ -284,7 +265,6 @@ def _record_iterative_retrieval_artifact(
 
         svc = OrchestratorService(db)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=int(topic_id),
             stage="build",
             artifact_type="iterative_retrieval_loop_result",
@@ -478,7 +458,6 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer"},
                 "topic_id": {"type": "integer"},
                 "stage": {"type": "string", "description": "Stage name (V2 or legacy)"},
                 "checkpoint": {
@@ -495,19 +474,19 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
                     "description": "Parameter snapshot at decision time",
                 },
             },
-            "required": ["project_id", "topic_id", "stage", "checkpoint", "choice"],
+            "required": ["topic_id", "stage", "checkpoint", "choice"],
         },
     ),
     "decision_log_list": Tool(
         name="decision_log_list",
-        description="List decision log entries for a project (useful for writing motivation)",
+        description="List decision log entries for a topic (useful for writing motivation)",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer"},
+                "topic_id": {"type": "integer"},
                 "stage": {"type": "string", "description": "Optional stage filter"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "search_query_list": Tool(
@@ -544,7 +523,6 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "topic_id": {"type": "integer"},
-                "project_id": {"type": "integer"},
             },
             "required": ["topic_id"],
         },
@@ -609,6 +587,37 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
                 },
             },
             "required": ["topic_id"],
+        },
+    ),
+    "domain_list": Tool(
+        name="domain_list",
+        description="List all research domains with their topic counts",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    "domain_init": Tool(
+        name="domain_init",
+        description="Create a new research domain",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Domain name (unique)"},
+                "description": {
+                    "type": "string",
+                    "description": "Short description of the domain",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    "domain_show": Tool(
+        name="domain_show",
+        description="Show details for a research domain including its topics",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Domain name"},
+            },
+            "required": ["name"],
         },
     ),
 }
@@ -781,7 +790,6 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
             svc = OrchestratorService(db)
             return svc.record_decision(
-                project_id=int(arguments["project_id"]),
                 topic_id=int(arguments["topic_id"]),
                 stage=arguments["stage"],
                 checkpoint=arguments["checkpoint"],
@@ -796,7 +804,7 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
             svc = OrchestratorService(db)
             return {
                 "decisions": svc.list_decisions(
-                    project_id=int(arguments["project_id"]),
+                    topic_id=int(arguments["topic_id"]),
                     stage=arguments.get("stage"),
                 ),
             }
@@ -849,9 +857,6 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
             engine = AdvisoryEngine(db)
             advisories = engine.run(
                 topic_id=int(arguments["topic_id"]),
-                project_id=int(arguments["project_id"])
-                if arguments.get("project_id") is not None
-                else None,
             )
             return {
                 "advisories": [asdict(item) for item in advisories],
@@ -979,6 +984,52 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
                 "updated": updated,
             }
 
+        elif name == "domain_list":
+            rows = conn.execute(
+                """SELECT d.id, d.name, d.description, d.status, d.created_at,
+                          COUNT(t.id) AS topic_count
+                   FROM domains d
+                   LEFT JOIN topics t ON t.domain_id = d.id
+                   GROUP BY d.id
+                   ORDER BY d.id"""
+            ).fetchall()
+            return {"domains": [dict(r) for r in rows]}
+
+        elif name == "domain_init":
+            domain_name = arguments["name"]
+            description = arguments.get("description", "")
+            try:
+                cur = conn.execute(
+                    "INSERT INTO domains (name, description) VALUES (?, ?)",
+                    (domain_name, description),
+                )
+                conn.commit()
+                return {
+                    "success": True,
+                    "domain_id": cur.lastrowid,
+                    "name": domain_name,
+                }
+            except Exception as exc:
+                return {"error": f"Failed to create domain: {exc}"}
+
+        elif name == "domain_show":
+            domain_name = arguments["name"]
+            row = conn.execute(
+                "SELECT * FROM domains WHERE name = ?",
+                (domain_name,),
+            ).fetchone()
+            if row is None:
+                return {"error": f"Domain not found: {domain_name}"}
+            result = dict(row)
+            topics = conn.execute(
+                """SELECT id, name, description, status
+                   FROM topics WHERE domain_id = ?
+                   ORDER BY id""",
+                (row["id"],),
+            ).fetchall()
+            result["topics"] = [dict(t) for t in topics]
+            return result
+
         return {"error": f"Unknown convenience tool: {name}"}
     finally:
         conn.close()
@@ -991,28 +1042,28 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
     "orchestrator_status": Tool(
         name="orchestrator_status",
-        description="Show orchestrator status for a project (current stage, gate, artifacts, issues)",
+        description="Show orchestrator status for a topic (current stage, gate, artifacts, issues)",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "orchestrator_advance": Tool(
         name="orchestrator_advance",
-        description="Advance the project to the next orchestrator stage (checks gates and artifacts)",
+        description="Advance the topic to the next orchestrator stage (checks gates and artifacts)",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "actor": {
                     "type": "string",
                     "description": "Actor name (default: system)",
                 },
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "orchestrator_record_artifact": Tool(
@@ -1021,7 +1072,6 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
                 "topic_id": {"type": "integer", "description": "Topic ID"},
                 "stage": {"type": "string", "description": "Stage name"},
                 "artifact_type": {"type": "string", "description": "Artifact type"},
@@ -1040,7 +1090,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "Dependency edge type (default: consumed_by)",
                 },
             },
-            "required": ["project_id", "topic_id", "stage", "artifact_type"],
+            "required": ["topic_id", "stage", "artifact_type"],
         },
     ),
     "orchestrator_add_artifact_dependency": Tool(
@@ -1097,27 +1147,26 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
     ),
     "orchestrator_list_stale_artifacts": Tool(
         name="orchestrator_list_stale_artifacts",
-        description="List active stale artifacts for a project",
+        description="List active stale artifacts for a topic",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "orchestrator_resume": Tool(
         name="orchestrator_resume",
         description=(
             "Resume (or create) an orchestrator run, automatically inferring the current "
-            "stage from existing artifacts so projects that predate orchestrator tracking "
+            "stage from existing artifacts so topics that predate orchestrator tracking "
             "start at the right stage instead of always at topic_framing. "
             "Pass force_stage to override the inferred stage."
         ),
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
                 "topic_id": {"type": "integer", "description": "Topic ID"},
                 "mode": {
                     "type": "string",
@@ -1136,7 +1185,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     ),
                 },
             },
-            "required": ["project_id", "topic_id"],
+            "required": ["topic_id"],
         },
     ),
     "orchestrator_gate_check": Tool(
@@ -1145,13 +1194,13 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "stage": {
                     "type": "string",
                     "description": "Stage to check (defaults to current)",
                 },
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "integrity_check": Tool(
@@ -1160,7 +1209,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "findings": {
                     "type": "array",
                     "items": {
@@ -1189,18 +1238,18 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "External findings from agent review",
                 },
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
-    "finalize_project": Tool(
-        name="finalize_project",
-        description="Create final submission bundle and process summary for a completed project",
+    "finalize": Tool(
+        name="finalize",
+        description="Create final submission bundle and process summary for a completed topic",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "review_bundle_create": Tool(
@@ -1209,7 +1258,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "integrity_artifact_id": {
                     "type": "integer",
                     "description": "Integrity report artifact ID",
@@ -1219,7 +1268,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "Scholarly report artifact ID",
                 },
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "review_add_issue": Tool(
@@ -1228,7 +1277,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "review_type": {
                     "type": "string",
                     "enum": ["integrity", "scholarly"],
@@ -1255,7 +1304,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                 },
             },
             "required": [
-                "project_id",
+                "topic_id",
                 "review_type",
                 "severity",
                 "category",
@@ -1265,11 +1314,11 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
     ),
     "review_issues": Tool(
         name="review_issues",
-        description="List review issues for a project, optionally filtered by stage/status/blocking",
+        description="List review issues for a topic, optionally filtered by stage/status/blocking",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "stage": {"type": "string", "description": "Filter by stage"},
                 "status": {
                     "type": "string",
@@ -1281,7 +1330,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "Show only blocking issues",
                 },
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "review_respond": Tool(
@@ -1290,7 +1339,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "issue_id": {
                     "type": "integer",
                     "description": "Issue ID to respond to",
@@ -1307,7 +1356,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "Supporting evidence as JSON",
                 },
             },
-            "required": ["project_id", "issue_id", "response_type", "response_text"],
+            "required": ["topic_id", "issue_id", "response_type", "response_text"],
         },
     ),
     "review_resolve": Tool(
@@ -1332,9 +1381,9 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "adversarial_run": Tool(
@@ -1343,7 +1392,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "artifact_id": {
                     "type": "integer",
                     "description": "Target artifact ID to review",
@@ -1377,7 +1426,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                 "resolver_notes": {"type": "string", "description": "Resolver notes"},
             },
             "required": [
-                "project_id",
+                "topic_id",
                 "artifact_id",
                 "proposal_snapshot",
                 "objections",
@@ -1390,7 +1439,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "round_artifact_id": {
                     "type": "integer",
                     "description": "Round artifact ID to resolve",
@@ -1401,24 +1450,24 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                 },
                 "notes": {"type": "string", "description": "Resolution notes"},
             },
-            "required": ["project_id", "round_artifact_id"],
+            "required": ["topic_id", "round_artifact_id"],
         },
     ),
     "adversarial_status": Tool(
         name="adversarial_status",
-        description="Check adversarial optimization status for a project",
+        description="Check adversarial optimization status for a topic",
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
             },
-            "required": ["project_id"],
+            "required": ["topic_id"],
         },
     ),
     "adversarial_review": Tool(
         name="adversarial_review",
         description=(
-            "Run an independent cross-model adversarial review on a project artifact. "
+            "Run an independent cross-model adversarial review on a topic artifact. "
             "Automatically dispatches to a DIFFERENT model than the current executor: "
             "Claude sessions → Codex/GPT review, Codex sessions → Anthropic Opus review. "
             "Returns structured verdict with issues/scores and auto-records as adversarial_round artifact."
@@ -1426,7 +1475,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "integer", "description": "Project ID"},
+                "topic_id": {"type": "integer", "description": "Topic ID"},
                 "artifact_id": {
                     "type": "integer",
                     "description": "Artifact ID to review",
@@ -1440,7 +1489,7 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "description": "Optional evidence summary to provide reviewer context",
                 },
             },
-            "required": ["project_id", "artifact_id"],
+            "required": ["topic_id", "artifact_id"],
         },
     ),
 }
@@ -1465,15 +1514,15 @@ def _execute_adversarial_review(
         run_codex_review,
     )
 
-    project_id = arguments["project_id"]
+    topic_id = arguments["topic_id"]
     artifact_id = arguments["artifact_id"]
     focus = arguments.get("focus", "")
     evidence_summary = arguments.get("evidence_summary", "")
 
     # Get the run to know current stage and topic
-    run = svc.get_run(project_id)
+    run = svc.get_run(topic_id)
     if run is None:
-        return {"success": False, "error": "No orchestrator run found for this project"}
+        return {"success": False, "error": "No orchestrator run found for this topic"}
 
     # Get artifact content for context
     artifact = svc._artifact_manager.get(artifact_id)
@@ -1518,7 +1567,7 @@ def _execute_adversarial_review(
 
     # Record as adversarial round
     round_result = svc.run_adversarial_round(
-        project_id=project_id,
+        topic_id=topic_id,
         target_artifact_id=artifact_id,
         proposal_snapshot=proposal_snapshot,
         objections=[
@@ -1537,7 +1586,7 @@ def _execute_adversarial_review(
     scores = review.get("scores", {})
     if scores and round_result.get("success"):
         resolve_result = svc.resolve_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             round_artifact_id=round_result["artifact_id"],
             scores=scores,
             notes=review.get("notes", ""),
@@ -1580,17 +1629,16 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
         if stop_before:
             stop_before = resolve_stage(stop_before)
         run = svc.resume_run(
-            project_id=arguments["project_id"],
             topic_id=arguments["topic_id"],
             mode=arguments.get("mode", "standard"),
             force_stage=arguments.get("force_stage"),
             stop_before=stop_before,
         )
-        inferred = svc.infer_stage_from_artifacts(arguments["project_id"])
+        inferred = svc.infer_stage_from_artifacts(arguments["topic_id"])
         result = {
             "success": True,
             "run_id": run.id,
-            "project_id": run.project_id,
+            "topic_id": run.topic_id,
             "current_stage": run.current_stage,
             "inferred_stage": inferred,
             "stage_status": run.stage_status,
@@ -1600,20 +1648,19 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
         return result
 
     if name == "orchestrator_status":
-        status = svc.get_status(arguments["project_id"])
+        status = svc.get_status(arguments["topic_id"])
         # Include db_path for debugging (Bug: DB path inconsistency)
         status["db_path"] = str(db.db_path)
         return status
 
     elif name == "orchestrator_advance":
         return svc.advance(
-            arguments["project_id"],
+            arguments["topic_id"],
             actor=arguments.get("actor", "system"),
         )
 
     elif name == "orchestrator_record_artifact":
         artifact = svc.record_artifact(
-            project_id=arguments["project_id"],
             topic_id=arguments["topic_id"],
             stage=arguments["stage"],
             artifact_type=arguments["artifact_type"],
@@ -1648,7 +1695,7 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
         return svc.clear_artifact_stale(arguments["artifact_id"])
 
     elif name == "orchestrator_list_stale_artifacts":
-        artifacts = svc.list_stale_artifacts(arguments["project_id"])
+        artifacts = svc.list_stale_artifacts(arguments["topic_id"])
         return {
             "artifacts": [asdict(artifact) for artifact in artifacts],
             "count": len(artifacts),
@@ -1656,32 +1703,32 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
 
     elif name == "orchestrator_gate_check":
         decision = svc.check_gate(
-            arguments["project_id"],
+            arguments["topic_id"],
             stage=arguments.get("stage"),
         )
         return {"gate_decision": decision}
 
     elif name == "integrity_check":
         return svc.run_integrity_check(
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             findings=arguments.get("findings"),
         )
 
-    elif name == "finalize_project":
-        return svc.finalize_project(
-            project_id=arguments["project_id"],
+    elif name == "finalize":
+        return svc.finalize(
+            topic_id=arguments["topic_id"],
         )
 
     elif name == "review_bundle_create":
         return svc.create_review_bundle(
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             integrity_artifact_id=arguments.get("integrity_artifact_id"),
             scholarly_artifact_id=arguments.get("scholarly_artifact_id"),
         )
 
     elif name == "review_add_issue":
         return svc.add_review_issue(
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             review_type=arguments["review_type"],
             severity=arguments["severity"],
             category=arguments["category"],
@@ -1694,7 +1741,7 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
     elif name == "review_issues":
         return {
             "issues": svc.list_review_issues(
-                project_id=arguments["project_id"],
+                topic_id=arguments["topic_id"],
                 stage=arguments.get("stage"),
                 status=arguments.get("status"),
                 blocking_only=arguments.get("blocking_only", False),
@@ -1704,7 +1751,7 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
     elif name == "review_respond":
         return svc.respond_to_issue(
             issue_id=arguments["issue_id"],
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             response_type=arguments["response_type"],
             response_text=arguments["response_text"],
             artifact_id=arguments.get("artifact_id"),
@@ -1718,11 +1765,11 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
         )
 
     elif name == "review_status":
-        return svc.get_review_status(arguments["project_id"])
+        return svc.get_review_status(arguments["topic_id"])
 
     elif name == "adversarial_run":
         return svc.run_adversarial_round(
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             target_artifact_id=arguments["artifact_id"],
             proposal_snapshot=arguments["proposal_snapshot"],
             objections=arguments["objections"],
@@ -1732,14 +1779,14 @@ def _execute_orchestrator(name: str, arguments: dict[str, Any]) -> dict[str, Any
 
     elif name == "adversarial_resolve":
         return svc.resolve_adversarial_round(
-            project_id=arguments["project_id"],
+            topic_id=arguments["topic_id"],
             round_artifact_id=arguments["round_artifact_id"],
             scores=arguments.get("scores", {}),
             notes=arguments.get("notes", ""),
         )
 
     elif name == "adversarial_status":
-        return svc.check_adversarial_status(arguments["project_id"])
+        return svc.check_adversarial_status(arguments["topic_id"])
 
     elif name == "adversarial_review":
         return _execute_adversarial_review(svc, db, arguments)

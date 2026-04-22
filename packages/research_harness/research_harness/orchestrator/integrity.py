@@ -134,7 +134,6 @@ class IntegrityVerifier:
 
     def run_check(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         findings: list[dict[str, Any]] | None = None,
@@ -150,7 +149,7 @@ class IntegrityVerifier:
         external_findings = [IntegrityFinding.from_dict(f) for f in (findings or [])]
 
         # Phase 1: References — check citation papers exist in pool
-        phase1_findings = self._check_references(project_id, topic_id, stage)
+        phase1_findings = self._check_references(topic_id, stage)
         report.phases_completed.append("references")
 
         # Phase 2: Citation context — from external findings
@@ -170,7 +169,7 @@ class IntegrityVerifier:
         report.phases_completed.append("originality")
 
         # Phase 5: Claims — check evidence links exist
-        phase5_findings = self._check_claims(project_id, topic_id, stage)
+        phase5_findings = self._check_claims(topic_id, stage)
         report.phases_completed.append("claims")
 
         # Combine all findings
@@ -204,7 +203,6 @@ class IntegrityVerifier:
 
         # Persist as artifact
         self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             artifact_type="final_integrity_report",
@@ -221,7 +219,6 @@ class IntegrityVerifier:
         for f in all_findings:
             if f.severity in ("critical", "high"):
                 self._review_manager.add_issue(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     review_type="integrity",
@@ -238,7 +235,6 @@ class IntegrityVerifier:
 
     def _check_references(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
     ) -> list[IntegrityFinding]:
@@ -250,10 +246,10 @@ class IntegrityVerifier:
             draft = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'draft_pack' AND status = 'active'
+                WHERE topic_id = ? AND artifact_type = 'draft_pack' AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if draft is None:
                 return findings
@@ -287,7 +283,6 @@ class IntegrityVerifier:
 
     def _check_claims(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
     ) -> list[IntegrityFinding]:
@@ -299,10 +294,10 @@ class IntegrityVerifier:
             evidence = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'evidence_pack' AND status = 'active'
+                WHERE topic_id = ? AND artifact_type = 'evidence_pack' AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if evidence is None:
                 return findings
@@ -347,14 +342,13 @@ class FinalizeManager:
 
     def create_final_bundle(
         self,
-        project_id: int,
         topic_id: int,
     ) -> Any:
         """Create the final submission bundle artifact.
 
         Collects references to all key artifacts produced during the workflow.
         """
-        artifacts = self._artifact_manager.list_by_project(project_id)
+        artifacts = self._artifact_manager.list_by_topic(topic_id)
         artifact_index = [
             {
                 "id": a.id,
@@ -373,7 +367,6 @@ class FinalizeManager:
         }
 
         return self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage="finalize",
             artifact_type="final_bundle",
@@ -384,7 +377,6 @@ class FinalizeManager:
 
     def create_process_summary(
         self,
-        project_id: int,
         topic_id: int,
     ) -> Any:
         """Create the process summary artifact.
@@ -399,10 +391,10 @@ class FinalizeManager:
                 """
                 SELECT from_stage, to_stage, event_type, actor, rationale, created_at
                 FROM orchestrator_stage_events
-                WHERE project_id = ?
+                WHERE topic_id = ?
                 ORDER BY id
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
             stage_history = [
                 {
@@ -423,9 +415,9 @@ class FinalizeManager:
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
                     SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) as critical
-                FROM review_issues WHERE project_id = ?
+                FROM review_issues WHERE topic_id = ?
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
 
             # Artifact count by stage
@@ -433,10 +425,10 @@ class FinalizeManager:
                 """
                 SELECT stage, COUNT(*) as cnt
                 FROM project_artifacts
-                WHERE project_id = ?
+                WHERE topic_id = ?
                 GROUP BY stage
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
 
             # Provenance cost
@@ -467,7 +459,6 @@ class FinalizeManager:
         }
 
         return self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage="finalize",
             artifact_type="process_summary",

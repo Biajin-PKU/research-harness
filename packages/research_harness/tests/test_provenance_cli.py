@@ -148,23 +148,6 @@ def test_topic_export_json(runner, tmp_path):
     assert paper.exit_code == 0
     paper_payload = json.loads(paper.output)
 
-    project = runner.invoke(
-        main,
-        [
-            "--json",
-            "project",
-            "add",
-            "--topic",
-            "export-topic",
-            "--name",
-            "proj-a",
-            "--description",
-            "ship it",
-        ],
-    )
-    assert project.exit_code == 0
-    project_payload = json.loads(project.output)
-
     task = runner.invoke(
         main,
         [
@@ -173,8 +156,6 @@ def test_topic_export_json(runner, tmp_path):
             "add",
             "--topic",
             "export-topic",
-            "--project",
-            "proj-a",
             "--title",
             "Do thing",
         ],
@@ -189,8 +170,6 @@ def test_topic_export_json(runner, tmp_path):
             "add",
             "--topic",
             "export-topic",
-            "--project",
-            "proj-a",
             "--gate",
             "method",
             "--reviewer",
@@ -225,9 +204,6 @@ def test_topic_export_json(runner, tmp_path):
     assert len(payload["papers"]) == 1
     assert payload["papers"][0]["id"] == paper_payload["paper_id"]
     assert len(payload["tasks"]) == 1
-    assert payload["tasks"][0]["project_id"] == project_payload["id"]
-    assert len(payload["projects"]) == 1
-    assert len(payload["reviews"]) == 1
     assert len(payload["provenance"]) == 1
 
     output_path = tmp_path / "topic-export.json"

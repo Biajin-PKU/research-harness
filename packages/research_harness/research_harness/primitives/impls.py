@@ -23,8 +23,8 @@ from .registry import (
     PAPER_ACQUIRE_SPEC,
     PAPER_INGEST_SPEC,
     PAPER_SEARCH_SPEC,
-    PROJECT_GET_CONTRIBUTIONS_SPEC,
-    PROJECT_SET_CONTRIBUTIONS_SPEC,
+    TOPIC_GET_CONTRIBUTIONS_SPEC,
+    TOPIC_SET_CONTRIBUTIONS_SPEC,
     SELECT_SEEDS_SPEC,
     register_primitive,
 )
@@ -36,6 +36,7 @@ from .types import (
     PaperRef,
     PaperSearchOutput,
     ProjectSetContributionsOutput,
+    TopicSetContributionsOutput,
     SeedPaper,
     SelectSeedsOutput,
     UnableToAcquireItem,
@@ -1161,63 +1162,63 @@ def _parse_authors(raw: str | None) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# project_set_contributions / project_get_contributions — project-level config
+# topic_set_contributions / topic_get_contributions — topic-level config
 # ---------------------------------------------------------------------------
 # Writing primitives (writing_architecture, outline_generate, figure_plan,
 # competitive_learning) read this as a fallback, eliminating the need to pass
 # the contributions string to every call.
 
 
-@register_primitive(PROJECT_SET_CONTRIBUTIONS_SPEC)
-def project_set_contributions(
+@register_primitive(TOPIC_SET_CONTRIBUTIONS_SPEC)
+def topic_set_contributions(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     contributions: str,
     **_: Any,
-) -> ProjectSetContributionsOutput:
-    """Persist project-level contributions. Overwrites any prior value."""
+) -> TopicSetContributionsOutput:
+    """Persist topic-level contributions. Overwrites any prior value."""
     text = (contributions or "").strip()
     conn = db.connect()
     try:
         exists = conn.execute(
-            "SELECT 1 FROM projects WHERE id = ?", (project_id,)
+            "SELECT 1 FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
         if not exists:
-            raise ValueError(f"project_id={project_id} not found")
+            raise ValueError(f"topic_id={topic_id} not found")
         conn.execute(
-            """UPDATE projects
+            """UPDATE topics
                SET contributions = ?, updated_at = datetime('now')
                WHERE id = ?""",
-            (text, project_id),
+            (text, topic_id),
         )
         conn.commit()
     finally:
         conn.close()
-    return ProjectSetContributionsOutput(
-        project_id=project_id, contributions=text, updated=True
+    return TopicSetContributionsOutput(
+        topic_id=topic_id, contributions=text, updated=True
     )
 
 
-@register_primitive(PROJECT_GET_CONTRIBUTIONS_SPEC)
-def project_get_contributions(
+@register_primitive(TOPIC_GET_CONTRIBUTIONS_SPEC)
+def topic_get_contributions(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     **_: Any,
-) -> ProjectSetContributionsOutput:
-    """Read project-level contributions. Returns empty string if unset."""
+) -> TopicSetContributionsOutput:
+    """Read topic-level contributions. Returns empty string if unset."""
     conn = db.connect()
     try:
         row = conn.execute(
-            "SELECT contributions FROM projects WHERE id = ?", (project_id,)
+            "SELECT contributions FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
     finally:
         conn.close()
     if not row:
-        raise ValueError(f"project_id={project_id} not found")
-    return ProjectSetContributionsOutput(
-        project_id=project_id,
+        raise ValueError(f"topic_id={topic_id} not found")
+    return TopicSetContributionsOutput(
+        topic_id=topic_id,
         contributions=(row["contributions"] or "").strip(),
         updated=False,
     )

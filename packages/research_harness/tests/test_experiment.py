@@ -245,13 +245,17 @@ class TestExperimentPrimitives:
         db.migrate()
         conn = db.connect()
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 't')")
-        conn.execute("INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'p')")
+        # Stub projects row needed because verified_numbers.project_id FK
+        # still references projects(id) and the impl writes topic_id there.
+        conn.execute(
+            "INSERT INTO projects (id, topic_id, name, description) VALUES (1, 1, 'stub', 'stub')"
+        )
         conn.commit()
         conn.close()
 
         build_result = verified_registry_build(
             db=db,
-            project_id=1,
+            topic_id=1,
             metrics={"baseline/acc": 0.85, "ours/acc": 0.92},
             primary_metric_name="acc",
         )
@@ -260,7 +264,7 @@ class TestExperimentPrimitives:
 
         check_result = verified_registry_check(
             db=db,
-            project_id=1,
+            topic_id=1,
             numbers=[0.92, 0.85, 999.99],
         )
         assert 0.92 in check_result.verified

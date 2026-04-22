@@ -17,7 +17,6 @@ class ArtifactManager:
 
     def record(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         artifact_type: str,
@@ -35,10 +34,10 @@ class ArtifactManager:
             row = conn.execute(
                 """
                 SELECT version FROM project_artifacts
-                WHERE project_id = ? AND stage = ? AND artifact_type = ?
+                WHERE topic_id = ? AND stage = ? AND artifact_type = ?
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id, stage, artifact_type),
+                (topic_id, stage, artifact_type),
             ).fetchone()
             version = 1 if row is None else int(row["version"]) + 1
 
@@ -47,9 +46,9 @@ class ArtifactManager:
                 """
                 UPDATE project_artifacts
                 SET status = 'superseded', updated_at = datetime('now')
-                WHERE project_id = ? AND stage = ? AND artifact_type = ? AND status = 'active'
+                WHERE topic_id = ? AND stage = ? AND artifact_type = ? AND status = 'active'
                 """,
-                (project_id, stage, artifact_type),
+                (topic_id, stage, artifact_type),
             )
 
             # Insert new version
@@ -61,7 +60,7 @@ class ArtifactManager:
                 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    project_id,
+                    topic_id,
                     topic_id,
                     stage,
                     artifact_type,
@@ -94,18 +93,18 @@ class ArtifactManager:
         finally:
             conn.close()
 
-    def list_by_project(
+    def list_by_topic(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str | None = None,
         artifact_type: str | None = None,
         status: str = "active",
     ) -> list[ProjectArtifact]:
-        """List artifacts for a project, optionally filtered."""
+        """List artifacts for a topic, optionally filtered."""
         conn = self._db.connect()
         try:
-            clauses = ["project_id = ?"]
-            params: list[Any] = [project_id]
+            clauses = ["topic_id = ?"]
+            params: list[Any] = [topic_id]
             if stage:
                 clauses.append("stage = ?")
                 params.append(stage)
@@ -127,7 +126,7 @@ class ArtifactManager:
 
     def get_latest(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str,
         artifact_type: str,
     ) -> ProjectArtifact | None:
@@ -137,10 +136,10 @@ class ArtifactManager:
             row = conn.execute(
                 """
                 SELECT * FROM project_artifacts
-                WHERE project_id = ? AND stage = ? AND artifact_type = ? AND status = 'active'
+                WHERE topic_id = ? AND stage = ? AND artifact_type = ? AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id, stage, artifact_type),
+                (topic_id, stage, artifact_type),
             ).fetchone()
             if row is None:
                 return None
@@ -255,17 +254,17 @@ class ArtifactManager:
         finally:
             conn.close()
 
-    def list_stale(self, project_id: int) -> list[ProjectArtifact]:
-        """List all stale artifacts for a project."""
+    def list_stale(self, topic_id: int) -> list[ProjectArtifact]:
+        """List all stale artifacts for a topic."""
         conn = self._db.connect()
         try:
             rows = conn.execute(
                 """
                 SELECT * FROM project_artifacts
-                WHERE project_id = ? AND stale = 1 AND status = 'active'
+                WHERE topic_id = ? AND stale = 1 AND status = 'active'
                 ORDER BY created_at DESC
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
             return [self._row_to_artifact(row) for row in rows]
         finally:
@@ -275,7 +274,6 @@ class ArtifactManager:
     def _row_to_artifact(row: Any) -> ProjectArtifact:
         return ProjectArtifact(
             id=row["id"],
-            project_id=row["project_id"],
             topic_id=row["topic_id"],
             stage=row["stage"],
             artifact_type=row["artifact_type"],

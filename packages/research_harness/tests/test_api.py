@@ -15,9 +15,10 @@ def test_api_artifact_dependency_and_stale(tmp_path):
             "INSERT INTO topics (id, name, description) VALUES (1, ?, ?)",
             ("api-topic", "API topic"),
         )
+        # Bridge row: project_artifacts.project_id FK still references projects(id)
         conn.execute(
             "INSERT INTO projects (id, topic_id, name, description) VALUES (1, 1, ?, ?)",
-            ("api-project", "API project"),
+            ("api-topic", "API topic"),
         )
         conn.commit()
     finally:
@@ -25,14 +26,12 @@ def test_api_artifact_dependency_and_stale(tmp_path):
 
     api = ResearchAPI(db_path=db_path)
     upstream = api.record_artifact(
-        project_id=1,
         topic_id=1,
         stage="build",
         artifact_type="literature_map",
         payload={"v": 1},
     )
     downstream = api.record_artifact(
-        project_id=1,
         topic_id=1,
         stage="analyze",
         artifact_type="gap_analysis",
@@ -41,7 +40,6 @@ def test_api_artifact_dependency_and_stale(tmp_path):
     )
 
     api.record_artifact(
-        project_id=1,
         topic_id=1,
         stage="build",
         artifact_type="literature_map",

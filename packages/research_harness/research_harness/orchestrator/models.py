@@ -180,10 +180,9 @@ class StageMetadata:
 
 @dataclass
 class OrchestratorRun:
-    """Current orchestrator state for a project."""
+    """Current orchestrator state for a topic."""
 
     id: int
-    project_id: int
     topic_id: int
     mode: WorkflowMode
     current_stage: StageName
@@ -204,7 +203,6 @@ class StageEvent:
 
     id: int
     run_id: int
-    project_id: int
     topic_id: int
     from_stage: StageName
     to_stage: StageName
@@ -222,7 +220,6 @@ class ProjectArtifact:
     """Typed artifact produced by a stage."""
 
     id: int
-    project_id: int
     topic_id: int
     stage: StageName
     artifact_type: str
@@ -245,7 +242,6 @@ class ReviewIssue:
     """Blocking or non-blocking finding from review."""
 
     id: int
-    project_id: int
     topic_id: int
     review_artifact_id: int | None
     stage: StageName
@@ -269,7 +265,7 @@ class ReviewResponse:
 
     id: int
     issue_id: int
-    project_id: int
+    topic_id: int
     response_type: ResponseType
     status: ResponseStatus
     artifact_id: int | None

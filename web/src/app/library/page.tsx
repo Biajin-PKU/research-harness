@@ -265,7 +265,7 @@ export default function LibraryPage() {
   // -- Data fetching --------------------------------------------------------
   const topicsQuery = useQuery({
     queryKey: ["topics"],
-    queryFn: fetchTopics,
+    queryFn: () => fetchTopics(),
     staleTime: 60_000,
   });
 

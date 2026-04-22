@@ -4,20 +4,20 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  Domain,
   Topic,
+  TopicDetail,
   Paper,
   PaperWithCard,
-  Project,
-  ProjectDetail,
   Artifact,
   StageEvent,
   ReviewIssue,
   DashboardStats,
   ProvenanceSummary,
   PaginatedResponse,
-  ProjectArtifactsResponse,
-  ProjectEventsResponse,
-  ProjectIssuesResponse,
+  TopicArtifactsResponse,
+  TopicEventsResponse,
+  TopicIssuesResponse,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -45,15 +45,46 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
+// Domains
+// ---------------------------------------------------------------------------
+
+export function fetchDomains(): Promise<Domain[]> {
+  return apiFetch<Domain[]>("/api/domains");
+}
+
+export function fetchDomain(domainId: number): Promise<Domain> {
+  return apiFetch<Domain>(`/api/domains/${domainId}`);
+}
+
+export function createDomain(data: {
+  name: string;
+  description?: string;
+}): Promise<Domain> {
+  return apiFetch<Domain>("/api/domains", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Topics
 // ---------------------------------------------------------------------------
 
-export function fetchTopics(): Promise<Topic[]> {
-  return apiFetch<Topic[]>("/api/topics");
+export function fetchTopics(params?: {
+  domain_id?: number;
+}): Promise<Topic[]> {
+  const sp = new URLSearchParams();
+  if (params?.domain_id != null) sp.set("domain_id", String(params.domain_id));
+  const qs = sp.toString();
+  return apiFetch<Topic[]>(`/api/topics${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchTopic(topicId: number): Promise<Topic> {
   return apiFetch<Topic>(`/api/topics/${topicId}`);
+}
+
+export function fetchTopicDetail(topicId: number): Promise<TopicDetail> {
+  return apiFetch<TopicDetail>(`/api/topics/${topicId}`);
 }
 
 export function fetchTopicPapers(
@@ -70,39 +101,27 @@ export function fetchTopicPapers(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Projects
-// ---------------------------------------------------------------------------
-
-export function fetchProjects(): Promise<Project[]> {
-  return apiFetch<Project[]>("/api/projects");
-}
-
-export function fetchProject(projectId: number): Promise<ProjectDetail> {
-  return apiFetch<ProjectDetail>(`/api/projects/${projectId}`);
-}
-
-export function fetchProjectArtifacts(
-  projectId: number
-): Promise<ProjectArtifactsResponse> {
-  return apiFetch<ProjectArtifactsResponse>(
-    `/api/projects/${projectId}/artifacts`
+export function fetchTopicArtifacts(
+  topicId: number
+): Promise<TopicArtifactsResponse> {
+  return apiFetch<TopicArtifactsResponse>(
+    `/api/topics/${topicId}/artifacts`
   );
 }
 
-export function fetchProjectEvents(
-  projectId: number
-): Promise<ProjectEventsResponse> {
-  return apiFetch<ProjectEventsResponse>(
-    `/api/projects/${projectId}/events`
+export function fetchTopicEvents(
+  topicId: number
+): Promise<TopicEventsResponse> {
+  return apiFetch<TopicEventsResponse>(
+    `/api/topics/${topicId}/events`
   );
 }
 
-export function fetchProjectIssues(
-  projectId: number
-): Promise<ProjectIssuesResponse> {
-  return apiFetch<ProjectIssuesResponse>(
-    `/api/projects/${projectId}/issues`
+export function fetchTopicIssues(
+  topicId: number
+): Promise<TopicIssuesResponse> {
+  return apiFetch<TopicIssuesResponse>(
+    `/api/topics/${topicId}/issues`
   );
 }
 
@@ -170,23 +189,11 @@ export function fetchProvenanceSummary(
 export function createTopic(data: {
   name: string;
   description: string;
-  target_venue: string;
-  deadline: string;
+  domain_id?: number;
+  target_venue?: string;
+  deadline?: string;
 }): Promise<Topic> {
   return apiFetch<Topic>("/api/topics", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
-
-export function createProject(data: {
-  topic_id: number;
-  name: string;
-  description: string;
-  target_venue: string;
-  deadline: string;
-}): Promise<unknown> {
-  return apiFetch("/api/projects", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -214,15 +221,15 @@ export function ingestPaper(data: {
   });
 }
 
-export function advanceProject(projectId: number): Promise<unknown> {
-  return apiFetch(`/api/projects/${projectId}/advance`, {
+export function advanceTopic(topicId: number): Promise<unknown> {
+  return apiFetch(`/api/topics/${topicId}/advance`, {
     method: "POST",
     body: JSON.stringify({ actor: "web_ui" }),
   });
 }
 
-export function checkGate(projectId: number): Promise<unknown> {
-  return apiFetch(`/api/projects/${projectId}/gate`);
+export function checkTopicGate(topicId: number): Promise<unknown> {
+  return apiFetch(`/api/topics/${topicId}/gate`);
 }
 
 export function detectGaps(topicId: number, focus?: string): Promise<unknown> {

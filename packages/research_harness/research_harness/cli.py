@@ -139,25 +139,6 @@ def _topic_id_or_exit(conn: sqlite3.Connection, topic_name: str) -> int:
     return int(row[0])
 
 
-def _project_id_or_exit(
-    conn: sqlite3.Connection, topic_name: str, project_name: str
-) -> int:
-    row = conn.execute(
-        """
-        SELECT p.id
-        FROM projects p
-        JOIN topics t ON p.topic_id = t.id
-        WHERE p.name = ? AND t.name = ?
-        """,
-        (project_name, topic_name),
-    ).fetchone()
-    if not row:
-        raise click.ClickException(
-            f"project '{project_name}' not found under topic '{topic_name}'"
-        )
-    return int(row[0])
-
-
 def _decode_artifact_metadata(metadata: object) -> object:
     if isinstance(metadata, str):
         try:
@@ -581,6 +562,100 @@ def backend_primitives(ctx: click.Context) -> None:
 
 
 @main.group()
+def domain() -> None:
+    """Manage research domains."""
+
+
+@domain.command("init")
+@click.argument("name")
+@click.option("--description", "-d", default="")
+@click.pass_context
+def domain_init(ctx: click.Context, name: str, description: str) -> None:
+    """Create a new domain."""
+    db = get_db(ctx)
+    conn = db.connect()
+    try:
+        conn.execute(
+            "INSERT INTO domains (name, description) VALUES (?, ?)",
+            (name, description),
+        )
+        conn.commit()
+        domain_id = conn.execute(
+            "SELECT id FROM domains WHERE name = ?", (name,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    _echo(
+        ctx,
+        {"id": domain_id, "name": name, "status": "active"},
+        f"Domain '{name}' created (id={domain_id})",
+    )
+
+
+@domain.command("list")
+@click.pass_context
+def domain_list(ctx: click.Context) -> None:
+    """List all domains with topic counts."""
+    db = get_db(ctx)
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT d.*, COALESCE(tc.cnt, 0) AS topic_count
+            FROM domains d
+            LEFT JOIN (
+                SELECT domain_id, COUNT(*) AS cnt FROM topics WHERE domain_id IS NOT NULL GROUP BY domain_id
+            ) tc ON tc.domain_id = d.id
+            ORDER BY d.created_at DESC, d.id DESC
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+    if ctx.obj.get("json"):
+        click.echo(
+            json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str)
+        )
+        return
+    for row in rows:
+        click.echo(
+            f"[{row['id']}] {row['name']} ({row['status']}) topics={row['topic_count']}"
+        )
+
+
+@domain.command("show")
+@click.argument("domain_name")
+@click.pass_context
+def domain_show(ctx: click.Context, domain_name: str) -> None:
+    """Show domain details with its topics."""
+    db = get_db(ctx)
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM domains WHERE name = ?", (domain_name,)
+        ).fetchone()
+        if row is None:
+            raise click.ClickException(f"domain '{domain_name}' not found")
+        domain_id = row["id"]
+        topics = conn.execute(
+            "SELECT id, name, status FROM topics WHERE domain_id = ? ORDER BY created_at",
+            (domain_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    topic_list = [dict(t) for t in topics]
+    payload = {**dict(row), "topics": topic_list}
+    if ctx.obj.get("json"):
+        click.echo(json.dumps(payload, ensure_ascii=False, default=str))
+        return
+    click.echo(f"Domain: {row['name']} (id={domain_id})")
+    click.echo(f"Description: {row['description'] or '-'}")
+    click.echo(f"Status: {row['status']}  Topics: {len(topic_list)}")
+    for t in topic_list:
+        click.echo(f"  [{t['id']}] {t['name']} ({t['status']})")
+
+
+@main.group()
 def topic() -> None:
     """Manage research topics."""
 
@@ -590,16 +665,25 @@ def topic() -> None:
 @click.option("--description", "-d", default="")
 @click.option("--venue", default="")
 @click.option("--deadline", default="")
+@click.option("--domain", "domain_name", default=None, help="Assign to a domain")
 @click.pass_context
 def topic_init(
-    ctx: click.Context, name: str, description: str, venue: str, deadline: str
+    ctx: click.Context, name: str, description: str, venue: str, deadline: str, domain_name: str | None
 ) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
+        domain_id: int | None = None
+        if domain_name:
+            row = conn.execute(
+                "SELECT id FROM domains WHERE name = ?", (domain_name,)
+            ).fetchone()
+            if not row:
+                raise click.ClickException(f"domain '{domain_name}' not found")
+            domain_id = int(row[0])
         conn.execute(
-            "INSERT INTO topics (name, description, target_venue, deadline) VALUES (?, ?, ?, ?)",
-            (name, description, venue, deadline),
+            "INSERT INTO topics (name, description, target_venue, deadline, domain_id) VALUES (?, ?, ?, ?, ?)",
+            (name, description, venue, deadline, domain_id),
         )
         conn.commit()
         topic_id = conn.execute(
@@ -609,7 +693,7 @@ def topic_init(
         conn.close()
     _echo(
         ctx,
-        {"id": topic_id, "name": name, "status": "created"},
+        {"id": topic_id, "name": name, "status": "created", "domain_id": domain_id},
         f"Topic '{name}' created (id={topic_id})",
     )
 
@@ -729,7 +813,7 @@ def topic_update(
 @click.argument("topic_name")
 @click.pass_context
 def topic_overview(ctx: click.Context, topic_name: str) -> None:
-    """Show a summary of topic progress: papers, queue, tasks, reviews."""
+    """Show a summary of topic progress: papers, queue, tasks, orchestrator."""
     from .core.paper_pool import PaperPool
 
     db = get_db(ctx)
@@ -759,19 +843,11 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
         task_summary = {row["status"]: row["cnt"] for row in tasks}
         task_total = sum(task_summary.values())
 
-        projects = conn.execute(
-            "SELECT id, name, status FROM projects WHERE topic_id = ? ORDER BY created_at",
+        orchestrator_run = conn.execute(
+            "SELECT id, current_stage, stage_status, mode, created_at FROM orchestrator_runs WHERE topic_id = ? ORDER BY created_at DESC LIMIT 1",
             (topic_id,),
-        ).fetchall()
-        project_list = [dict(row) for row in projects]
-
-        review_count = 0
-        for proj in projects:
-            cnt = conn.execute(
-                "SELECT COUNT(*) as cnt FROM reviews WHERE project_id = ?",
-                (proj["id"],),
-            ).fetchone()["cnt"]
-            review_count += cnt
+        ).fetchone()
+        orchestrator_info = dict(orchestrator_run) if orchestrator_run else None
 
         review_ready = _check_review_ready(conn, topic_id)
     finally:
@@ -790,8 +866,7 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
             "total": task_total,
             "by_status": task_summary,
         },
-        "project_count": len(project_list),
-        "review_count": review_count,
+        "orchestrator": orchestrator_info,
         "review_ready": review_ready,
     }
 
@@ -811,7 +886,12 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
         if task_summary
         else "Tasks: 0"
     )
-    click.echo(f"Projects: {len(project_list)}, Reviews: {review_count}")
+    if orchestrator_info:
+        click.echo(
+            f"Orchestrator: stage={orchestrator_info['current_stage']} status={orchestrator_info['stage_status']} mode={orchestrator_info['mode']}"
+        )
+    else:
+        click.echo("Orchestrator: no run")
     if payload["review_ready"]:
         click.echo("All tasks done. Ready for gate review.")
 
@@ -821,10 +901,8 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
 @click.option("--output", "-o", type=click.Path(), help="Output file path")
 @click.pass_context
 def topic_export(ctx: click.Context, name: str, output: str | None) -> None:
-    """Export a topic's full state (papers, claims, tasks, provenance) as JSON."""
+    """Export a topic's full state (papers, claims, tasks, orchestrator, provenance) as JSON."""
     from .core.paper_pool import PaperPool
-    from .core.project_manager import ProjectManager
-    from .core.review_manager import ReviewManager
     from .provenance import ProvenanceRecorder
 
     db = get_db(ctx)
@@ -848,20 +926,22 @@ def topic_export(ctx: click.Context, name: str, output: str | None) -> None:
                 (topic_id,),
             ).fetchall()
         ]
-        projects = [
-            dataclasses.asdict(item)
-            for item in ProjectManager(conn).list_projects(topic_id)
+
+        orchestrator_runs = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM orchestrator_runs WHERE topic_id = ? ORDER BY created_at",
+                (topic_id,),
+            ).fetchall()
         ]
 
-        review_manager = ReviewManager(conn)
-        reviews: list[dict[str, object]] = []
-        for project in projects:
-            project_id = project.get("id")
-            if isinstance(project_id, int):
-                reviews.extend(
-                    dataclasses.asdict(item)
-                    for item in review_manager.list_reviews(project_id)
-                )
+        orchestrator_artifacts = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM project_artifacts WHERE topic_id = ? ORDER BY created_at",
+                (topic_id,),
+            ).fetchall()
+        ]
 
         provenance = [
             dataclasses.asdict(item)
@@ -877,8 +957,8 @@ def topic_export(ctx: click.Context, name: str, output: str | None) -> None:
         "papers": papers,
         "claims": [],
         "tasks": tasks,
-        "projects": projects,
-        "reviews": reviews,
+        "orchestrator_runs": orchestrator_runs,
+        "orchestrator_artifacts": orchestrator_artifacts,
         "provenance": provenance,
     }
     serialized = json.dumps(payload, ensure_ascii=False, default=str)
@@ -2243,6 +2323,56 @@ def topic_stats(ctx: click.Context, topic_name: str) -> None:
         click.echo(f"  {r['relevance']:10s} {r['cnt']:>4d}")
 
 
+@topic.command("get-contributions")
+@click.argument("topic_name")
+@click.pass_context
+def topic_get_contributions(ctx: click.Context, topic_name: str) -> None:
+    """Read the contributions text for a topic."""
+    db = get_db(ctx)
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT id, contributions FROM topics WHERE name = ?", (topic_name,)
+        ).fetchone()
+        if row is None:
+            raise click.ClickException(f"topic '{topic_name}' not found")
+    finally:
+        conn.close()
+    contributions = row["contributions"] or ""
+    _echo(
+        ctx,
+        {"topic": topic_name, "contributions": contributions},
+        contributions if contributions else "(no contributions set)",
+    )
+
+
+@topic.command("set-contributions")
+@click.argument("topic_name")
+@click.argument("text")
+@click.pass_context
+def topic_set_contributions(ctx: click.Context, topic_name: str, text: str) -> None:
+    """Write the contributions text for a topic."""
+    db = get_db(ctx)
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM topics WHERE name = ?", (topic_name,)
+        ).fetchone()
+        if row is None:
+            raise click.ClickException(f"topic '{topic_name}' not found")
+        conn.execute(
+            "UPDATE topics SET contributions = ? WHERE id = ?", (text, row["id"])
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    _echo(
+        ctx,
+        {"topic": topic_name, "contributions": text, "updated": True},
+        f"Contributions updated for topic '{topic_name}'",
+    )
+
+
 @main.group()
 def bib() -> None:
     """Manage BibTeX entries."""
@@ -2356,18 +2486,11 @@ def task() -> None:
 
 @task.command("list")
 @click.option("--topic", "topic_name", default=None)
-@click.option(
-    "--project",
-    "project_name",
-    default=None,
-    help="Filter by project name (use with --topic for unambiguous scoping)",
-)
 @click.option("--status", default=None)
 @click.pass_context
 def task_list(
     ctx: click.Context,
     topic_name: str | None,
-    project_name: str | None,
     status: str | None,
 ) -> None:
     db = get_db(ctx)
@@ -2378,18 +2501,10 @@ def task_list(
         conditions: list[str] = []
         params: list[object] = []
 
-        if project_name and not topic_name:
-            raise click.ClickException(
-                "--project requires --topic for unambiguous scoping"
-            )
         if topic_name:
             joins.append("JOIN topics tp ON t.topic_id = tp.id")
             conditions.append("tp.name = ?")
             params.append(topic_name)
-        if project_name:
-            joins.append("JOIN projects p ON t.project_id = p.id")
-            conditions.append("p.name = ?")
-            params.append(project_name)
         if status:
             conditions.append("t.status = ?")
             params.append(status)
@@ -2408,22 +2523,13 @@ def task_list(
         )
         return
     for row in rows:
-        proj_tag = (
-            f" [proj:{row['project_id']}]" if row["project_id"] is not None else ""
-        )
         click.echo(
-            f"[{row['id']}] [{row['status']}] [{row['priority']}]{proj_tag} {row['title']}"
+            f"[{row['id']}] [{row['status']}] [{row['priority']}] {row['title']}"
         )
 
 
 @task.command("add")
 @click.option("--topic", "topic_name", required=True)
-@click.option(
-    "--project",
-    "project_name",
-    default=None,
-    help="Assign task to a project under the topic",
-)
 @click.option("--title", required=True)
 @click.option(
     "--priority", type=click.Choice(["high", "medium", "low"]), default="medium"
@@ -2433,7 +2539,6 @@ def task_list(
 def task_add(
     ctx: click.Context,
     topic_name: str,
-    project_name: str | None,
     title: str,
     priority: str,
     description: str,
@@ -2442,14 +2547,9 @@ def task_add(
     conn = db.connect()
     try:
         topic_id = _topic_id_or_exit(conn, topic_name)
-        project_id = (
-            _project_id_or_exit(conn, topic_name, project_name)
-            if project_name
-            else None
-        )
         conn.execute(
-            "INSERT INTO tasks (topic_id, project_id, title, description, priority) VALUES (?, ?, ?, ?, ?)",
-            (topic_id, project_id, title, description, priority),
+            "INSERT INTO tasks (topic_id, title, description, priority) VALUES (?, ?, ?, ?)",
+            (topic_id, title, description, priority),
         )
         conn.commit()
         task_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -2460,7 +2560,6 @@ def task_add(
         {
             "task_id": task_id,
             "title": title,
-            "project_id": project_id,
             "status": "pending",
         },
         f"Task added: id={task_id}",
@@ -2649,192 +2748,14 @@ def task_update(
 
 
 @main.group()
-def project() -> None:
-    """Manage projects."""
-
-
-@project.command("add")
-@click.option("--topic", "topic_name", required=True)
-@click.option("--name", required=True)
-@click.option("--venue", default="")
-@click.option("--deadline", default="")
-@click.option("--description", "-d", default="")
-@click.pass_context
-def project_add(
-    ctx: click.Context,
-    topic_name: str,
-    name: str,
-    venue: str,
-    deadline: str,
-    description: str,
-) -> None:
-    from .core.project_manager import ProjectManager
-
-    db = get_db(ctx)
-    conn = db.connect()
-    try:
-        topic_id = _topic_id_or_exit(conn, topic_name)
-        project_id = ProjectManager(conn).create(
-            topic_id, name, description, venue, deadline
-        )
-    finally:
-        conn.close()
-    _echo(
-        ctx,
-        {"id": project_id, "name": name, "topic": topic_name, "status": "planning"},
-        f"Project '{name}' created (id={project_id})",
-    )
-
-
-@project.command("list")
-@click.option("--topic", "topic_name", default=None)
-@click.pass_context
-def project_list(ctx: click.Context, topic_name: str | None) -> None:
-    from .core.project_manager import ProjectManager
-
-    db = get_db(ctx)
-    conn = db.connect()
-    try:
-        topic_id = _topic_id_or_exit(conn, topic_name) if topic_name else None
-        projects = ProjectManager(conn).list_projects(topic_id)
-    finally:
-        conn.close()
-
-    if ctx.obj.get("json"):
-        click.echo(
-            json.dumps(
-                [dataclasses.asdict(item) for item in projects],
-                ensure_ascii=False,
-                default=str,
-            )
-        )
-        return
-    for item in projects:
-        click.echo(
-            f"[{item.id}] [{item.status}] {item.name} -> {item.target_venue or '?'}"
-        )
-
-
-@project.command("show")
-@click.option("--topic", "topic_name", required=True)
-@click.argument("project_name")
-@click.pass_context
-def project_show(ctx: click.Context, topic_name: str, project_name: str) -> None:
-    """Show project details."""
-    from .core.project_manager import ProjectManager
-
-    db = get_db(ctx)
-    conn = db.connect()
-    try:
-        topic_id = _topic_id_or_exit(conn, topic_name)
-        project = ProjectManager(conn).get_project(topic_id, project_name)
-        if project is None:
-            raise click.ClickException(
-                f"project '{project_name}' not found under topic '{topic_name}'"
-            )
-        review_count = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM reviews WHERE project_id = ?",
-            (project.id,),
-        ).fetchone()["cnt"]
-        task_count = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM tasks WHERE project_id = ?",
-            (project.id,),
-        ).fetchone()["cnt"]
-    finally:
-        conn.close()
-
-    payload = {
-        **dataclasses.asdict(project),
-        "topic": topic_name,
-        "review_count": review_count,
-        "task_count": task_count,
-    }
-    if ctx.obj.get("json"):
-        click.echo(json.dumps(payload, ensure_ascii=False, default=str))
-        return
-    click.echo(f"Project: {project.name} (id={project.id})")
-    click.echo(f"Topic: {topic_name}")
-    click.echo(f"Description: {project.description or '-'}")
-    click.echo(
-        f"Venue: {project.target_venue or '-'}  Deadline: {project.deadline or '-'}"
-    )
-    click.echo(
-        f"Status: {project.status}  Tasks: {task_count}  Reviews: {review_count}"
-    )
-
-
-@project.command("update")
-@click.option("--topic", "topic_name", required=True)
-@click.argument("project_name")
-@click.option("--new-name", default=None)
-@click.option("--description", default=None)
-@click.option("--venue", default=None)
-@click.option("--deadline", default=None)
-@click.option(
-    "--status",
-    type=click.Choice(["planning", "active", "paused", "completed", "archived"]),
-)
-@click.pass_context
-def project_update(
-    ctx: click.Context,
-    topic_name: str,
-    project_name: str,
-    new_name: str | None,
-    description: str | None,
-    venue: str | None,
-    deadline: str | None,
-    status: str | None,
-) -> None:
-    """Update project metadata and lifecycle status."""
-    from .core.project_manager import ProjectManager
-
-    if all(value is None for value in (new_name, description, venue, deadline, status)):
-        raise click.ClickException("Nothing to update")
-
-    db = get_db(ctx)
-    conn = db.connect()
-    try:
-        topic_id = _topic_id_or_exit(conn, topic_name)
-        manager = ProjectManager(conn)
-        project = manager.get_project(topic_id, project_name)
-        if project is None:
-            raise click.ClickException(
-                f"project '{project_name}' not found under topic '{topic_name}'"
-            )
-        manager.update_project(
-            project.id or 0,
-            name=new_name,
-            description=description,
-            status=status,
-            target_venue=venue,
-            deadline=deadline,
-        )
-        updated_name = new_name or project.name
-    finally:
-        conn.close()
-
-    _echo(
-        ctx,
-        {
-            "topic": topic_name,
-            "project": updated_name,
-            "previous_name": project_name,
-            "updated": True,
-        },
-        f"Project '{project_name}' updated",
-    )
-
-
-@main.group()
 def review() -> None:
     """Manage gate reviews."""
 
 
 @review.command("add")
 @click.option(
-    "--topic", "topic_name", required=True, help="Topic that owns the project"
+    "--topic", "topic_name", required=True, help="Topic name"
 )
-@click.option("--project", "project_name", required=True)
 @click.option(
     "--gate",
     required=True,
@@ -2852,7 +2773,6 @@ def review() -> None:
 def review_add(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     gate: str,
     reviewer: str,
     verdict: str,
@@ -2864,9 +2784,9 @@ def review_add(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
         review_id = ReviewManager(conn).add_review(
-            project_id, gate, reviewer, verdict, score, findings
+            topic_id, gate, reviewer, verdict, score, findings
         )
     finally:
         conn.close()
@@ -2875,7 +2795,6 @@ def review_add(
         {
             "id": review_id,
             "topic": topic_name,
-            "project": project_name,
             "gate": gate,
             "reviewer": reviewer,
             "verdict": verdict,
@@ -2887,18 +2806,17 @@ def review_add(
 
 @review.command("list")
 @click.option(
-    "--topic", "topic_name", required=True, help="Topic that owns the project"
+    "--topic", "topic_name", required=True, help="Topic name"
 )
-@click.option("--project", "project_name", required=True)
 @click.pass_context
-def review_list(ctx: click.Context, topic_name: str, project_name: str) -> None:
+def review_list(ctx: click.Context, topic_name: str) -> None:
     from .core.review_manager import ReviewManager
 
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
-        reviews = ReviewManager(conn).list_reviews(project_id)
+        topic_id = _topic_id_or_exit(conn, topic_name)
+        reviews = ReviewManager(conn).list_reviews(topic_id)
     finally:
         conn.close()
 
@@ -3139,7 +3057,6 @@ def orchestrator() -> None:
 
 @orchestrator.command("init")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--mode",
     type=click.Choice(["explore", "standard", "strict", "demo"]),
@@ -3147,24 +3064,22 @@ def orchestrator() -> None:
 )
 @click.pass_context
 def orchestrator_init(
-    ctx: click.Context, topic_name: str, project_name: str, mode: str
+    ctx: click.Context, topic_name: str, mode: str
 ) -> None:
-    """Initialize an orchestrator run for a project."""
+    """Initialize an orchestrator run for a topic."""
     from .orchestrator import OrchestratorService
 
     db = get_db(ctx)
     conn = db.connect()
     try:
         topic_id = _topic_id_or_exit(conn, topic_name)
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    run = svc.init_run(project_id=project_id, topic_id=topic_id, mode=mode)
+    run = svc.init_run(topic_id=topic_id, mode=mode)
     payload = {
         "run_id": run.id,
-        "project_id": run.project_id,
         "topic_id": run.topic_id,
         "mode": run.mode,
         "current_stage": run.current_stage,
@@ -3173,27 +3088,26 @@ def orchestrator_init(
     _echo(
         ctx,
         payload,
-        f"Orchestrator initialized: {topic_name}/{project_name} -> {run.current_stage}",
+        f"Orchestrator initialized: {topic_name} -> {run.current_stage}",
     )
 
 
 @orchestrator.command("status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
-def orchestrator_status(ctx: click.Context, topic_name: str, project_name: str) -> None:
-    """Show orchestrator status for a project."""
+def orchestrator_status(ctx: click.Context, topic_name: str) -> None:
+    """Show orchestrator status for a topic."""
     from .orchestrator import OrchestratorService
 
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    status = svc.get_status(project_id)
+    status = svc.get_status(topic_id)
     _echo(
         ctx, status, f"Status: {status.get('run', {}).get('current_stage', 'unknown')}"
     )
@@ -3201,29 +3115,27 @@ def orchestrator_status(ctx: click.Context, topic_name: str, project_name: str) 
 
 @orchestrator.command("artifacts")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--stage", default=None, help="Filter by stage")
 @click.option("--type", "artifact_type", default=None, help="Filter by artifact type")
 @click.pass_context
 def orchestrator_artifacts(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     stage: str | None,
     artifact_type: str | None,
 ) -> None:
-    """List artifacts for a project."""
+    """List artifacts for a topic."""
     from .orchestrator import OrchestratorService
 
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    artifacts = svc.list_artifacts(project_id, stage=stage, artifact_type=artifact_type)
+    artifacts = svc.list_artifacts(topic_id, stage=stage, artifact_type=artifact_type)
     payload = [
         {
             "id": a.id,
@@ -3241,24 +3153,23 @@ def orchestrator_artifacts(
 
 @orchestrator.command("advance")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--actor", default="user", help="Actor name")
 @click.pass_context
 def orchestrator_advance(
-    ctx: click.Context, topic_name: str, project_name: str, actor: str
+    ctx: click.Context, topic_name: str, actor: str
 ) -> None:
-    """Advance the project to the next stage."""
+    """Advance the topic to the next stage."""
     from .orchestrator import OrchestratorService
 
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    result = svc.advance(project_id, actor=actor)
+    result = svc.advance(topic_id, actor=actor)
     _echo(
         ctx,
         result,
@@ -3269,11 +3180,10 @@ def orchestrator_advance(
 
 @orchestrator.command("gate-check")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--stage", default=None, help="Stage to check (defaults to current)")
 @click.pass_context
 def orchestrator_gate_check(
-    ctx: click.Context, topic_name: str, project_name: str, stage: str | None
+    ctx: click.Context, topic_name: str, stage: str | None
 ) -> None:
     """Check the gate for a stage."""
     from .orchestrator import OrchestratorService
@@ -3281,19 +3191,18 @@ def orchestrator_gate_check(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    decision = svc.check_gate(project_id, stage=stage)
+    decision = svc.check_gate(topic_id, stage=stage)
     payload = {"gate_decision": decision, "stage": stage or "current"}
     _echo(ctx, payload, f"Gate decision: {decision}")
 
 
 @orchestrator.command("adversarial-run")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--artifact-id", type=int, required=True, help="Target artifact ID to review"
 )
@@ -3318,7 +3227,6 @@ def orchestrator_gate_check(
 def orchestrator_adversarial_run(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     artifact_id: int,
     proposal_json: str,
     objections_json: str,
@@ -3333,7 +3241,7 @@ def orchestrator_adversarial_run(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
@@ -3348,7 +3256,7 @@ def orchestrator_adversarial_run(
 
     svc = OrchestratorService(db)
     result = svc.run_adversarial_round(
-        project_id=project_id,
+        topic_id=topic_id,
         target_artifact_id=artifact_id,
         proposal_snapshot=proposal,
         objections=objections,
@@ -3366,7 +3274,6 @@ def orchestrator_adversarial_run(
 
 @orchestrator.command("adversarial-resolve")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--round-artifact-id", type=int, required=True, help="Round artifact ID to resolve"
 )
@@ -3382,7 +3289,6 @@ def orchestrator_adversarial_run(
 def orchestrator_adversarial_resolve(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     round_artifact_id: int,
     scores_json: str,
     notes: str,
@@ -3395,7 +3301,7 @@ def orchestrator_adversarial_resolve(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
@@ -3407,7 +3313,7 @@ def orchestrator_adversarial_resolve(
 
     svc = OrchestratorService(db)
     result = svc.resolve_adversarial_round(
-        project_id=project_id,
+        topic_id=topic_id,
         round_artifact_id=round_artifact_id,
         scores=scores,
         notes=notes,
@@ -3423,23 +3329,22 @@ def orchestrator_adversarial_resolve(
 
 @orchestrator.command("adversarial-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
 def orchestrator_adversarial_status(
-    ctx: click.Context, topic_name: str, project_name: str
+    ctx: click.Context, topic_name: str
 ) -> None:
-    """Check adversarial status for the project."""
+    """Check adversarial status for the topic."""
     from .orchestrator import OrchestratorService
 
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    status = svc.check_adversarial_status(project_id)
+    status = svc.check_adversarial_status(topic_id)
     _echo(
         ctx,
         status,
@@ -3449,7 +3354,6 @@ def orchestrator_adversarial_status(
 
 @orchestrator.command("review-bundle")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--integrity-artifact-id",
     type=int,
@@ -3466,7 +3370,6 @@ def orchestrator_adversarial_status(
 def orchestrator_review_bundle(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     integrity_artifact_id: int | None,
     scholarly_artifact_id: int | None,
 ) -> None:
@@ -3476,14 +3379,14 @@ def orchestrator_review_bundle(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
     try:
         result = svc.create_review_bundle(
-            project_id=project_id,
+            topic_id=topic_id,
             integrity_artifact_id=integrity_artifact_id,
             scholarly_artifact_id=scholarly_artifact_id,
         )
@@ -3499,7 +3402,6 @@ def orchestrator_review_bundle(
 
 @orchestrator.command("review-add-issue")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--review-type",
     required=True,
@@ -3526,7 +3428,6 @@ def orchestrator_review_bundle(
 def orchestrator_review_add_issue(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     review_type: str,
     severity: str,
     category: str,
@@ -3542,13 +3443,13 @@ def orchestrator_review_add_issue(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
     result = svc.add_review_issue(
-        project_id=project_id,
+        topic_id=topic_id,
         review_type=review_type,
         severity=severity,
         category=category,
@@ -3567,7 +3468,6 @@ def orchestrator_review_add_issue(
 
 @orchestrator.command("review-issues")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--stage", default=None, help="Filter by stage")
 @click.option(
     "--status",
@@ -3583,7 +3483,6 @@ def orchestrator_review_add_issue(
 def orchestrator_review_issues(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     stage: str | None,
     issue_status: str | None,
     blocking_only: bool,
@@ -3594,13 +3493,13 @@ def orchestrator_review_issues(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
     issues = svc.list_review_issues(
-        project_id=project_id,
+        topic_id=topic_id,
         stage=stage,
         status=issue_status,
         blocking_only=blocking_only,
@@ -3610,7 +3509,6 @@ def orchestrator_review_issues(
 
 @orchestrator.command("review-respond")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--issue-id", type=int, required=True, help="Issue ID to respond to")
 @click.option(
     "--response-type",
@@ -3627,7 +3525,6 @@ def orchestrator_review_issues(
 def orchestrator_review_respond(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     issue_id: int,
     response_type: str,
     text: str,
@@ -3641,7 +3538,7 @@ def orchestrator_review_respond(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
@@ -3656,7 +3553,7 @@ def orchestrator_review_respond(
     svc = OrchestratorService(db)
     result = svc.respond_to_issue(
         issue_id=issue_id,
-        project_id=project_id,
+        topic_id=topic_id,
         response_type=response_type,
         response_text=text,
         artifact_id=artifact_id,
@@ -3667,7 +3564,6 @@ def orchestrator_review_respond(
 
 @orchestrator.command("review-resolve")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--issue-id", type=int, required=True, help="Issue ID to resolve")
 @click.option(
     "--status",
@@ -3680,7 +3576,6 @@ def orchestrator_review_respond(
 def orchestrator_review_resolve(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     issue_id: int,
     resolution_status: str,
 ) -> None:
@@ -3690,7 +3585,7 @@ def orchestrator_review_resolve(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        _project_id_or_exit(conn, topic_name, project_name)
+        _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
@@ -3703,10 +3598,9 @@ def orchestrator_review_resolve(
 
 @orchestrator.command("review-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
 def orchestrator_review_status(
-    ctx: click.Context, topic_name: str, project_name: str
+    ctx: click.Context, topic_name: str
 ) -> None:
     """Show review status summary."""
     from .orchestrator import OrchestratorService
@@ -3714,12 +3608,12 @@ def orchestrator_review_status(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    status = svc.get_review_status(project_id)
+    status = svc.get_review_status(topic_id)
     decision = status.get("decision", "unknown")
     blocking = status.get("blocking_open", 0)
     _echo(
@@ -3731,7 +3625,6 @@ def orchestrator_review_status(
 
 @orchestrator.command("integrity-check")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.option(
     "--findings", "findings_json", default=None, help="External findings as JSON array"
 )
@@ -3739,7 +3632,6 @@ def orchestrator_review_status(
 def orchestrator_integrity_check(
     ctx: click.Context,
     topic_name: str,
-    project_name: str,
     findings_json: str | None,
 ) -> None:
     """Run 5-phase integrity verification."""
@@ -3749,7 +3641,7 @@ def orchestrator_integrity_check(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
@@ -3762,7 +3654,7 @@ def orchestrator_integrity_check(
             return
 
     svc = OrchestratorService(db)
-    result = svc.run_integrity_check(project_id=project_id, findings=findings)
+    result = svc.run_integrity_check(topic_id=topic_id, findings=findings)
     passed = "PASSED" if result.get("passed") else "FAILED"
     _echo(
         ctx,
@@ -3773,10 +3665,9 @@ def orchestrator_integrity_check(
 
 @orchestrator.command("finalize")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
-@click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
 def orchestrator_finalize(
-    ctx: click.Context, topic_name: str, project_name: str
+    ctx: click.Context, topic_name: str
 ) -> None:
     """Produce final bundle and process summary."""
     from .orchestrator import OrchestratorService
@@ -3784,12 +3675,12 @@ def orchestrator_finalize(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        project_id = _project_id_or_exit(conn, topic_name, project_name)
+        topic_id = _topic_id_or_exit(conn, topic_name)
     finally:
         conn.close()
 
     svc = OrchestratorService(db)
-    result = svc.finalize_project(project_id=project_id)
+    result = svc.finalize(topic_id=topic_id)
     _echo(
         ctx,
         result,
@@ -3912,13 +3803,7 @@ def auto_runner_group() -> None:
 
 
 @auto_runner_group.command("start")
-@click.option("--project-id", type=int, required=True, help="Project ID")
-@click.option(
-    "--topic-id",
-    type=int,
-    default=None,
-    help="Topic ID (resolved from project if omitted)",
-)
+@click.option("--topic-id", type=int, required=True, help="Topic ID")
 @click.option(
     "--direction", type=str, default="", help="Research direction description"
 )
@@ -3945,8 +3830,7 @@ def auto_runner_group() -> None:
 @click.pass_context
 def auto_runner_start(
     ctx: click.Context,
-    project_id: int,
-    topic_id: int | None,
+    topic_id: int,
     direction: str,
     mode: str,
     session_command: str,
@@ -3954,11 +3838,10 @@ def auto_runner_start(
     dry_run: bool,
 ) -> None:
     """Start a new autonomous workflow run."""
-    from .auto_runner.runner import run_project
+    from .auto_runner.runner import run_topic
 
-    result = run_project(
-        project_id,
-        topic_id=topic_id,
+    result = run_topic(
+        topic_id,
         direction=direction,
         mode=mode,
         session_command=session_command.split(),
@@ -3969,25 +3852,25 @@ def auto_runner_start(
 
 
 @auto_runner_group.command("resume")
-@click.option("--project-id", type=int, required=True, help="Project ID")
+@click.option("--topic-id", type=int, required=True, help="Topic ID")
 @click.option("--auto-approve", is_flag=True, default=False)
 @click.pass_context
-def auto_runner_resume(ctx: click.Context, project_id: int, auto_approve: bool) -> None:
+def auto_runner_resume(ctx: click.Context, topic_id: int, auto_approve: bool) -> None:
     """Resume a paused workflow from checkpoint."""
-    from .auto_runner.runner import resume_project
+    from .auto_runner.runner import resume_topic
 
-    result = resume_project(project_id, auto_approve=auto_approve)
+    result = resume_topic(topic_id, auto_approve=auto_approve)
     _echo(ctx, result, result.get("summary", ""))
 
 
 @auto_runner_group.command("status")
-@click.option("--project-id", type=int, required=True, help="Project ID")
+@click.option("--topic-id", type=int, required=True, help="Topic ID")
 @click.pass_context
-def auto_runner_status(ctx: click.Context, project_id: int) -> None:
+def auto_runner_status(ctx: click.Context, topic_id: int) -> None:
     """Show current workflow status."""
     from .auto_runner.runner import get_status
 
-    result = get_status(project_id)
+    result = get_status(topic_id)
     _echo(
         ctx,
         result,

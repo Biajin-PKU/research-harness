@@ -25,7 +25,6 @@ def _utc_now() -> str:
 
 
 def new_checkpoint(
-    project_id: int,
     topic_id: int,
     *,
     mode: str = "standard",
@@ -34,7 +33,6 @@ def new_checkpoint(
     """Create a fresh checkpoint seeded with defaults."""
     return {
         "schema_version": SCHEMA_VERSION,
-        "project_id": project_id,
         "topic_id": topic_id,
         "mode": mode,
         "session_command": session_command or ["claude-kimi"],
@@ -68,14 +66,14 @@ def new_checkpoint(
     }
 
 
-def checkpoint_path(base_dir: Path, project_id: int) -> Path:
-    """Return the checkpoint file path for a project."""
-    return base_dir / "auto_runner" / "checkpoints" / f"project_{project_id}.json"
+def checkpoint_path(base_dir: Path, topic_id: int) -> Path:
+    """Return the checkpoint file path for a topic."""
+    return base_dir / "auto_runner" / "checkpoints" / f"topic_{topic_id}.json"
 
 
-def handoff_dir(base_dir: Path, project_id: int, stage: str) -> Path:
-    """Return the handoff directory for a project stage."""
-    return base_dir / "auto_runner" / "handoffs" / f"project_{project_id}" / stage
+def handoff_dir(base_dir: Path, topic_id: int, stage: str) -> Path:
+    """Return the handoff directory for a topic stage."""
+    return base_dir / "auto_runner" / "handoffs" / f"topic_{topic_id}" / stage
 
 
 def _clean_stale_temps(directory: Path) -> None:

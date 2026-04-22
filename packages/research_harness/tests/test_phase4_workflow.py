@@ -28,17 +28,14 @@ def _insert_paper(conn, pid, title, **extra):
 
 class TestRebuttalFormat:
     def test_formats_rebuttal(self, db, conn):
-        # Set up project with review issues
+        # Set up topic with review issues
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 'test')")
         conn.execute(
-            "INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'test-project')"
-        )
-        conn.execute(
             "INSERT INTO review_issues (id, project_id, topic_id, stage, review_type, severity, category, summary, details, recommended_action, status) "
-            "VALUES (1, 1, 1, 'writing', 'scholarly', 'high', 'methodology', 'Missing ablation study', 'Need ablation of key components', 'Add ablation table', 'open')"
+            "VALUES (1, NULL, 1, 'writing', 'scholarly', 'high', 'methodology', 'Missing ablation study', 'Need ablation of key components', 'Add ablation table', 'open')"
         )
         conn.execute(
-            "INSERT INTO review_responses (id, issue_id, project_id, response_type, response_text, status) "
+            "INSERT INTO review_responses (id, issue_id, topic_id, response_type, response_text, status) "
             "VALUES (1, 1, 1, 'change', 'Added ablation study in Table 5', 'active')"
         )
         conn.commit()
@@ -57,22 +54,19 @@ class TestRebuttalFormat:
             mock_client.return_value = MagicMock()
             from research_harness.execution.llm_primitives import rebuttal_format
 
-            result = rebuttal_format(db=db, project_id=1)
+            result = rebuttal_format(db=db, topic_id=1)
 
         assert result.issues_addressed == 1
         assert "ablation" in result.rebuttal_text.lower()
-        assert result.project_id == 1
+        assert result.topic_id == 1
 
     def test_no_issues(self, db, conn):
         conn.execute("INSERT INTO topics (id, name) VALUES (1, 'empty')")
-        conn.execute(
-            "INSERT INTO projects (id, topic_id, name) VALUES (1, 1, 'empty-project')"
-        )
         conn.commit()
 
         from research_harness.execution.llm_primitives import rebuttal_format
 
-        result = rebuttal_format(db=db, project_id=1)
+        result = rebuttal_format(db=db, topic_id=1)
         assert result.issues_addressed == 0
         assert "No review issues" in result.rebuttal_text
 

@@ -31,6 +31,8 @@ def svc(db):
 
 @pytest.fixture
 def topic_and_project(db):
+    """Create a topic (and a stub projects row to satisfy the FK on
+    orchestrator_runs.project_id).  Returns (topic_id, topic_id)."""
     conn = db.connect()
     try:
         cur = conn.execute(
@@ -38,13 +40,14 @@ def topic_and_project(db):
             ("test-topic", "Test topic"),
         )
         topic_id = int(cur.lastrowid)
-        cur = conn.execute(
-            "INSERT INTO projects (topic_id, name, description) VALUES (?, ?, ?)",
-            (topic_id, "test-project", "Test project"),
+        # The legacy FK on orchestrator_runs.project_id -> projects(id)
+        # still exists, so we need a stub row whose id == topic_id.
+        conn.execute(
+            "INSERT INTO projects (id, topic_id, name, description) VALUES (?, ?, ?, ?)",
+            (topic_id, topic_id, "stub", "stub"),
         )
-        project_id = int(cur.lastrowid)
         conn.commit()
-        return topic_id, project_id
+        return topic_id, topic_id
     finally:
         conn.close()
 
@@ -165,35 +168,34 @@ class TestStageRegistry:
 
 class TestOrchestratorInit:
     def test_init_run_creates_run(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id, mode="standard")
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id, mode="standard")
 
         assert run.id is not None
-        assert run.project_id == project_id
         assert run.topic_id == topic_id
         assert run.mode == "standard"
         assert run.current_stage == "init"
         assert run.stage_status == "in_progress"
 
     def test_init_run_default_mode(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id)
         assert run.mode == "standard"
 
     def test_get_run_returns_run(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        run = svc.get_run(project_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        run = svc.get_run(topic_id)
         assert run is not None
-        assert run.project_id == project_id
+        assert run.topic_id == topic_id
 
     def test_get_run_none_for_unknown(self, svc):
         run = svc.get_run(99999)
         assert run is None
 
     def test_init_run_creates_stage_event(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id)
 
         conn = db.connect()
         try:
@@ -211,7 +213,7 @@ class TestOrchestratorInit:
     def test_init_run_rolls_back_on_failure(self, db, topic_and_project):
         """Verify that init_run is atomic — a failure during stage event insert
         should roll back the run insert as well."""
-        topic_id, project_id = topic_and_project
+        topic_id, _project_id = topic_and_project
         svc = OrchestratorService(db)
 
         # Wrap db.connect to return a connection whose execute() bombs on the
@@ -242,15 +244,15 @@ class TestOrchestratorInit:
         db.connect = lambda: _SabotageConn(original_connect())
 
         with pytest.raises(RuntimeError, match="simulated"):
-            svc.init_run(project_id=project_id, topic_id=topic_id)
+            svc.init_run(topic_id=topic_id)
 
         # Restore and verify no partial data was committed
         db.connect = original_connect
         conn = db.connect()
         try:
             runs = conn.execute(
-                "SELECT * FROM orchestrator_runs WHERE project_id = ?",
-                (project_id,),
+                "SELECT * FROM orchestrator_runs WHERE topic_id = ?",
+                (topic_id,),
             ).fetchall()
             assert len(runs) == 0, "Run should have been rolled back"
         finally:
@@ -263,31 +265,30 @@ class TestOrchestratorStatus:
         assert "error" in status
 
     def test_status_shows_current_stage(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        status = svc.get_status(project_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        status = svc.get_status(topic_id)
         assert status["run"]["current_stage"] == "init"
 
     def test_status_shows_required_artifacts(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        status = svc.get_status(project_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        status = svc.get_status(topic_id)
         assert "topic_brief" in status["stage"]["required_artifacts"]
 
     def test_status_shows_missing_artifacts(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        status = svc.get_status(project_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        status = svc.get_status(topic_id)
         assert "topic_brief" in status["stage"]["missing_artifacts"]
 
 
 class TestArtifactPersistence:
     def test_record_artifact(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         artifact = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
@@ -296,25 +297,23 @@ class TestArtifactPersistence:
         )
 
         assert artifact.id is not None
-        assert artifact.project_id == project_id
+        assert artifact.topic_id == topic_id
         assert artifact.stage == "topic_framing"
         assert artifact.artifact_type == "topic_brief"
         assert artifact.version == 1
         assert artifact.payload == {"question": "What is X?"}
 
     def test_artifact_version_increments(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={"v": 1},
         )
         artifact2 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
@@ -324,18 +323,16 @@ class TestArtifactPersistence:
         assert artifact2.version == 2
 
     def test_old_artifact_superseded(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         art1 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={"v": 1},
         )
         art2 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
@@ -349,56 +346,51 @@ class TestArtifactPersistence:
         assert art2.status == "active"
 
     def test_list_artifacts(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={},
         )
 
-        artifacts = svc.list_artifacts(project_id)
+        artifacts = svc.list_artifacts(topic_id)
         assert len(artifacts) == 1
 
     def test_get_latest_artifact(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={"v": 1},
         )
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={"v": 2},
         )
 
-        latest = svc.get_latest_artifact(project_id, "topic_framing", "topic_brief")
+        latest = svc.get_latest_artifact(topic_id, "topic_framing", "topic_brief")
         assert latest is not None
         assert latest.payload == {"v": 2}
 
     def test_record_artifact_can_attach_dependencies(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         upstream = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="build",
             artifact_type="literature_map",
             payload={"v": 1},
         )
         downstream = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_analysis",
@@ -420,18 +412,16 @@ class TestArtifactPersistence:
         assert row is not None
 
     def test_superseding_artifact_marks_dependents_stale(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         upstream_v1 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="build",
             artifact_type="literature_map",
             payload={"v": 1},
         )
         downstream = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_analysis",
@@ -440,7 +430,6 @@ class TestArtifactPersistence:
         )
 
         upstream_v2 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="build",
             artifact_type="literature_map",
@@ -448,7 +437,7 @@ class TestArtifactPersistence:
         )
 
         assert upstream_v2.version == 2
-        stale = svc.list_stale_artifacts(project_id)
+        stale = svc.list_stale_artifacts(topic_id)
         stale_ids = {artifact.id for artifact in stale}
         assert downstream.id in stale_ids
         refreshed = svc._artifact_manager.get(downstream.id)
@@ -459,11 +448,10 @@ class TestArtifactPersistence:
         )
 
     def test_mark_and_clear_artifact_stale(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         artifact = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_analysis",
@@ -483,41 +471,39 @@ class TestArtifactPersistence:
 
 class TestStageAdvancement:
     def test_advance_requires_artifact(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is False
         assert "Missing required artifact" in result["error"]
 
     def test_advance_with_artifact(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload=_valid_topic_brief_payload(),
         )
 
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is True
         assert result["from_stage"] == "init"
         assert result["to_stage"] == "build"
 
-        run = svc.get_run(project_id)
+        run = svc.get_run(topic_id)
         assert run.current_stage == "build"
 
     def test_advance_cannot_skip_stages(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Record artifact for init
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
@@ -525,45 +511,44 @@ class TestStageAdvancement:
         )
 
         # Advance to build
-        svc.advance(project_id)
+        svc.advance(topic_id)
 
         # Try to advance without literature_map artifact
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is False
 
     def test_advance_from_write_is_none(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Manually set stage to write (last stage)
         conn = svc._db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = 'write' WHERE project_id = ?",
-                (project_id,),
+                "UPDATE orchestrator_runs SET current_stage = 'write' WHERE topic_id = ?",
+                (topic_id,),
             )
             conn.commit()
         finally:
             conn.close()
 
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is False
         assert "No next stage" in result["error"]
 
     def test_advance_records_stage_event(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload=_valid_topic_brief_payload(),
         )
 
-        svc.advance(project_id)
+        svc.advance(topic_id)
 
         conn = db.connect()
         try:
@@ -580,36 +565,35 @@ class TestStageAdvancement:
 
 class TestGateCheck:
     def test_gate_check_approval_gate_needs_artifact(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
-        decision = svc.check_gate(project_id, stage="topic_framing")
+        decision = svc.check_gate(topic_id, stage="topic_framing")
         assert decision == "needs_approval"
 
     def test_gate_check_approval_gate_passes_with_artifact(
         self, svc, db, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload=_valid_topic_brief_payload(),
         )
 
-        decision = svc.check_gate(project_id, stage="topic_framing")
+        decision = svc.check_gate(topic_id, stage="topic_framing")
         assert decision == "pass"
 
     def test_gate_check_uses_current_stage_by_default(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Without artifact, should fail for topic_framing (current stage)
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "needs_approval"
 
 
@@ -617,12 +601,11 @@ class TestAdversarialOptimization:
     """Slice 4: Adversarial optimization tests."""
 
     def test_adversarial_round_creates_artifact(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # First, create a target artifact
         target = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="direction_proposal",
@@ -631,7 +614,7 @@ class TestAdversarialOptimization:
         )
 
         result = svc.run_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             target_artifact_id=target.id,
             proposal_snapshot={"direction": "AI safety via RLHF"},
             objections=[
@@ -653,12 +636,11 @@ class TestAdversarialOptimization:
     def test_adversarial_resolution_blocks_without_approval(
         self, svc, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Create proposal and run round
         target = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="direction_proposal",
@@ -666,7 +648,7 @@ class TestAdversarialOptimization:
         )
 
         round_result = svc.run_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             target_artifact_id=target.id,
             proposal_snapshot={"direction": "Test"},
             objections=[
@@ -681,7 +663,7 @@ class TestAdversarialOptimization:
 
         # Resolve with low scores (should not approve)
         resolve_result = svc.resolve_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             round_artifact_id=round_result["artifact_id"],
             scores={"novelty": 2.0, "evidence_coverage": 3.0},
             notes="Needs work",
@@ -694,11 +676,10 @@ class TestAdversarialOptimization:
     def test_adversarial_resolution_approves_with_good_scores(
         self, svc, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         target = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="direction_proposal",
@@ -706,7 +687,7 @@ class TestAdversarialOptimization:
         )
 
         round_result = svc.run_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             target_artifact_id=target.id,
             proposal_snapshot={"direction": "Test"},
             objections=[
@@ -725,7 +706,7 @@ class TestAdversarialOptimization:
 
         # Resolve with good scores (should approve)
         resolve_result = svc.resolve_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             round_artifact_id=round_result["artifact_id"],
             scores={"novelty": 4.5, "evidence_coverage": 4.5, "method_validity": 4.5},
             notes="Good proposal",
@@ -737,15 +718,15 @@ class TestAdversarialOptimization:
         assert resolve_result["mean_score"] >= 4.0
 
     def test_adversarial_gate_blocks_stage_advance(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Move to adversarial_optimization stage (which has adversarial_gate)
         conn = svc._db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = 'adversarial_optimization' WHERE project_id = ?",
-                (project_id,),
+                "UPDATE orchestrator_runs SET current_stage = 'adversarial_optimization' WHERE topic_id = ?",
+                (topic_id,),
             )
             conn.commit()
         finally:
@@ -753,7 +734,6 @@ class TestAdversarialOptimization:
 
         # Add required artifact but no adversarial resolution
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="adversarial_optimization",
             artifact_type="adversarial_round",
@@ -761,38 +741,37 @@ class TestAdversarialOptimization:
         )
 
         # Gate should fail without adversarial resolution
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "needs_adversarial"
 
         # Create adversarial resolution
         target = svc.list_artifacts(
-            project_id,
+            topic_id,
             stage="adversarial_optimization",
             artifact_type="adversarial_round",
         )[0]
 
         svc.resolve_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             round_artifact_id=target.id,
             scores={"novelty": 4.5, "evidence_coverage": 4.5, "method_validity": 4.5},
         )
 
         # Gate should now pass
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "pass"
 
     def test_adversarial_status_reflects_current_state(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         # Initially no resolution
-        status = svc.check_adversarial_status(project_id)
+        status = svc.check_adversarial_status(topic_id)
         assert status["has_resolution"] is False
         assert status["status"] == "no_resolution_yet"
 
         # Create resolution
         target = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="direction_proposal",
@@ -800,19 +779,19 @@ class TestAdversarialOptimization:
         )
 
         round_result = svc.run_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             target_artifact_id=target.id,
             proposal_snapshot={},
             objections=[],
         )
 
         svc.resolve_adversarial_round(
-            project_id=project_id,
+            topic_id=topic_id,
             round_artifact_id=round_result["artifact_id"],
             scores={"novelty": 4.5},
         )
 
-        status = svc.check_adversarial_status(project_id)
+        status = svc.check_adversarial_status(topic_id)
         assert status["has_resolution"] is True
         assert status["outcome"] == "approved"
         assert status["should_repeat"] is False
@@ -822,32 +801,30 @@ class TestReviewLoop:
     """Slice 5: Review loop tests."""
 
     @staticmethod
-    def _set_stage(db, project_id: int, stage: str) -> None:
+    def _set_stage(db, topic_id: int, stage: str) -> None:
         conn = db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = ? WHERE project_id = ?",
-                (stage, project_id),
+                "UPDATE orchestrator_runs SET current_stage = ? WHERE topic_id = ?",
+                (stage, topic_id),
             )
             conn.commit()
         finally:
             conn.close()
 
     def test_create_review_bundle_from_artifacts(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         # Create report artifacts
         a1 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="formal_review",
             artifact_type="integrity_review_report",
             payload={"findings": []},
         )
         a2 = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="formal_review",
             artifact_type="scholarly_review_report",
@@ -855,7 +832,7 @@ class TestReviewLoop:
         )
 
         result = svc.create_review_bundle(
-            project_id=project_id,
+            topic_id=topic_id,
             integrity_artifact_id=a1.id,
             scholarly_artifact_id=a2.id,
         )
@@ -865,24 +842,24 @@ class TestReviewLoop:
         assert result["cycle_number"] == 1
 
         # Verify persisted
-        bundle = svc.get_latest_artifact(project_id, "formal_review", "review_bundle")
+        bundle = svc.get_latest_artifact(topic_id, "formal_review", "review_bundle")
         assert bundle is not None
         assert bundle.payload["cycle_number"] == 1
 
     def test_add_issues_with_various_severities(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         r1 = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="critical",
             category="methodology",
             summary="Missing baseline comparison",
         )
         r2 = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="low",
             category="writing",
@@ -895,9 +872,9 @@ class TestReviewLoop:
         assert r2["blocking"] is False
 
     def test_blocking_issues_prevent_gate_passage(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         # Add required artifacts
         for art_type in (
@@ -906,7 +883,6 @@ class TestReviewLoop:
             "review_bundle",
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="formal_review",
                 artifact_type=art_type,
@@ -915,26 +891,26 @@ class TestReviewLoop:
 
         # Add blocking issue
         svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="integrity",
             severity="critical",
             category="citation",
             summary="Fabricated reference",
         )
 
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "needs_review"
 
-        advance_result = svc.advance(project_id)
+        advance_result = svc.advance(topic_id)
         assert advance_result["success"] is False
 
     def test_responses_link_to_issues(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         issue_result = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="medium",
             category="evidence",
@@ -944,7 +920,7 @@ class TestReviewLoop:
 
         resp = svc.respond_to_issue(
             issue_id=issue_id,
-            project_id=project_id,
+            topic_id=topic_id,
             response_type="change",
             response_text="Added additional citations and analysis",
         )
@@ -957,9 +933,9 @@ class TestReviewLoop:
         assert responses[0].response_text == "Added additional citations and analysis"
 
     def test_resolve_issues_allows_gate_passage(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         # Write-stage gate now requires a final_bundle + process_summary in
         # addition to the review report bundle and absence of blocking issues.
@@ -971,7 +947,6 @@ class TestReviewLoop:
             "process_summary",
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="formal_review",
                 artifact_type=art_type,
@@ -980,39 +955,39 @@ class TestReviewLoop:
 
         # Add and resolve blocking issue
         issue_result = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="integrity",
             severity="high",
             category="statistics",
             summary="P-value calculation error",
         )
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
         svc.resolve_review_issue(issue_result["issue_id"], "resolved")
-        assert svc.check_gate(project_id) == "pass"
+        assert svc.check_gate(topic_id) == "pass"
 
     def test_review_summary_counts(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         # Add mixed issues
         svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="critical",
             category="methodology",
             summary="Issue 1",
         )
         svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="critical",
             category="evidence",
             summary="Issue 2",
         )
         svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="medium",
             category="writing",
@@ -1020,36 +995,36 @@ class TestReviewLoop:
         )
 
         # Resolve one critical
-        issues = svc.list_review_issues(project_id)
+        issues = svc.list_review_issues(topic_id)
         critical_id = next(i["id"] for i in issues if i["summary"] == "Issue 1")
         svc.resolve_review_issue(critical_id, "resolved")
 
-        summary = svc.get_review_status(project_id)
+        summary = svc.get_review_status(topic_id)
         assert summary["total_issues"] == 3
         assert summary["blocking_open"] == 1  # one critical still open
         assert summary["decision"] == "reject"  # critical open
         assert summary["can_pass_gate"] is False
 
     def test_max_review_cycles_enforced(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         # Create 2 bundles (max)
-        svc.create_review_bundle(project_id=project_id)
-        svc.create_review_bundle(project_id=project_id)
+        svc.create_review_bundle(topic_id=topic_id)
+        svc.create_review_bundle(topic_id=topic_id)
 
         # Third should fail
         with pytest.raises(ValueError, match="Maximum review cycles"):
-            svc._review.create_bundle(project_id, topic_id, "formal_review")
+            svc._review.create_bundle(topic_id, "formal_review")
 
     def test_critical_severity_auto_blocks(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         result = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="critical",
             category="scope",
@@ -1060,12 +1035,12 @@ class TestReviewLoop:
         assert result["blocking"] is True
 
     def test_change_response_sets_issue_in_progress(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "formal_review")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "formal_review")
 
         issue_result = svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="scholarly",
             severity="medium",
             category="writing",
@@ -1074,12 +1049,12 @@ class TestReviewLoop:
 
         svc.respond_to_issue(
             issue_id=issue_result["issue_id"],
-            project_id=project_id,
+            topic_id=topic_id,
             response_type="change",
             response_text="Rewrote methodology section",
         )
 
-        issues = svc.list_review_issues(project_id)
+        issues = svc.list_review_issues(topic_id)
         issue = next(i for i in issues if i["id"] == issue_result["issue_id"])
         assert issue["status"] == "in_progress"
 
@@ -1088,32 +1063,32 @@ class TestIntegrityAndFinalize:
     """Slice 6: Integrity verification and finalize tests."""
 
     @staticmethod
-    def _set_stage(db, project_id: int, stage: str) -> None:
+    def _set_stage(db, topic_id: int, stage: str) -> None:
         conn = db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = ? WHERE project_id = ?",
-                (stage, project_id),
+                "UPDATE orchestrator_runs SET current_stage = ? WHERE topic_id = ?",
+                (stage, topic_id),
             )
             conn.commit()
         finally:
             conn.close()
 
     def test_integrity_check_passes_with_no_findings(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "final_integrity")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "final_integrity")
 
-        result = svc.run_integrity_check(project_id=project_id)
+        result = svc.run_integrity_check(topic_id=topic_id)
         assert result["success"] is True
         assert result["passed"] is True
         assert result["critical_count"] == 0
         assert len(result["phases_completed"]) == 5
 
     def test_integrity_check_fails_with_critical_findings(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "final_integrity")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "final_integrity")
 
         findings = [
             {
@@ -1124,15 +1099,15 @@ class TestIntegrityAndFinalize:
                 "details": "Page 5 claim contradicts cited paper",
             },
         ]
-        result = svc.run_integrity_check(project_id=project_id, findings=findings)
+        result = svc.run_integrity_check(topic_id=topic_id, findings=findings)
         assert result["success"] is True
         assert result["passed"] is False
         assert result["critical_count"] == 1
 
     def test_integrity_findings_create_review_issues(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "final_integrity")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "final_integrity")
 
         findings = [
             {
@@ -1142,25 +1117,24 @@ class TestIntegrityAndFinalize:
                 "summary": "P-value not reported for main result",
             },
         ]
-        svc.run_integrity_check(project_id=project_id, findings=findings)
+        svc.run_integrity_check(topic_id=topic_id, findings=findings)
 
         # Should have created a blocking review issue
-        issues = svc.list_review_issues(project_id)
+        issues = svc.list_review_issues(topic_id)
         assert len(issues) >= 1
         stat_issue = next((i for i in issues if i["category"] == "statistics"), None)
         assert stat_issue is not None
         assert stat_issue["blocking"] is True
 
     def test_integrity_gate_blocks_with_critical_issues(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         # Set to write stage (which has review_gate in V2, but we test
         # that critical issues block passage regardless)
-        self._set_stage(svc._db, project_id, "write")
+        self._set_stage(svc._db, topic_id, "write")
 
         # Add required artifact
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="write",
             artifact_type="final_integrity_report",
@@ -1169,7 +1143,7 @@ class TestIntegrityAndFinalize:
 
         # Add critical finding via integrity check
         svc.run_integrity_check(
-            project_id=project_id,
+            topic_id=topic_id,
             findings=[
                 {
                     "phase": "originality",
@@ -1180,16 +1154,16 @@ class TestIntegrityAndFinalize:
             ],
         )
 
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "needs_review"
 
     def test_integrity_gate_passes_when_clean(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         # ``final_integrity`` is a legacy substep of ``write``; the active
         # gate is therefore the review gate which additionally requires the
         # final bundle + process summary artifacts.
-        self._set_stage(svc._db, project_id, "final_integrity")
+        self._set_stage(svc._db, topic_id, "final_integrity")
 
         for art_type, payload in (
             ("final_integrity_report", {"passed": True, "critical_count": 0}),
@@ -1197,50 +1171,47 @@ class TestIntegrityAndFinalize:
             ("process_summary", {}),
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="final_integrity",
                 artifact_type=art_type,
                 payload=payload,
             )
 
-        decision = svc.check_gate(project_id)
+        decision = svc.check_gate(topic_id)
         assert decision == "pass"
 
     def test_integrity_reference_check_catches_missing_paper(
         self, svc, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "final_integrity")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "final_integrity")
 
         # Create a draft_pack artifact with a nonexistent cited paper
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="draft_preparation",
             artifact_type="draft_pack",
             payload={"cited_paper_ids": [99999]},
         )
 
-        result = svc.run_integrity_check(project_id=project_id)
+        result = svc.run_integrity_check(topic_id=topic_id)
         assert result["critical_count"] >= 1
 
     def test_finalize_creates_bundle_and_summary(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(svc._db, project_id, "finalize")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(svc._db, topic_id, "finalize")
 
         # Add some artifacts first
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="topic_framing",
             artifact_type="topic_brief",
             payload={"goals": ["test"]},
         )
 
-        result = svc.finalize_project(project_id=project_id)
+        result = svc.finalize(topic_id=topic_id)
         assert result["success"] is True
         assert "bundle_artifact_id" in result
         assert "summary_artifact_id" in result
@@ -1257,14 +1228,14 @@ class TestCoverageGateThreshold:
         assert DEFAULT_MIN_PAPER_COUNT == 50
 
     def test_coverage_gate_blocks_below_threshold(self, svc, topic_and_project, db):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
         conn = db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = 'build' WHERE project_id = ?",
-                (project_id,),
+                "UPDATE orchestrator_runs SET current_stage = 'build' WHERE topic_id = ?",
+                (topic_id,),
             )
             conn.commit()
         finally:
@@ -1277,7 +1248,6 @@ class TestCoverageGateThreshold:
             "acquisition_report",
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="build",
                 artifact_type=art_type,
@@ -1304,7 +1274,7 @@ class TestCoverageGateThreshold:
         finally:
             conn.close()
 
-        decision = svc.check_gate(project_id, stage="build")
+        decision = svc.check_gate(topic_id, stage="build")
         assert decision == "needs_coverage"
 
     def test_soft_prerequisites_use_threshold(self):
@@ -1318,28 +1288,27 @@ class TestCoverageGateThreshold:
 
 
 class TestGapTriggeredLoopback:
-    """Sprint 1B: Gap-triggered analyze→build loopback."""
+    """Sprint 1B: Gap-triggered analyze->build loopback."""
 
     @staticmethod
-    def _set_stage(db, project_id: int, stage: str) -> None:
+    def _set_stage(db, topic_id: int, stage: str) -> None:
         conn = db.connect()
         try:
             conn.execute(
-                "UPDATE orchestrator_runs SET current_stage = ? WHERE project_id = ?",
-                (stage, project_id),
+                "UPDATE orchestrator_runs SET current_stage = ? WHERE topic_id = ?",
+                (stage, topic_id),
             )
             conn.commit()
         finally:
             conn.close()
 
-    def _setup_analyze(self, svc, db, topic_id, project_id):
-        """Set up project at analyze stage with all required artifacts."""
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        self._set_stage(db, project_id, "analyze")
+    def _setup_analyze(self, svc, db, topic_id, _project_id):
+        """Set up topic at analyze stage with all required artifacts."""
+        svc.init_run(topic_id=topic_id)
+        self._set_stage(db, topic_id, "analyze")
 
         for art_type in ("evidence_pack", "claim_candidate_set", "direction_proposal"):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="analyze",
                 artifact_type=art_type,
@@ -1349,66 +1318,62 @@ class TestGapTriggeredLoopback:
     def test_analyze_gate_needs_expansion_with_few_gaps(
         self, svc, topic_and_project, db
     ):
-        topic_id, project_id = topic_and_project
-        self._setup_analyze(svc, db, topic_id, project_id)
+        topic_id, _project_id = topic_and_project
+        self._setup_analyze(svc, db, topic_id, _project_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_detect",
             payload={"gaps": [{"id": 1, "severity": "high"}]},
         )
 
-        decision = svc.check_gate(project_id, stage="analyze")
+        decision = svc.check_gate(topic_id, stage="analyze")
         assert decision == "needs_expansion"
 
     def test_analyze_gate_passes_with_enough_gaps(self, svc, topic_and_project, db):
-        topic_id, project_id = topic_and_project
-        self._setup_analyze(svc, db, topic_id, project_id)
+        topic_id, _project_id = topic_and_project
+        self._setup_analyze(svc, db, topic_id, _project_id)
 
         gaps = [{"id": i, "severity": "high"} for i in range(5)]
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_detect",
             payload={"gaps": gaps},
         )
 
-        decision = svc.check_gate(project_id, stage="analyze")
+        decision = svc.check_gate(topic_id, stage="analyze")
         assert decision == "pass"
 
     def test_advance_triggers_loopback_on_needs_expansion(
         self, svc, topic_and_project, db
     ):
-        topic_id, project_id = topic_and_project
-        self._setup_analyze(svc, db, topic_id, project_id)
+        topic_id, _project_id = topic_and_project
+        self._setup_analyze(svc, db, topic_id, _project_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_detect",
             payload={"gaps": [{"id": 1}]},
         )
 
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is True
         assert result.get("loopback") is True
         assert result["from_stage"] == "analyze"
         assert result["to_stage"] == "build"
         assert result["round"] == 1
 
-        run = svc.get_run(project_id)
+        run = svc.get_run(topic_id)
         assert run.current_stage == "build"
 
     def test_loopback_limited_to_max_rounds(self, svc, topic_and_project, db):
-        topic_id, project_id = topic_and_project
-        self._setup_analyze(svc, db, topic_id, project_id)
+        topic_id, _project_id = topic_and_project
+        self._setup_analyze(svc, db, topic_id, _project_id)
 
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="gap_detect",
@@ -1417,7 +1382,7 @@ class TestGapTriggeredLoopback:
 
         conn = db.connect()
         try:
-            run = svc.get_run(project_id)
+            run = svc.get_run(topic_id)
             for i in range(2):
                 conn.execute(
                     """
@@ -1426,13 +1391,13 @@ class TestGapTriggeredLoopback:
                      event_type, status, actor, rationale)
                     VALUES (?, ?, ?, 'analyze', 'build', 'transition', 'in_progress', 'system', ?)
                     """,
-                    (run.id, project_id, topic_id, f"loopback round {i + 1}"),
+                    (run.id, topic_id, topic_id, f"loopback round {i + 1}"),
                 )
             conn.commit()
         finally:
             conn.close()
 
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         assert result["success"] is False
         assert result["gate_decision"] == "needs_expansion"
 
@@ -1463,10 +1428,10 @@ class TestExpansionBudget:
         assert STAGE_POLICIES["build"].expansion_paper_budget == 0
 
     def test_finalize_summary_includes_stage_history(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
 
-        result = svc.finalize_project(project_id=project_id)
+        result = svc.finalize(topic_id=topic_id)
         summary_id = result["summary_artifact_id"]
         summary = svc._artifact_manager.get(summary_id)
         assert summary is not None
@@ -1481,12 +1446,12 @@ class TestExpansionBudget:
 # ---------------------------------------------------------------------------
 
 
-def _set_stage(db, project_id: int, stage: str) -> None:
+def _set_stage(db, topic_id: int, stage: str) -> None:
     conn = db.connect()
     try:
         conn.execute(
-            "UPDATE orchestrator_runs SET current_stage = ? WHERE project_id = ?",
-            (stage, project_id),
+            "UPDATE orchestrator_runs SET current_stage = ? WHERE topic_id = ?",
+            (stage, topic_id),
         )
         conn.commit()
     finally:
@@ -1497,78 +1462,73 @@ class TestInitGateStricter:
     """Init stage gate: scope + exclusion + seed papers are required."""
 
     def test_empty_topic_brief_blocks_gate(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload={},
         )
-        # Missing scope/exclusion → needs_approval (schema violation on
+        # Missing scope/exclusion -> needs_approval (schema violation on
         # scope/venue_target is only medium severity and therefore not
         # blocking, but the init-gate semantic check still blocks).
-        assert svc.check_gate(project_id, stage="init") == "needs_approval"
+        assert svc.check_gate(topic_id, stage="init") == "needs_approval"
 
     def test_missing_exclusion_blocks_gate(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload={"scope": "Test scope", "venue_target": "NeurIPS"},
         )
-        assert svc.check_gate(project_id, stage="init") == "needs_approval"
+        assert svc.check_gate(topic_id, stage="init") == "needs_approval"
 
     def test_too_few_seed_papers_blocks_gate(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=1)  # below MIN_SEED_PAPER_COUNT
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload=_valid_topic_brief_payload(),
         )
-        assert svc.check_gate(project_id, stage="init") == "needs_approval"
+        assert svc.check_gate(topic_id, stage="init") == "needs_approval"
 
     def test_full_init_setup_passes(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
             payload=_valid_topic_brief_payload(),
         )
-        assert svc.check_gate(project_id, stage="init") == "pass"
+        assert svc.check_gate(topic_id, stage="init") == "pass"
 
 
 class TestReviewGateHardened:
     """Write-stage review gate must enforce final_bundle + integrity + citations."""
 
     def _write_stage(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        _set_stage(db, project_id, "write")
-        return topic_id, project_id
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        _set_stage(db, topic_id, "write")
+        return topic_id, topic_id
 
-    def _all_required(self, svc, project_id: int, topic_id: int) -> None:
+    def _all_required(self, svc, topic_id: int, _unused_id: int) -> None:
         for art_type, payload in (
             ("final_bundle", {}),
             ("process_summary", {}),
             ("final_integrity_report", {"passed": True, "critical_count": 0}),
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="write",
                 artifact_type=art_type,
@@ -1576,84 +1536,81 @@ class TestReviewGateHardened:
             )
 
     def test_missing_final_bundle_blocks(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="write",
             artifact_type="process_summary",
             payload={},
         )
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
     def test_missing_process_summary_blocks(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="write",
             artifact_type="final_bundle",
             payload={},
         )
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
     def test_failing_integrity_report_blocks(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
         for art_type, payload in (
             ("final_bundle", {}),
             ("process_summary", {}),
             ("final_integrity_report", {"passed": False, "critical_count": 2}),
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="write",
                 artifact_type=art_type,
                 payload=payload,
             )
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
     def test_hallucinated_citation_blocks(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
-        self._all_required(svc, project_id, topic_id)
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
+        self._all_required(svc, topic_id, topic_id)
         conn = db.connect()
         try:
             conn.execute(
                 """INSERT INTO citation_verifications
-                   (project_id, title, status) VALUES (?, ?, 'hallucinated')""",
-                (project_id, "Fake Paper"),
+                   (project_id, topic_id, title, status) VALUES (?, ?, ?, 'hallucinated')""",
+                (topic_id, topic_id, "Fake Paper"),
             )
             conn.commit()
         finally:
             conn.close()
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
     def test_critical_open_issue_blocks(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
-        self._all_required(svc, project_id, topic_id)
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
+        self._all_required(svc, topic_id, topic_id)
         svc.add_review_issue(
-            project_id=project_id,
+            topic_id=topic_id,
             review_type="integrity",
             severity="critical",
             category="methodology",
             summary="Critical finding",
             blocking=False,  # will still be escalated
         )
-        assert svc.check_gate(project_id) == "needs_review"
+        assert svc.check_gate(topic_id) == "needs_review"
 
     def test_passes_with_all_artifacts_and_clean(self, svc, db, topic_and_project):
-        topic_id, project_id = self._write_stage(svc, db, topic_and_project)
-        self._all_required(svc, project_id, topic_id)
-        assert svc.check_gate(project_id) == "pass"
+        topic_id, _project_id = self._write_stage(svc, db, topic_and_project)
+        self._all_required(svc, topic_id, topic_id)
+        assert svc.check_gate(topic_id) == "pass"
 
 
 class TestAnalyzeGateEvidenceCoverage:
     """Evidence-trace coverage soft check at the analyze gate."""
 
     def _analyze_ready(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        _set_stage(db, project_id, "analyze")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        _set_stage(db, topic_id, "analyze")
         # Required artifacts for analyze approval gate.
         for art_type, payload in (
             ("evidence_pack", {"claims": [{"id": "c1"}]}),
@@ -1663,37 +1620,34 @@ class TestAnalyzeGateEvidenceCoverage:
             ("gap_detect", {"gaps": [1, 2, 3, 4, 5]}),
         ):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="analyze",
                 artifact_type=art_type,
                 payload=payload,
             )
-        return topic_id, project_id
+        return topic_id, topic_id
 
     def test_low_evidence_coverage_triggers_needs_expansion(
         self, svc, db, topic_and_project
     ):
-        topic_id, project_id = self._analyze_ready(svc, db, topic_and_project)
+        topic_id, _project_id = self._analyze_ready(svc, db, topic_and_project)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="evidence_trace_report",
             payload={"coverage_ratio": 0.4},
         )
-        assert svc.check_gate(project_id) == "needs_expansion"
+        assert svc.check_gate(topic_id) == "needs_expansion"
 
     def test_high_evidence_coverage_passes(self, svc, db, topic_and_project):
-        topic_id, project_id = self._analyze_ready(svc, db, topic_and_project)
+        topic_id, _project_id = self._analyze_ready(svc, db, topic_and_project)
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="analyze",
             artifact_type="evidence_trace_report",
             payload={"coverage_ratio": 0.9},
         )
-        assert svc.check_gate(project_id) == "pass"
+        assert svc.check_gate(topic_id) == "pass"
 
 
 class TestExperimentGateMigrationFailure:
@@ -1703,12 +1657,11 @@ class TestExperimentGateMigrationFailure:
     def test_missing_experiment_runs_table_reports_fail(
         self, svc, db, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        _set_stage(db, project_id, "experiment")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        _set_stage(db, topic_id, "experiment")
         for art_type in ("experiment_code", "experiment_result", "verified_registry"):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="experiment",
                 artifact_type=art_type,
@@ -1720,12 +1673,12 @@ class TestExperimentGateMigrationFailure:
             conn.commit()
         finally:
             conn.close()
-        assert svc.check_gate(project_id) == "fail"
+        assert svc.check_gate(topic_id) == "fail"
 
 
 class TestAutoLoopbackRules:
     """Generic AUTO_LOOPBACK_RULES should fire for multiple (stage, decision)
-    pairs, not only analyze→build."""
+    pairs, not only analyze->build."""
 
     def test_rules_cover_expected_transitions(self):
         rules = OrchestratorService.AUTO_LOOPBACK_RULES
@@ -1736,9 +1689,9 @@ class TestAutoLoopbackRules:
         assert ("write", "needs_review") in rules
 
     def test_loopback_respects_max_rounds(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id)
-        # Simulate max rounds of prior analyze→build transitions.
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id)
+        # Simulate max rounds of prior analyze->build transitions.
         conn = db.connect()
         try:
             for _ in range(OrchestratorService.MAX_GAP_LOOPBACKS):
@@ -1748,7 +1701,7 @@ class TestAutoLoopbackRules:
                         event_type, status, actor, rationale)
                        VALUES (?, ?, ?, 'analyze', 'build', 'transition',
                                'in_progress', 'system', 'prior loop')""",
-                    (run.id, project_id, topic_id),
+                    (run.id, topic_id, topic_id),
                 )
             conn.commit()
         finally:
@@ -1760,10 +1713,10 @@ class TestAutoLoopbackRules:
         assert result is None
 
     def test_loopback_respects_stop_before(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        run = svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        run = svc.init_run(topic_id=topic_id)
         run = svc.resume_run(
-            project_id=project_id, topic_id=topic_id, stop_before="build"
+            topic_id=topic_id, stop_before="build"
         )
         result = svc._try_auto_loopback(
             run, "analyze", "needs_expansion", actor="test"
@@ -1776,17 +1729,16 @@ class TestInferStageRespectsGate:
     """infer_stage_from_artifacts must stop at the first unsatisfied gate."""
 
     def test_returns_init_when_empty(self, svc, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        assert svc.infer_stage_from_artifacts(project_id) == "init"
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        assert svc.infer_stage_from_artifacts(topic_id) == "init"
 
     def test_stops_at_incomplete_build_gate(self, svc, db, topic_and_project):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
         _seed_topic_with_papers(db, topic_id, count=3)
         # Init complete...
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="init",
             artifact_type="topic_brief",
@@ -1796,14 +1748,13 @@ class TestInferStageRespectsGate:
         # or acquisition report).
         for art_type in ("literature_map", "paper_pool_snapshot"):
             svc.record_artifact(
-                project_id=project_id,
                 topic_id=topic_id,
                 stage="build",
                 artifact_type=art_type,
                 payload={},
             )
         # Init passed so we should resume at build (missing artifacts).
-        assert svc.infer_stage_from_artifacts(project_id) == "build"
+        assert svc.infer_stage_from_artifacts(topic_id) == "build"
 
 
 class TestInvariantSectionCitations:
@@ -1812,16 +1763,15 @@ class TestInvariantSectionCitations:
     def test_draft_without_citations_surfaces_violation(
         self, svc, db, topic_and_project
     ):
-        topic_id, project_id = topic_and_project
-        svc.init_run(project_id=project_id, topic_id=topic_id)
-        _set_stage(db, project_id, "write")
+        topic_id, _project_id = topic_and_project
+        svc.init_run(topic_id=topic_id)
+        _set_stage(db, topic_id, "write")
         # Draft pack has an introduction longer than 200 chars with no \cite
         # / [N] / (Author, Year) pattern at all.
         long_intro = (
             "This paper introduces a fascinating new framework. " * 10
         )
         svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage="write",
             artifact_type="draft_pack",
@@ -1830,5 +1780,5 @@ class TestInvariantSectionCitations:
         from research_harness.orchestrator.invariants import InvariantChecker
 
         checker = InvariantChecker(db)
-        violations = checker.check_all(project_id, "write")
+        violations = checker.check_all(topic_id, "write")
         assert any(v.check == "section_citations" for v in violations)

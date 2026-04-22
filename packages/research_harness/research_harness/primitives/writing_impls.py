@@ -41,7 +41,6 @@ logger = logging.getLogger(__name__)
 def outline_generate(
     *,
     topic_id: int,
-    project_id: int,
     template: str = "neurips",
     **_: Any,
 ) -> OutlineGenerateOutput:
@@ -143,7 +142,7 @@ def section_revise(
 @register_primitive(LATEX_COMPILE_SPEC)
 def latex_compile(
     *,
-    project_id: int,
+    topic_id: int,
     output_dir: str,
     template: str = "generic",
     sections: dict[str, str] | None = None,
@@ -182,7 +181,7 @@ def latex_compile(
 @register_primitive(PAPER_FINALIZE_SPEC)
 def paper_finalize(
     *,
-    project_id: int,
+    topic_id: int,
     output_dir: str,
     title: str = "",
     authors: list[str] | None = None,

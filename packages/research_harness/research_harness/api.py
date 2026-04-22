@@ -5,8 +5,8 @@ Usage from Skills or scripts::
     from research_harness.api import ResearchAPI
 
     api = ResearchAPI()  # auto-resolves DB path
-    api.record_artifact(project_id=1, topic_id=1, stage="init", artifact_type="topic_brief", payload={...})
-    status = api.orchestrator_status(project_id=1)
+    api.record_artifact(topic_id=1, stage="init", artifact_type="topic_brief", payload={...})
+    status = api.orchestrator_status(topic_id=1)
     papers = api.paper_search(query="attention", topic_id=1)
 """
 
@@ -43,7 +43,6 @@ class ResearchAPI:
 
     def record_artifact(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         artifact_type: str,
@@ -52,12 +51,11 @@ class ResearchAPI:
         dependency_artifact_ids: list[int] | None = None,
         dependency_type: str = "consumed_by",
     ) -> dict[str, Any]:
-        """Record a project artifact (equivalent to orchestrator_record_artifact MCP tool)."""
+        """Record a topic artifact (equivalent to orchestrator_record_artifact MCP tool)."""
         from .orchestrator import OrchestratorService
 
         svc = OrchestratorService(self._db)
         artifact = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             artifact_type=artifact_type,
@@ -113,30 +111,30 @@ class ResearchAPI:
         svc = OrchestratorService(self._db)
         return svc.clear_artifact_stale(artifact_id)
 
-    def list_stale_artifacts(self, project_id: int) -> list[dict[str, Any]]:
-        """List stale artifacts for a project."""
+    def list_stale_artifacts(self, topic_id: int) -> list[dict[str, Any]]:
+        """List stale artifacts for a topic."""
         from dataclasses import asdict
 
         from .orchestrator import OrchestratorService
 
         svc = OrchestratorService(self._db)
-        return [asdict(item) for item in svc.list_stale_artifacts(project_id)]
+        return [asdict(item) for item in svc.list_stale_artifacts(topic_id)]
 
-    def orchestrator_status(self, project_id: int) -> dict[str, Any]:
-        """Get orchestrator status for a project."""
+    def orchestrator_status(self, topic_id: int) -> dict[str, Any]:
+        """Get orchestrator status for a topic."""
         from .orchestrator import OrchestratorService
 
         svc = OrchestratorService(self._db)
-        status = svc.get_status(project_id)
+        status = svc.get_status(topic_id)
         status["db_path"] = str(self._db.db_path)
         return status
 
-    def gate_check(self, project_id: int, stage: str | None = None) -> dict[str, Any]:
+    def gate_check(self, topic_id: int, stage: str | None = None) -> dict[str, Any]:
         """Check gate for current or specified stage."""
         from .orchestrator import OrchestratorService
 
         svc = OrchestratorService(self._db)
-        return svc.check_gate(project_id, stage=stage)
+        return svc.check_gate(topic_id, stage=stage)
 
     def paper_search(self, query: str, **kwargs: Any) -> Any:
         """Search papers (delegates to paper_search primitive)."""

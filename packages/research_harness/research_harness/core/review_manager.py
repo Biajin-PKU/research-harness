@@ -13,7 +13,7 @@ class ReviewManager:
 
     def add_review(
         self,
-        project_id: int,
+        topic_id: int,
         gate: str,
         reviewer: str,
         verdict: str,
@@ -22,18 +22,18 @@ class ReviewManager:
     ) -> int:
         cur = self._conn.execute(
             """
-            INSERT INTO reviews (project_id, gate, reviewer, verdict, score, findings)
+            INSERT INTO reviews (topic_id, gate, reviewer, verdict, score, findings)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (project_id, gate, reviewer, verdict, score, findings),
+            (topic_id, gate, reviewer, verdict, score, findings),
         )
         self._conn.commit()
         return int(cur.lastrowid)
 
-    def list_reviews(self, project_id: int) -> list[Review]:
+    def list_reviews(self, topic_id: int) -> list[Review]:
         rows = self._conn.execute(
-            "SELECT * FROM reviews WHERE project_id = ? ORDER BY created_at DESC",
-            (project_id,),
+            "SELECT * FROM reviews WHERE topic_id = ? ORDER BY created_at DESC",
+            (topic_id,),
         ).fetchall()
         return [self._row_to_review(row) for row in rows]
 
@@ -41,7 +41,7 @@ class ReviewManager:
     def _row_to_review(row: sqlite3.Row) -> Review:
         return Review(
             id=row["id"],
-            project_id=row["project_id"],
+            topic_id=row["topic_id"],
             gate=row["gate"],
             reviewer=row["reviewer"],
             verdict=row["verdict"],

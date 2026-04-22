@@ -38,19 +38,19 @@ logger = logging.getLogger(__name__)
 def paper_verify_numbers(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     text: str,
     section: str = "",
     tolerance: float = 0.01,
     **_: Any,
 ) -> PaperVerifyOutput:
-    """Verify numbers in paper text against the project's verified registry."""
+    """Verify numbers in paper text against the topic's verified registry."""
     # Load registry from DB
     conn = db.connect()
     try:
         rows = conn.execute(
-            "SELECT number_original, source FROM verified_numbers WHERE project_id = ?",
-            (project_id,),
+            "SELECT number_original, source FROM verified_numbers WHERE topic_id = ?",
+            (topic_id,),
         ).fetchall()
     finally:
         conn.close()
@@ -138,7 +138,6 @@ def citation_verify(
 def evidence_trace(
     *,
     db: Database,
-    project_id: int,
     topic_id: int,
     **_: Any,
 ) -> EvidenceTraceOutput:
@@ -153,9 +152,9 @@ def evidence_trace(
             """
             SELECT DISTINCT pa.payload_json
             FROM project_artifacts pa
-            WHERE pa.project_id = ? AND pa.artifact_type = 'claims' AND pa.status = 'active'
+            WHERE pa.topic_id = ? AND pa.artifact_type = 'claims' AND pa.status = 'active'
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchall()
 
         # Get all evidence links
@@ -163,15 +162,15 @@ def evidence_trace(
             """
             SELECT DISTINCT pa.payload_json
             FROM project_artifacts pa
-            WHERE pa.project_id = ? AND pa.artifact_type = 'evidence_links' AND pa.status = 'active'
+            WHERE pa.topic_id = ? AND pa.artifact_type = 'evidence_links' AND pa.status = 'active'
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchall()
 
         # Get papers with verified numbers
         rows = conn.execute(
-            "SELECT DISTINCT project_id FROM verified_numbers WHERE project_id = ?",
-            (project_id,),
+            "SELECT DISTINCT topic_id FROM verified_numbers WHERE topic_id = ?",
+            (topic_id,),
         ).fetchall()
         has_verified = len(rows) > 0
 

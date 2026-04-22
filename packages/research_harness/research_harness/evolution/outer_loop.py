@@ -73,7 +73,6 @@ class OuterLoop:
 
     def log_experiment(
         self,
-        project_id: int,
         topic_id: int,
         hypothesis: str,
         *,
@@ -90,8 +89,8 @@ class OuterLoop:
         try:
             # Determine experiment number
             row = conn.execute(
-                "SELECT MAX(experiment_number) as n FROM experiment_log WHERE project_id = ?",
-                (project_id,),
+                "SELECT MAX(experiment_number) as n FROM experiment_log WHERE topic_id = ?",
+                (topic_id,),
             ).fetchone()
             exp_num = (row["n"] or 0) + 1
 
@@ -103,7 +102,7 @@ class OuterLoop:
                     outcome, notes)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    project_id,
+                    topic_id,
                     topic_id,
                     exp_num,
                     hypothesis,
@@ -123,15 +122,15 @@ class OuterLoop:
 
     # ---- Reflection Logic ----
 
-    def should_reflect(self, project_id: int) -> bool:
+    def should_reflect(self, topic_id: int) -> bool:
         """Check if it's time for a meta-reflection."""
         conn = self._db.connect()
         try:
             # Count experiments since last reflection
             last_refl = conn.execute(
                 """SELECT MAX(id) as last_id FROM meta_reflections
-                   WHERE project_id = ?""",
-                (project_id,),
+                   WHERE topic_id = ?""",
+                (topic_id,),
             ).fetchone()
             last_refl_id = last_refl["last_id"] if last_refl else None
 
@@ -149,18 +148,18 @@ class OuterLoop:
                 if reviewed:
                     max_reviewed = max(reviewed)
                     new_count = conn.execute(
-                        "SELECT COUNT(*) as n FROM experiment_log WHERE project_id = ? AND id > ?",
-                        (project_id, max_reviewed),
+                        "SELECT COUNT(*) as n FROM experiment_log WHERE topic_id = ? AND id > ?",
+                        (topic_id, max_reviewed),
                     ).fetchone()["n"]
                 else:
                     new_count = conn.execute(
-                        "SELECT COUNT(*) as n FROM experiment_log WHERE project_id = ?",
-                        (project_id,),
+                        "SELECT COUNT(*) as n FROM experiment_log WHERE topic_id = ?",
+                        (topic_id,),
                     ).fetchone()["n"]
             else:
                 new_count = conn.execute(
-                    "SELECT COUNT(*) as n FROM experiment_log WHERE project_id = ?",
-                    (project_id,),
+                    "SELECT COUNT(*) as n FROM experiment_log WHERE topic_id = ?",
+                    (topic_id,),
                 ).fetchone()["n"]
 
             return new_count >= self._interval
@@ -169,20 +168,19 @@ class OuterLoop:
 
     def reflect(
         self,
-        project_id: int,
         topic_id: int,
         *,
         force: bool = False,
     ) -> MetaReflection | None:
         """Run a meta-reflection. Returns None if not enough experiments."""
-        if not force and not self.should_reflect(project_id):
+        if not force and not self.should_reflect(topic_id):
             return None
 
-        experiments = self.get_experiment_history(project_id)
+        experiments = self.get_experiment_history(topic_id)
         if not experiments:
             return None
 
-        previous = self.get_reflection_history(project_id, limit=3)
+        previous = self.get_reflection_history(topic_id, limit=3)
 
         # Get topic context
         topic_context = self._get_topic_context(topic_id)
@@ -201,8 +199,8 @@ class OuterLoop:
         conn = self._db.connect()
         try:
             row = conn.execute(
-                "SELECT MAX(reflection_number) as n FROM meta_reflections WHERE project_id = ?",
-                (project_id,),
+                "SELECT MAX(reflection_number) as n FROM meta_reflections WHERE topic_id = ?",
+                (topic_id,),
             ).fetchone()
             refl_num = (row["n"] or 0) + 1
         finally:
@@ -212,7 +210,6 @@ class OuterLoop:
         model_name = getattr(client, "model", "unknown")
 
         reflection = MetaReflection(
-            project_id=project_id,
             topic_id=topic_id,
             reflection_number=refl_num,
             trigger_type="periodic" if not force else "manual",
@@ -234,7 +231,7 @@ class OuterLoop:
 
     def get_experiment_history(
         self,
-        project_id: int,
+        topic_id: int,
         *,
         limit: int = 20,
     ) -> list[ExperimentEntry]:
@@ -242,9 +239,9 @@ class OuterLoop:
         try:
             rows = conn.execute(
                 """SELECT * FROM experiment_log
-                   WHERE project_id = ?
+                   WHERE topic_id = ?
                    ORDER BY experiment_number DESC LIMIT ?""",
-                (project_id, limit),
+                (topic_id, limit),
             ).fetchall()
             return [_row_to_experiment(r) for r in reversed(rows)]
         finally:
@@ -252,7 +249,7 @@ class OuterLoop:
 
     def get_reflection_history(
         self,
-        project_id: int,
+        topic_id: int,
         *,
         limit: int = 10,
     ) -> list[MetaReflection]:
@@ -260,20 +257,20 @@ class OuterLoop:
         try:
             rows = conn.execute(
                 """SELECT * FROM meta_reflections
-                   WHERE project_id = ?
+                   WHERE topic_id = ?
                    ORDER BY reflection_number DESC LIMIT ?""",
-                (project_id, limit),
+                (topic_id, limit),
             ).fetchall()
             return [_row_to_reflection(r) for r in reversed(rows)]
         finally:
             conn.close()
 
-    def get_experiment_count(self, project_id: int) -> int:
+    def get_experiment_count(self, topic_id: int) -> int:
         conn = self._db.connect()
         try:
             row = conn.execute(
-                "SELECT COUNT(*) as n FROM experiment_log WHERE project_id = ?",
-                (project_id,),
+                "SELECT COUNT(*) as n FROM experiment_log WHERE topic_id = ?",
+                (topic_id,),
             ).fetchone()
             return row["n"] if row else 0
         finally:
@@ -304,7 +301,7 @@ class OuterLoop:
                     reasoning, next_hypothesis, confidence, model_used)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    r.project_id,
+                    r.topic_id,
                     r.topic_id,
                     r.reflection_number,
                     r.trigger_type,
@@ -389,7 +386,6 @@ def _row_to_experiment(row: Any) -> ExperimentEntry:
         metrics = {}
     return ExperimentEntry(
         id=row["id"],
-        project_id=row["project_id"],
         topic_id=row["topic_id"],
         experiment_number=row["experiment_number"],
         hypothesis=row["hypothesis"],
@@ -412,7 +408,6 @@ def _row_to_reflection(row: Any) -> MetaReflection:
         reviewed = []
     return MetaReflection(
         id=row["id"],
-        project_id=row["project_id"],
         topic_id=row["topic_id"],
         reflection_number=row["reflection_number"],
         trigger_type=row["trigger_type"],

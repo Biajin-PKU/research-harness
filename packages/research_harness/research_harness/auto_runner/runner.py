@@ -27,10 +27,9 @@ from .stage_policy import max_retries, should_pause_human
 logger = logging.getLogger(__name__)
 
 
-def run_project(
-    project_id: int,
+def run_topic(
+    topic_id: int,
     *,
-    topic_id: int | None = None,
     direction: str = "",
     mode: str = "standard",
     session_command: list[str] | None = None,
@@ -38,7 +37,7 @@ def run_project(
     base_dir: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Run the full research workflow for a project.
+    """Run the full research workflow for a topic.
 
     This is the main entrypoint called by CLI (`rhub auto-runner start`)
     or by the /research-harness skill.
@@ -59,25 +58,22 @@ def run_project(
         base_dir = ws / ".research-harness" if ws else Path.home() / ".research-harness"
 
     cmd = session_command or ["claude-kimi"]
-    ckpt_path = ckpt.checkpoint_path(base_dir, project_id)
+    ckpt_path = ckpt.checkpoint_path(base_dir, topic_id)
 
     # Load or create checkpoint
     checkpoint_data = ckpt.load_checkpoint(ckpt_path)
     if checkpoint_data is None:
-        # Resolve topic_id and current stage from orchestrator if not provided
-        run = svc.get_run(project_id)
-        if topic_id is None:
-            if run is None:
-                return {
-                    "status": "error",
-                    "current_stage": "",
-                    "stages_completed": [],
-                    "summary": f"No orchestrator run found for project {project_id}. "
-                    "Initialize with: rhub auto-runner start --init",
-                }
-            topic_id = run.topic_id
+        # Resolve current stage from orchestrator if not provided
+        run = svc.get_run(topic_id)
+        if run is None:
+            return {
+                "status": "error",
+                "current_stage": "",
+                "stages_completed": [],
+                "summary": f"No orchestrator run found for topic {topic_id}. "
+                "Initialize with: rhub auto-runner start --init",
+            }
         checkpoint_data = ckpt.new_checkpoint(
-            project_id,
             topic_id,
             mode=mode,
             session_command=cmd,
@@ -86,12 +82,12 @@ def run_project(
         if run is not None and run.current_stage and run.current_stage != "init":
             checkpoint_data["current_stage"] = run.current_stage
             logger.info(
-                "Resuming from orchestrator stage '%s' for project %d",
+                "Resuming from orchestrator stage '%s' for topic %d",
                 run.current_stage,
-                project_id,
+                topic_id,
             )
         ckpt.save_checkpoint(ckpt_path, checkpoint_data)
-        logger.info("Created new checkpoint for project %d", project_id)
+        logger.info("Created new checkpoint for topic %d", topic_id)
 
     # Initialize budget monitor
     budget_data = checkpoint_data.get("budget", {})
@@ -120,8 +116,7 @@ def run_project(
         result = execute_stage(
             db=db,
             svc=svc,
-            project_id=project_id,
-            topic_id=checkpoint_data.get("topic_id", 0),
+            topic_id=topic_id,
             stage=current_stage,
             mode=mode,
             checkpoint_data=checkpoint_data,
@@ -162,7 +157,7 @@ def run_project(
             # Terminal stage: write is the last stage, no advance needed.
             # But still verify the gate passes (review issues, artifacts).
             if current_stage == "write":
-                gate_decision = svc.check_gate(project_id, stage="write")
+                gate_decision = svc.check_gate(topic_id, stage="write")
                 if gate_decision not in ("pass", None):
                     logger.warning("Write gate not passed: %s", gate_decision)
                     ckpt.update_stage(
@@ -196,7 +191,7 @@ def run_project(
 
             # Advance orchestrator — only move checkpoint if advance succeeds
             try:
-                advance_result = svc.advance(project_id, actor="auto_runner")
+                advance_result = svc.advance(topic_id, actor="auto_runner")
                 if not advance_result.get("success"):
                     error_msg = advance_result.get("error", "advance failed")
                     logger.warning("orchestrator_advance blocked: %s", error_msg)
@@ -277,7 +272,7 @@ def run_project(
             if auto_approve:
                 # Auto-approve in demo mode — but still respect advance() result
                 try:
-                    advance_result = svc.advance(project_id, actor="auto_runner")
+                    advance_result = svc.advance(topic_id, actor="auto_runner")
                     if not advance_result.get("success"):
                         error_msg = advance_result.get("error", "advance failed")
                         logger.warning("Auto-approve advance blocked: %s", error_msg)
@@ -419,8 +414,8 @@ def run_project(
     }
 
 
-def resume_project(
-    project_id: int,
+def resume_topic(
+    topic_id: int,
     *,
     base_dir: Path | None = None,
     auto_approve: bool = False,
@@ -430,19 +425,18 @@ def resume_project(
         ws = find_workspace_root()
         base_dir = ws / ".research-harness" if ws else Path.home() / ".research-harness"
 
-    ckpt_path = ckpt.checkpoint_path(base_dir, project_id)
+    ckpt_path = ckpt.checkpoint_path(base_dir, topic_id)
     checkpoint_data = ckpt.load_checkpoint(ckpt_path)
     if checkpoint_data is None:
         return {
             "status": "error",
             "current_stage": "",
             "stages_completed": [],
-            "summary": f"No checkpoint found for project {project_id}",
+            "summary": f"No checkpoint found for topic {topic_id}",
         }
 
-    return run_project(
-        project_id,
-        topic_id=checkpoint_data.get("topic_id"),
+    return run_topic(
+        topic_id,
         mode=checkpoint_data.get("mode", "standard"),
         session_command=checkpoint_data.get("session_command"),
         auto_approve=auto_approve,
@@ -451,7 +445,7 @@ def resume_project(
 
 
 def get_status(
-    project_id: int,
+    topic_id: int,
     *,
     base_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -460,10 +454,10 @@ def get_status(
         ws = find_workspace_root()
         base_dir = ws / ".research-harness" if ws else Path.home() / ".research-harness"
 
-    ckpt_path = ckpt.checkpoint_path(base_dir, project_id)
+    ckpt_path = ckpt.checkpoint_path(base_dir, topic_id)
     checkpoint_data = ckpt.load_checkpoint(ckpt_path)
     if checkpoint_data is None:
-        return {"status": "not_started", "project_id": project_id}
+        return {"status": "not_started", "topic_id": topic_id}
 
     current = checkpoint_data.get("current_stage", "?")
     state = checkpoint_data.get("stage_state", "?")
@@ -471,7 +465,7 @@ def get_status(
 
     return {
         "status": state,
-        "project_id": project_id,
+        "topic_id": topic_id,
         "current_stage": f"{idx}/{len(STAGE_ORDER)}: {current}",
         "stage_state": state,
         "mode": checkpoint_data.get("mode", "?"),

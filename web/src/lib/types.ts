@@ -51,12 +51,39 @@ export type ArtifactType =
 
 // -- Core entities ---------------------------------------------------------
 
+export interface Domain {
+  id: number;
+  name: string;
+  description: string | null;
+  status: string;
+  topic_count: number;
+  created_at: string;
+}
+
 export interface Topic {
   id: number;
   name: string;
   description: string | null;
+  domain_id: number | null;
+  domain_name: string | null;
   paper_count: number;
   created_at: string;
+}
+
+export interface TopicDetail extends Topic {
+  status: string;
+  target_venue: string;
+  deadline: string;
+  contributions: string;
+  current_stage: ResearchStage | null;
+  stage_status: string | null;
+  gate_status: string | null;
+  mode: string | null;
+  stop_before: string | null;
+  blocking_issue_count: number;
+  unresolved_issue_count: number;
+  annotation_count: number;
+  artifact_counts: Record<string, number>;
 }
 
 export interface Paper {
@@ -89,34 +116,9 @@ export interface PaperWithCard extends Paper {
   card: PaperCard | null;
 }
 
-export interface Project {
-  id: number;
-  name: string;
-  topic_id: number;
-  topic_name: string | null;
-  description: string | null;
-  status: string;
-  target_venue: string;
-  deadline: string;
-  current_stage: ResearchStage | null;
-  stage_status: string | null;
-  gate_status: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProjectDetail extends Project {
-  contributions: string;
-  mode: string | null;
-  stop_before: string | null;
-  blocking_issue_count: number;
-  unresolved_issue_count: number;
-  artifact_counts: Record<string, number>;
-}
-
 export interface ReviewIssue {
   id: number;
-  project_id: number;
+  topic_id: number;
   review_type: string;
   severity: "critical" | "high" | "medium" | "low";
   category: string;
@@ -129,24 +131,23 @@ export interface ReviewIssue {
   updated_at: string | null;
 }
 
-export interface ProjectArtifactsResponse {
-  project_id: number;
+export interface TopicArtifactsResponse {
+  topic_id: number;
   artifacts_by_stage: Record<string, Artifact[]>;
 }
 
-export interface ProjectEventsResponse {
-  project_id: number;
+export interface TopicEventsResponse {
+  topic_id: number;
   events: StageEvent[];
 }
 
-export interface ProjectIssuesResponse {
-  project_id: number;
+export interface TopicIssuesResponse {
+  topic_id: number;
   issues: ReviewIssue[];
 }
 
 export interface Artifact {
   id: number;
-  project_id: number;
   topic_id: number;
   stage: ResearchStage;
   artifact_type: ArtifactType | string;
@@ -159,7 +160,6 @@ export interface Artifact {
 
 export interface OrchestratorRun {
   id: number;
-  project_id: number;
   topic_id: number;
   current_stage: ResearchStage;
   mode: string;
@@ -170,7 +170,7 @@ export interface OrchestratorRun {
 
 export interface StageEvent {
   id: number;
-  project_id: number;
+  topic_id: number;
   stage: ResearchStage;
   event_type: "advance" | "gate_check" | "artifact_record" | "decision";
   actor: string;
@@ -198,7 +198,7 @@ export interface ProvenanceSummary {
 
 export interface DashboardStats {
   total_papers: number;
-  total_projects: number;
+  total_domains: number;
   total_topics: number;
   total_artifacts: number;
   total_provenance_records: number;

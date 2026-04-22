@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-  fetchProject,
-  fetchProjectArtifacts,
-  fetchProjectEvents,
-  fetchProjectIssues,
+  fetchTopicDetail,
+  fetchTopicArtifacts,
+  fetchTopicEvents,
+  fetchTopicIssues,
 } from "@/lib/api";
 import {
   RESEARCH_STAGES,
@@ -35,7 +35,7 @@ import {
   type Artifact,
   type StageEvent,
   type ReviewIssue,
-  type ProjectDetail,
+  type TopicDetail,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -47,28 +47,17 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   StagePipeline,
   StagePipelineSkeleton,
-} from "@/components/project/stage-pipeline";
-import { PaperSearchPanel } from "@/components/project/paper-search-panel";
-import { AnalysisPanel } from "@/components/project/analysis-panel";
-import { ActionToolbar } from "@/components/project/action-toolbar";
+} from "@/components/topic/stage-pipeline";
+import { PaperSearchPanel } from "@/components/topic/paper-search-panel";
+import { AnalysisPanel } from "@/components/topic/analysis-panel";
+import { ActionToolbar } from "@/components/topic/action-toolbar";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "--";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function formatTimestamp(dateStr: string | null | undefined): string {
   if (!dateStr) return "--";
@@ -271,13 +260,10 @@ function StagePanelSkeleton() {
 // Page component
 // ---------------------------------------------------------------------------
 
-export default function ProjectDetailPage() {
+export default function TopicDetailPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const topicId = Number(params.id);
   const queryClient = useQueryClient();
-
-  // Stage section refs for scroll-to
-  const stageRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const handleStageClick = useCallback((stage: ResearchStage) => {
     const el = document.getElementById(`stage-${stage}`);
@@ -287,41 +273,41 @@ export default function ProjectDetailPage() {
   }, []);
 
   // Queries
-  const projectQ = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => fetchProject(projectId),
-    enabled: !isNaN(projectId),
+  const topicQ = useQuery({
+    queryKey: ["topic", topicId],
+    queryFn: () => fetchTopicDetail(topicId),
+    enabled: !isNaN(topicId),
   });
 
   const artifactsQ = useQuery({
-    queryKey: ["project-artifacts", projectId],
-    queryFn: () => fetchProjectArtifacts(projectId),
-    enabled: !isNaN(projectId),
+    queryKey: ["topic-artifacts", topicId],
+    queryFn: () => fetchTopicArtifacts(topicId),
+    enabled: !isNaN(topicId),
   });
 
   const eventsQ = useQuery({
-    queryKey: ["project-events", projectId],
-    queryFn: () => fetchProjectEvents(projectId),
-    enabled: !isNaN(projectId),
+    queryKey: ["topic-events", topicId],
+    queryFn: () => fetchTopicEvents(topicId),
+    enabled: !isNaN(topicId),
   });
 
   const issuesQ = useQuery({
-    queryKey: ["project-issues", projectId],
-    queryFn: () => fetchProjectIssues(projectId),
-    enabled: !isNaN(projectId),
+    queryKey: ["topic-issues", topicId],
+    queryFn: () => fetchTopicIssues(topicId),
+    enabled: !isNaN(topicId),
   });
 
-  const project: ProjectDetail | undefined = projectQ.data;
+  const topic: TopicDetail | undefined = topicQ.data;
   const artifactsByStage = artifactsQ.data?.artifacts_by_stage ?? {};
   const events = eventsQ.data?.events ?? [];
   const issues = issuesQ.data?.issues ?? [];
 
   const handleRefresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-    queryClient.invalidateQueries({ queryKey: ["project-artifacts", projectId] });
-    queryClient.invalidateQueries({ queryKey: ["project-events", projectId] });
-    queryClient.invalidateQueries({ queryKey: ["project-issues", projectId] });
-  }, [queryClient, projectId]);
+    queryClient.invalidateQueries({ queryKey: ["topic", topicId] });
+    queryClient.invalidateQueries({ queryKey: ["topic-artifacts", topicId] });
+    queryClient.invalidateQueries({ queryKey: ["topic-events", topicId] });
+    queryClient.invalidateQueries({ queryKey: ["topic-issues", topicId] });
+  }, [queryClient, topicId]);
 
   return (
     <div className="space-y-6 p-6 pb-20 lg:p-8 lg:pb-20">
@@ -330,88 +316,88 @@ export default function ProjectDetailPage() {
       {/* ---------------------------------------------------------------- */}
       <div className="space-y-4">
         <Link
-          href="/projects"
+          href="/topics"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="size-3.5" />
-          All Projects
+          All Topics
         </Link>
 
-        {projectQ.isPending ? (
+        {topicQ.isPending ? (
           <HeaderSkeleton />
-        ) : project ? (
+        ) : topic ? (
           <div className="space-y-3">
             {/* Title row */}
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                {project.name}
+                {topic.name}
               </h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {project.topic_name ?? `Topic #${project.topic_id}`}
-                {project.description ? ` — ${project.description}` : ""}
+                {topic.domain_name ?? "No domain"}
+                {topic.description ? ` -- ${topic.description}` : ""}
               </p>
             </div>
 
             {/* Metadata badges */}
             <div className="flex flex-wrap items-center gap-2">
-              {project.target_venue && (
+              {topic.target_venue && (
                 <Badge variant="outline" className="text-xs gap-1">
                   <MapPin className="size-3" />
-                  {project.target_venue}
+                  {topic.target_venue}
                 </Badge>
               )}
-              {project.deadline && (
+              {topic.deadline && (
                 <Badge variant="outline" className="text-xs gap-1">
                   <Calendar className="size-3" />
-                  {project.deadline}
+                  {topic.deadline}
                 </Badge>
               )}
-              {project.current_stage && (
+              {topic.current_stage && (
                 <Badge
                   variant="secondary"
                   className={cn(
                     "text-xs font-medium",
-                    STAGE_BG_COLORS[project.current_stage],
-                    STAGE_TEXT_COLORS[project.current_stage]
+                    STAGE_BG_COLORS[topic.current_stage],
+                    STAGE_TEXT_COLORS[topic.current_stage]
                   )}
                 >
-                  {STAGE_LABELS[project.current_stage]}
-                  {project.stage_status ? ` / ${project.stage_status}` : ""}
+                  {STAGE_LABELS[topic.current_stage]}
+                  {topic.stage_status ? ` / ${topic.stage_status}` : ""}
                 </Badge>
               )}
-              {project.gate_status && (
-                <GateStatusBadge status={project.gate_status} />
+              {topic.gate_status && (
+                <GateStatusBadge status={topic.gate_status} />
               )}
-              {(project.blocking_issue_count ?? 0) > 0 && (
+              {(topic.blocking_issue_count ?? 0) > 0 && (
                 <Badge className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-xs gap-1">
                   <AlertTriangle className="size-3" />
-                  {project.blocking_issue_count} blocking
+                  {topic.blocking_issue_count} blocking
                 </Badge>
               )}
             </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Project not found.
+            Topic not found.
           </p>
         )}
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* Pipeline visualization — centerpiece                             */}
+      {/* Pipeline visualization -- centerpiece                             */}
       {/* ---------------------------------------------------------------- */}
       <Card>
         <CardHeader className="border-b">
           <CardTitle>Research Pipeline</CardTitle>
         </CardHeader>
         <CardContent className="py-6">
-          {projectQ.isPending ? (
+          {topicQ.isPending ? (
             <StagePipelineSkeleton />
-          ) : project ? (
+          ) : topic ? (
             <StagePipeline
-              currentStage={project.current_stage}
-              stageStatus={project.stage_status}
-              artifactCounts={project.artifact_counts}
+              currentStage={topic.current_stage}
+              stageStatus={topic.stage_status}
+              artifactCounts={topic.artifact_counts}
               onStageClick={handleStageClick}
             />
           ) : null}
@@ -421,11 +407,11 @@ export default function ProjectDetailPage() {
       {/* ---------------------------------------------------------------- */}
       {/* Stage-specific operation panels                                   */}
       {/* ---------------------------------------------------------------- */}
-      {project?.current_stage === "build" && (
-        <PaperSearchPanel topicId={project.topic_id} />
+      {topic?.current_stage === "build" && (
+        <PaperSearchPanel topicId={topicId} />
       )}
-      {project?.current_stage === "analyze" && (
-        <AnalysisPanel topicId={project.topic_id} projectId={projectId} />
+      {topic?.current_stage === "analyze" && (
+        <AnalysisPanel topicId={topicId} />
       )}
 
       {/* ---------------------------------------------------------------- */}
@@ -449,7 +435,7 @@ export default function ProjectDetailPage() {
                 key={stage}
                 stage={stage}
                 artifacts={artifactsByStage[stage] ?? []}
-                isCurrent={project?.current_stage === stage}
+                isCurrent={topic?.current_stage === stage}
               />
             ))
           )}
@@ -600,11 +586,11 @@ export default function ProjectDetailPage() {
       {/* ---------------------------------------------------------------- */}
       {/* Fixed bottom action toolbar                                      */}
       {/* ---------------------------------------------------------------- */}
-      {project && (
+      {topic && (
         <ActionToolbar
-          projectId={projectId}
-          currentStage={project.current_stage}
-          stageStatus={project.stage_status}
+          topicId={topicId}
+          currentStage={topic.current_stage}
+          stageStatus={topic.stage_status}
           onRefresh={handleRefresh}
         />
       )}

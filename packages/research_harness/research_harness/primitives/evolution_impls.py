@@ -176,7 +176,6 @@ def strategy_inject(
 def experiment_log(
     *,
     db: Any = None,
-    project_id: int,
     topic_id: int,
     hypothesis: str,
     primary_metric_name: str = "",
@@ -190,13 +189,12 @@ def experiment_log(
 ) -> ExperimentLogOutput:
     """Log an experiment result for dual-loop tracking."""
     if db is None:
-        return ExperimentLogOutput(project_id=project_id)
+        return ExperimentLogOutput(topic_id=topic_id)
 
     from ..evolution.outer_loop import OuterLoop
 
     loop = OuterLoop(db)
     eid = loop.log_experiment(
-        project_id,
         topic_id,
         hypothesis,
         primary_metric_name=primary_metric_name,
@@ -208,11 +206,11 @@ def experiment_log(
         result_artifact_id=result_artifact_id,
     )
 
-    exp_num = loop.get_experiment_count(project_id)
+    exp_num = loop.get_experiment_count(topic_id)
     return ExperimentLogOutput(
         experiment_id=eid,
         experiment_number=exp_num,
-        project_id=project_id,
+        topic_id=topic_id,
     )
 
 
@@ -220,7 +218,6 @@ def experiment_log(
 def meta_reflect(
     *,
     db: Any = None,
-    project_id: int,
     topic_id: int,
     force: bool = False,
     **_: Any,
@@ -232,7 +229,7 @@ def meta_reflect(
     from ..evolution.outer_loop import OuterLoop
 
     loop = OuterLoop(db)
-    reflection = loop.reflect(project_id, topic_id, force=force)
+    reflection = loop.reflect(topic_id, force=force)
 
     if reflection is None:
         return MetaReflectOutput(

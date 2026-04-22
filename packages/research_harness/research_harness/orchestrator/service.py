@@ -57,11 +57,10 @@ class OrchestratorService:
 
     def init_run(
         self,
-        project_id: int,
         topic_id: int,
         mode: WorkflowMode = "standard",
     ) -> OrchestratorRun:
-        """Create a new orchestrator run for a project."""
+        """Create a new orchestrator run for a topic."""
         conn = self._db.connect()
         try:
             cur = conn.execute(
@@ -70,7 +69,7 @@ class OrchestratorService:
                 (project_id, topic_id, mode, current_stage, stage_status)
                 VALUES (?, ?, ?, 'init', 'in_progress')
                 """,
-                (project_id, topic_id, mode),
+                (topic_id, topic_id, mode),
             )
             run_id = int(cur.lastrowid)
 
@@ -81,19 +80,19 @@ class OrchestratorService:
                 (run_id, project_id, topic_id, from_stage, to_stage, event_type, status, actor, rationale)
                 VALUES (?, ?, ?, '', 'init', 'init', 'in_progress', 'system', 'Orchestrator run initialized')
                 """,
-                (run_id, project_id, topic_id),
+                (run_id, topic_id, topic_id),
             )
             conn.commit()
 
-            return self.get_run(project_id)
+            return self.get_run(topic_id)
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
 
-    def infer_stage_from_artifacts(self, project_id: int) -> str:
-        """Return the furthest V2 stage the project has actually completed.
+    def infer_stage_from_artifacts(self, topic_id: int) -> str:
+        """Return the furthest V2 stage the topic has actually completed.
 
         A stage is considered "completed" only if:
 
@@ -111,8 +110,8 @@ class OrchestratorService:
         conn = self._db.connect()
         try:
             rows = conn.execute(
-                "SELECT DISTINCT stage, artifact_type FROM project_artifacts WHERE project_id = ?",
-                (project_id,),
+                "SELECT DISTINCT stage, artifact_type FROM project_artifacts WHERE topic_id = ?",
+                (topic_id,),
             ).fetchall()
         finally:
             conn.close()
@@ -141,16 +140,16 @@ class OrchestratorService:
             if stage not in covered_stages:
                 return stage
             artifacts_ok = all(
-                self._validator.check_artifacts_for_stage(project_id, stage).values()
+                self._validator.check_artifacts_for_stage(topic_id, stage).values()
             )
             if not artifacts_ok:
                 return stage
             try:
-                gate_decision = self._gate_evaluator.evaluate(project_id, stage)
+                gate_decision = self._gate_evaluator.evaluate(topic_id, stage)
             except Exception:
                 logger.debug(
-                    "Gate evaluation failed during infer_stage for project %s at %s",
-                    project_id,
+                    "Gate evaluation failed during infer_stage for topic %s at %s",
+                    topic_id,
                     stage,
                     exc_info=True,
                 )
@@ -163,7 +162,6 @@ class OrchestratorService:
 
     def resume_run(
         self,
-        project_id: int,
         topic_id: int,
         mode: WorkflowMode = "standard",
         force_stage: str | None = None,
@@ -172,7 +170,7 @@ class OrchestratorService:
         """Resume (or create) an orchestrator run, inferring the current stage
         from existing artifacts instead of always starting at ``topic_framing``.
 
-        If a run already exists for ``project_id``, returns it unchanged unless
+        If a run already exists for ``topic_id``, returns it unchanged unless
         ``force_stage`` is given, in which case the stage is overwritten.
 
         If no run exists, creates one at the inferred stage (or ``force_stage``).
@@ -181,7 +179,7 @@ class OrchestratorService:
             force_stage = resolve_stage(force_stage)
         if stop_before:
             stop_before = resolve_stage(stop_before)
-        existing = self.get_run(project_id)
+        existing = self.get_run(topic_id)
         if existing is not None:
             # Update stop_before if provided
             stop_before_changed = False
@@ -189,15 +187,15 @@ class OrchestratorService:
                 conn = self._db.connect()
                 try:
                     conn.execute(
-                        "UPDATE orchestrator_runs SET stop_before = ? WHERE project_id = ?",
-                        (stop_before, project_id),
+                        "UPDATE orchestrator_runs SET stop_before = ? WHERE topic_id = ?",
+                        (stop_before, topic_id),
                     )
                     conn.commit()
                     stop_before_changed = True
                 except Exception:
                     logger.warning(
-                        "Failed to persist stop_before for project %s",
-                        project_id,
+                        "Failed to persist stop_before for topic %s",
+                        topic_id,
                         exc_info=True,
                     )
                 finally:
@@ -210,9 +208,9 @@ class OrchestratorService:
                         UPDATE orchestrator_runs
                         SET current_stage = ?, stage_status = 'in_progress',
                             updated_at = datetime('now')
-                        WHERE project_id = ?
+                        WHERE topic_id = ?
                         """,
-                        (force_stage, project_id),
+                        (force_stage, topic_id),
                     )
                     conn.execute(
                         """
@@ -223,7 +221,7 @@ class OrchestratorService:
                         """,
                         (
                             existing.id,
-                            project_id,
+                            topic_id,
                             topic_id,
                             existing.current_stage,
                             force_stage,
@@ -233,54 +231,53 @@ class OrchestratorService:
                     conn.commit()
                 finally:
                     conn.close()
-                return self.get_run(project_id)
+                return self.get_run(topic_id)
             if stop_before_changed:
                 # Refresh so the returned run reflects the new stop_before.
-                return self.get_run(project_id)
+                return self.get_run(topic_id)
             return existing
 
-        inferred = force_stage or self.infer_stage_from_artifacts(project_id)
+        inferred = force_stage or self.infer_stage_from_artifacts(topic_id)
         conn = self._db.connect()
         try:
             cur = conn.execute(
                 """
                 INSERT INTO orchestrator_runs
-                (project_id, topic_id, mode, current_stage, stage_status, stop_before)
-                VALUES (?, ?, ?, ?, 'in_progress', ?)
+                (topic_id, mode, current_stage, stage_status, stop_before)
+                VALUES (?, ?, ?, 'in_progress', ?)
                 """,
-                (project_id, topic_id, mode, inferred, stop_before or ""),
+                (topic_id, mode, inferred, stop_before or ""),
             )
             run_id = int(cur.lastrowid)
             conn.execute(
                 """
                 INSERT INTO orchestrator_stage_events
-                (run_id, project_id, topic_id, from_stage, to_stage,
+                (run_id, topic_id, from_stage, to_stage,
                  event_type, status, actor, rationale)
-                VALUES (?, ?, ?, '', ?, 'init', 'in_progress', 'system', ?)
+                VALUES (?, ?, '', ?, 'init', 'in_progress', 'system', ?)
                 """,
                 (
                     run_id,
-                    project_id,
                     topic_id,
                     inferred,
                     f"Run resumed at inferred stage: {inferred}",
                 ),
             )
             conn.commit()
-            return self.get_run(project_id)
+            return self.get_run(topic_id)
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
 
-    def get_run(self, project_id: int) -> OrchestratorRun | None:
-        """Fetch the current orchestrator run for a project."""
+    def get_run(self, topic_id: int) -> OrchestratorRun | None:
+        """Fetch the current orchestrator run for a topic."""
         conn = self._db.connect()
         try:
             row = conn.execute(
-                "SELECT * FROM orchestrator_runs WHERE project_id = ?",
-                (project_id,),
+                "SELECT * FROM orchestrator_runs WHERE topic_id = ?",
+                (topic_id,),
             ).fetchone()
             if row is None:
                 return None
@@ -288,31 +285,31 @@ class OrchestratorService:
         finally:
             conn.close()
 
-    def get_status(self, project_id: int) -> dict[str, Any]:
-        """Return a rich status dict for a project."""
-        run = self.get_run(project_id)
+    def get_status(self, topic_id: int) -> dict[str, Any]:
+        """Return a rich status dict for a topic."""
+        run = self.get_run(topic_id)
         if run is None:
-            return {"error": "No orchestrator run found for this project"}
+            return {"error": "No orchestrator run found for this topic"}
 
         # Check required artifacts for current stage
         artifacts_check = self._validator.check_artifacts_for_stage(
-            project_id, run.current_stage
+            topic_id, run.current_stage
         )
 
         # Evaluate gate
-        gate_decision = self._gate_evaluator.evaluate(project_id, run.current_stage)
+        gate_decision = self._gate_evaluator.evaluate(topic_id, run.current_stage)
 
         # Count active artifacts
         conn = self._db.connect()
         try:
             artifact_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM project_artifacts WHERE project_id = ? AND status = 'active'",
-                (project_id,),
+                "SELECT COUNT(*) as cnt FROM project_artifacts WHERE topic_id = ? AND status = 'active'",
+                (topic_id,),
             ).fetchone()["cnt"]
 
             issue_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM review_issues WHERE project_id = ? AND status = 'open'",
-                (project_id,),
+                "SELECT COUNT(*) as cnt FROM review_issues WHERE topic_id = ? AND status = 'open'",
+                (topic_id,),
             ).fetchone()["cnt"]
         finally:
             conn.close()
@@ -324,7 +321,6 @@ class OrchestratorService:
         return {
             "run": {
                 "id": run.id,
-                "project_id": run.project_id,
                 "topic_id": run.topic_id,
                 "mode": run.mode,
                 "current_stage": run.current_stage,
@@ -354,7 +350,6 @@ class OrchestratorService:
 
     def record_artifact(
         self,
-        project_id: int,
         topic_id: int,
         stage: StageName,
         artifact_type: str,
@@ -369,9 +364,8 @@ class OrchestratorService:
         propagate_stale_from_previous: bool = True,
     ) -> ProjectArtifact:
         """Record a new artifact for a stage."""
-        previous = self._artifact_manager.get_latest(project_id, stage, artifact_type)
+        previous = self._artifact_manager.get_latest(topic_id, stage, artifact_type)
         artifact = self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             artifact_type=artifact_type,
@@ -405,25 +399,25 @@ class OrchestratorService:
 
     def list_artifacts(
         self,
-        project_id: int,
+        topic_id: int,
         stage: StageName | None = None,
         artifact_type: str | None = None,
     ) -> list[ProjectArtifact]:
-        """List artifacts for a project."""
-        return self._artifact_manager.list_by_project(
-            project_id=project_id,
+        """List artifacts for a topic."""
+        return self._artifact_manager.list_by_topic(
+            topic_id=topic_id,
             stage=stage,
             artifact_type=artifact_type,
         )
 
     def get_latest_artifact(
         self,
-        project_id: int,
+        topic_id: int,
         stage: StageName,
         artifact_type: str,
     ) -> ProjectArtifact | None:
         """Get the latest artifact of a given type."""
-        return self._artifact_manager.get_latest(project_id, stage, artifact_type)
+        return self._artifact_manager.get_latest(topic_id, stage, artifact_type)
 
     def add_artifact_dependency(
         self,
@@ -483,9 +477,9 @@ class OrchestratorService:
         self._artifact_manager.clear_stale(artifact_id)
         return {"success": True, "artifact_id": artifact_id}
 
-    def list_stale_artifacts(self, project_id: int) -> list[ProjectArtifact]:
-        """List active stale artifacts for a project."""
-        return self._artifact_manager.list_stale(project_id)
+    def list_stale_artifacts(self, topic_id: int) -> list[ProjectArtifact]:
+        """List active stale artifacts for a topic."""
+        return self._artifact_manager.list_stale(topic_id)
 
     # -----------------------------------------------------------------------
     # Stage advancement
@@ -493,12 +487,12 @@ class OrchestratorService:
 
     def advance(
         self,
-        project_id: int,
+        topic_id: int,
         actor: str = "system",
         auto_run_gates: bool = True,
     ) -> dict[str, Any]:
-        """Attempt to advance the project to the next stage."""
-        run = self.get_run(project_id)
+        """Attempt to advance the topic to the next stage."""
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
 
@@ -530,7 +524,7 @@ class OrchestratorService:
 
         # 2. Check required artifacts exist
         allowed, reason, advisories = self._validator.can_advance(
-            project_id, current, nxt
+            topic_id, current, nxt
         )
         if not allowed:
             return {
@@ -541,7 +535,7 @@ class OrchestratorService:
 
         # 3. Check gate
         if auto_run_gates:
-            gate_decision = self._gate_evaluator.evaluate(project_id, current)
+            gate_decision = self._gate_evaluator.evaluate(topic_id, current)
             loopback_result = self._try_auto_loopback(
                 run, current, gate_decision, actor
             )
@@ -562,9 +556,9 @@ class OrchestratorService:
                 """
                 UPDATE orchestrator_runs
                 SET current_stage = ?, stage_status = 'in_progress', updated_at = datetime('now')
-                WHERE project_id = ?
+                WHERE topic_id = ?
                 """,
-                (nxt, project_id),
+                (nxt, topic_id),
             )
             conn.execute(
                 """
@@ -574,7 +568,7 @@ class OrchestratorService:
                 """,
                 (
                     run.id,
-                    project_id,
+                    topic_id,
                     run.topic_id,
                     current,
                     nxt,
@@ -587,7 +581,7 @@ class OrchestratorService:
             conn.close()
 
         # Auto-extract lessons from the completed stage
-        self._auto_extract_lessons(current, project_id, run.topic_id)
+        self._auto_extract_lessons(current, run.topic_id)
 
         # Auto-housekeeping: promote draft strategies, check stale, patch
         self._auto_housekeeping()
@@ -674,20 +668,20 @@ class OrchestratorService:
             loopback_count = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM orchestrator_stage_events
-                WHERE project_id = ? AND from_stage = ? AND to_stage = ?
+                WHERE topic_id = ? AND from_stage = ? AND to_stage = ?
                       AND event_type = 'transition'
                 """,
-                (run.project_id, current, target_stage),
+                (run.topic_id, current, target_stage),
             ).fetchone()["cnt"]
         finally:
             conn.close()
 
         if loopback_count >= max_rounds:
             logger.info(
-                "Auto loopback %s→%s exhausted for project %d (%d/%d)",
+                "Auto loopback %s→%s exhausted for topic %d (%d/%d)",
                 current,
                 target_stage,
-                run.project_id,
+                run.topic_id,
                 loopback_count,
                 max_rounds,
             )
@@ -699,7 +693,7 @@ class OrchestratorService:
             f"gate={gate_decision}): {reason_text}"
         )
         result = self.transition_to(
-            run.project_id,
+            run.topic_id,
             target_stage,
             rationale=rationale,
             actor=actor,
@@ -708,7 +702,6 @@ class OrchestratorService:
             return None
 
         self.record_decision(
-            project_id=run.project_id,
             topic_id=run.topic_id,
             stage=current,
             checkpoint=checkpoint,
@@ -717,10 +710,10 @@ class OrchestratorService:
         )
 
         logger.info(
-            "Auto loopback %s→%s for project %d (round %d)",
+            "Auto loopback %s→%s for topic %d (round %d)",
             current,
             target_stage,
-            run.project_id,
+            run.topic_id,
             loopback_count + 1,
         )
         return {
@@ -775,8 +768,7 @@ class OrchestratorService:
     def _auto_extract_lessons(
         self,
         stage: str,
-        project_id: int,
-        topic_id: int | None,
+        topic_id: int,
     ) -> None:
         """Auto-extract lessons from a completed stage (best-effort, non-blocking)."""
         try:
@@ -821,7 +813,6 @@ class OrchestratorService:
                         stage=stage, content=issue, lesson_type="failure", tags=[stage]
                     ),
                     source="auto_extracted",
-                    source_project_id=project_id,
                     topic_id=topic_id,
                 )
             if stage_summary:
@@ -833,7 +824,6 @@ class OrchestratorService:
                         tags=[stage],
                     ),
                     source="auto_extracted",
-                    source_project_id=project_id,
                     topic_id=topic_id,
                 )
 
@@ -847,7 +837,7 @@ class OrchestratorService:
 
     def transition_to(
         self,
-        project_id: int,
+        topic_id: int,
         target_stage: StageName,
         *,
         rationale: str = "",
@@ -858,7 +848,7 @@ class OrchestratorService:
         Unlike advance() which only moves linearly, this allows jumps
         defined in STAGE_GRAPH — e.g. propose → build, write → experiment.
         """
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
 
@@ -880,9 +870,9 @@ class OrchestratorService:
                 """
                 UPDATE orchestrator_runs
                 SET current_stage = ?, stage_status = 'in_progress', updated_at = datetime('now')
-                WHERE project_id = ?
+                WHERE topic_id = ?
                 """,
-                (target_stage, project_id),
+                (target_stage, topic_id),
             )
             conn.execute(
                 """
@@ -892,7 +882,7 @@ class OrchestratorService:
                 """,
                 (
                     run.id,
-                    project_id,
+                    topic_id,
                     run.topic_id,
                     current,
                     target_stage,
@@ -914,15 +904,15 @@ class OrchestratorService:
         }
 
     def check_gate(
-        self, project_id: int, stage: StageName | None = None
+        self, topic_id: int, stage: StageName | None = None
     ) -> GateDecision:
         """Evaluate the gate for a stage (defaults to current stage)."""
         if stage is None:
-            run = self.get_run(project_id)
+            run = self.get_run(topic_id)
             if run is None:
                 return "fail"
             stage = run.current_stage
-        return self._gate_evaluator.evaluate(project_id, stage)
+        return self._gate_evaluator.evaluate(topic_id, stage)
 
     # -----------------------------------------------------------------------
     # Adversarial optimization
@@ -930,7 +920,7 @@ class OrchestratorService:
 
     def run_adversarial_round(
         self,
-        project_id: int,
+        topic_id: int,
         target_artifact_id: int,
         proposal_snapshot: dict[str, Any],
         objections: list[dict[str, Any]],
@@ -939,7 +929,7 @@ class OrchestratorService:
         actor: str = "system",
     ) -> dict[str, Any]:
         """Run one adversarial round and record it as an artifact."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
 
@@ -956,12 +946,11 @@ class OrchestratorService:
         ]
 
         # Count existing rounds
-        round_count = self._adversarial._count_rounds(project_id, run.current_stage)
+        round_count = self._adversarial._count_rounds(topic_id, run.current_stage)
         round_number = round_count + 1
 
         result = self._adversarial.run_round(
-            project_id=project_id,
-            topic_id=run.topic_id,
+            topic_id=topic_id,
             target_artifact_id=target_artifact_id,
             target_stage=run.current_stage,
             round_number=round_number,
@@ -980,14 +969,14 @@ class OrchestratorService:
 
     def resolve_adversarial_round(
         self,
-        project_id: int,
+        topic_id: int,
         round_artifact_id: int,
         scores: dict[str, float] | None = None,
         notes: str = "",
         actor: str = "system",
     ) -> dict[str, Any]:
         """Resolve an adversarial round and determine outcome."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
 
@@ -1002,8 +991,7 @@ class OrchestratorService:
         round_number = round_artifact.metadata.get("round_number", 1)
 
         result = self._adversarial.resolve_round(
-            project_id=project_id,
-            topic_id=run.topic_id,
+            topic_id=topic_id,
             target_stage=run.current_stage,
             round_number=round_number,
             round_artifact_id=round_artifact_id,
@@ -1024,20 +1012,20 @@ class OrchestratorService:
             "stage": run.current_stage,
         }
 
-    def check_adversarial_status(self, project_id: int) -> dict[str, Any]:
-        """Check current adversarial status for the project."""
-        run = self.get_run(project_id)
+    def check_adversarial_status(self, topic_id: int) -> dict[str, Any]:
+        """Check current adversarial status for the topic."""
+        run = self.get_run(topic_id)
         if run is None:
             return {"error": "No orchestrator run found"}
 
         # Get latest resolution
         resolution_artifact = self._adversarial._artifact_manager.get_latest(
-            project_id, run.current_stage, "adversarial_resolution"
+            topic_id, run.current_stage, "adversarial_resolution"
         )
 
         if resolution_artifact is None:
             # Check if there are any rounds
-            round_count = self._adversarial._count_rounds(project_id, run.current_stage)
+            round_count = self._adversarial._count_rounds(topic_id, run.current_stage)
             return {
                 "has_resolution": False,
                 "round_count": round_count,
@@ -1050,7 +1038,7 @@ class OrchestratorService:
         resolution = AdversarialResolution.from_payload(resolution_artifact.payload)
 
         should_repeat, reason = self._adversarial.should_repeat(
-            project_id, run.current_stage, run.mode
+            topic_id, run.current_stage, run.mode
         )
 
         return {
@@ -1071,17 +1059,16 @@ class OrchestratorService:
 
     def create_review_bundle(
         self,
-        project_id: int,
+        topic_id: int,
         integrity_artifact_id: int | None = None,
         scholarly_artifact_id: int | None = None,
     ) -> dict[str, Any]:
         """Create a review bundle linking review report artifacts."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
         bundle = self._review.create_bundle(
-            project_id,
-            run.topic_id,
+            topic_id,
             run.current_stage,
             integrity_artifact_id,
             scholarly_artifact_id,
@@ -1095,7 +1082,7 @@ class OrchestratorService:
 
     def add_review_issue(
         self,
-        project_id: int,
+        topic_id: int,
         review_type: str,
         severity: str,
         category: str,
@@ -1106,12 +1093,11 @@ class OrchestratorService:
         review_artifact_id: int | None = None,
     ) -> dict[str, Any]:
         """Add a review finding as an issue."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
         issue = self._review.add_issue(
-            project_id=project_id,
-            topic_id=run.topic_id,
+            topic_id=topic_id,
             stage=run.current_stage,
             review_type=review_type,
             severity=severity,
@@ -1133,7 +1119,7 @@ class OrchestratorService:
     def respond_to_issue(
         self,
         issue_id: int,
-        project_id: int,
+        topic_id: int,
         response_type: str,
         response_text: str,
         artifact_id: int | None = None,
@@ -1142,7 +1128,7 @@ class OrchestratorService:
         """Record a response to a review issue."""
         response = self._review.add_response(
             issue_id=issue_id,
-            project_id=project_id,
+            topic_id=topic_id,
             response_type=response_type,
             response_text=response_text,
             artifact_id=artifact_id,
@@ -1169,14 +1155,14 @@ class OrchestratorService:
 
     def list_review_issues(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str | None = None,
         status: str | None = None,
         blocking_only: bool = False,
     ) -> list[dict[str, Any]]:
         """List review issues with optional filters."""
         issues = self._review.list_issues(
-            project_id=project_id,
+            topic_id=topic_id,
             stage=stage,
             status=status,
             blocking_only=blocking_only,
@@ -1195,12 +1181,12 @@ class OrchestratorService:
             for i in issues
         ]
 
-    def get_review_status(self, project_id: int) -> dict[str, Any]:
-        """Get review summary for a project."""
-        run = self.get_run(project_id)
+    def get_review_status(self, topic_id: int) -> dict[str, Any]:
+        """Get review summary for a topic."""
+        run = self.get_run(topic_id)
         if run is None:
             return {"error": "No orchestrator run found"}
-        return self._review.get_review_summary(project_id, run.current_stage)
+        return self._review.get_review_summary(topic_id, run.current_stage)
 
     # -----------------------------------------------------------------------
     # Integrity verification & finalize
@@ -1208,16 +1194,15 @@ class OrchestratorService:
 
     def run_integrity_check(
         self,
-        project_id: int,
+        topic_id: int,
         findings: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Run 5-phase integrity verification and persist report."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
         report = self._integrity.run_check(
-            project_id=project_id,
-            topic_id=run.topic_id,
+            topic_id=topic_id,
             stage=run.current_stage,
             findings=findings,
         )
@@ -1233,16 +1218,16 @@ class OrchestratorService:
             "stage": run.current_stage,
         }
 
-    def finalize_project(
+    def finalize(
         self,
-        project_id: int,
+        topic_id: int,
     ) -> dict[str, Any]:
         """Create final_bundle and process_summary artifacts."""
-        run = self.get_run(project_id)
+        run = self.get_run(topic_id)
         if run is None:
             return {"success": False, "error": "No orchestrator run found"}
-        bundle = self._finalize.create_final_bundle(project_id, run.topic_id)
-        summary = self._finalize.create_process_summary(project_id, run.topic_id)
+        bundle = self._finalize.create_final_bundle(topic_id)
+        summary = self._finalize.create_process_summary(topic_id)
         return {
             "success": True,
             "bundle_artifact_id": bundle.id,
@@ -1254,7 +1239,7 @@ class OrchestratorService:
 
     def record_experiment_run(
         self,
-        project_id: int,
+        topic_id: int,
         *,
         iteration: int = 1,
         code_hash: str = "",
@@ -1274,7 +1259,7 @@ class OrchestratorService:
                     primary_metric_value, all_metrics_json, kept)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    project_id,
+                    topic_id,
                     iteration,
                     code_hash,
                     primary_metric_name,
@@ -1293,7 +1278,6 @@ class OrchestratorService:
 
     def record_decision(
         self,
-        project_id: int,
         topic_id: int,
         stage: str,
         checkpoint: str,
@@ -1313,7 +1297,7 @@ class OrchestratorService:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    project_id,
+                    topic_id,
                     topic_id,
                     resolve_stage(stage),
                     checkpoint,
@@ -1337,21 +1321,21 @@ class OrchestratorService:
 
     def list_decisions(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List decision log entries for a project."""
+        """List decision log entries for a topic."""
         conn = self._db.connect()
         try:
             if stage:
                 rows = conn.execute(
-                    "SELECT * FROM decision_log WHERE project_id = ? AND stage = ? ORDER BY created_at",
-                    (project_id, resolve_stage(stage)),
+                    "SELECT * FROM decision_log WHERE topic_id = ? AND stage = ? ORDER BY created_at",
+                    (topic_id, resolve_stage(stage)),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM decision_log WHERE project_id = ? ORDER BY created_at",
-                    (project_id,),
+                    "SELECT * FROM decision_log WHERE topic_id = ? ORDER BY created_at",
+                    (topic_id,),
                 ).fetchall()
             return [dict(r) for r in rows]
         finally:
@@ -1370,7 +1354,6 @@ class OrchestratorService:
             stop_before = ""
         return OrchestratorRun(
             id=row["id"],
-            project_id=row["project_id"],
             topic_id=row["topic_id"],
             mode=row["mode"],
             current_stage=row["current_stage"],

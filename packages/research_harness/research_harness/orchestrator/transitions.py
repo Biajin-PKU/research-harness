@@ -17,19 +17,19 @@ from .models import (
 from .invariants import InvariantChecker, is_blocking
 
 
-def _hallucinated_citation_count(conn, project_id: int) -> int:
-    """Return the number of hallucinated citations for a project.
+def _hallucinated_citation_count(conn, topic_id: int) -> int:
+    """Return the number of hallucinated citations for a topic.
 
     Returns 0 if the ``citation_verifications`` table does not exist (e.g. pre-
-    migration DB) or the project has no records. Never raises.
+    migration DB) or the topic has no records. Never raises.
     """
     try:
         row = conn.execute(
             """
             SELECT COUNT(*) as cnt FROM citation_verifications
-            WHERE project_id = ? AND status = 'hallucinated'
+            WHERE topic_id = ? AND status = 'hallucinated'
             """,
-            (project_id,),
+            (topic_id,),
         ).fetchone()
         return int(row["cnt"]) if row else 0
     except Exception:
@@ -44,7 +44,7 @@ class TransitionValidator:
 
     def can_advance(
         self,
-        project_id: int,
+        topic_id: int,
         from_stage: StageName,
         to_stage: StageName,
     ) -> tuple[bool, str, list[str]]:
@@ -67,11 +67,11 @@ class TransitionValidator:
                     row = conn.execute(
                         f"""
                         SELECT 1 FROM project_artifacts
-                        WHERE project_id = ? AND stage IN ({placeholders})
+                        WHERE topic_id = ? AND stage IN ({placeholders})
                               AND artifact_type = ? AND status = 'active'
                         LIMIT 1
                         """,
-                        (project_id, *stage_names, artifact_type),
+                        (topic_id, *stage_names, artifact_type),
                     ).fetchone()
                     if row is None:
                         return (
@@ -95,7 +95,7 @@ class TransitionValidator:
 
     def check_artifacts_for_stage(
         self,
-        project_id: int,
+        topic_id: int,
         stage: StageName,
     ) -> dict[str, bool]:
         """Return a map of required artifact -> exists for a stage."""
@@ -112,11 +112,11 @@ class TransitionValidator:
                 row = conn.execute(
                     f"""
                     SELECT 1 FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type = ? AND status = 'active'
                     LIMIT 1
                     """,
-                    (project_id, *stage_names, artifact_type),
+                    (topic_id, *stage_names, artifact_type),
                 ).fetchone()
                 result[artifact_type] = row is not None
         finally:
@@ -131,10 +131,10 @@ class GateEvaluator:
         self._db = db
         self._invariant_checker = InvariantChecker(db)
 
-    def evaluate(self, project_id: int, stage: StageName) -> GateDecision:
+    def evaluate(self, topic_id: int, stage: StageName) -> GateDecision:
         """Evaluate the gate for a stage and return a decision."""
         # Deterministic invariant pre-checks
-        violations = self._invariant_checker.check_all(project_id, stage)
+        violations = self._invariant_checker.check_all(topic_id, stage)
         blocking = [v for v in violations if is_blocking(v)]
         if blocking:
             import logging
@@ -147,23 +147,23 @@ class GateEvaluator:
         gate_type = stages.get_gate_type(stage)
 
         if gate_type == "approval_gate":
-            return self._evaluate_approval_gate(project_id, stage)
+            return self._evaluate_approval_gate(topic_id, stage)
         if gate_type == "coverage_gate":
-            return self._evaluate_coverage_gate(project_id, stage)
+            return self._evaluate_coverage_gate(topic_id, stage)
         if gate_type == "adversarial_gate":
-            return self._evaluate_adversarial_gate(project_id, stage)
+            return self._evaluate_adversarial_gate(topic_id, stage)
         if gate_type == "review_gate":
-            return self._evaluate_review_gate(project_id)
+            return self._evaluate_review_gate(topic_id)
         if gate_type == "integrity_gate":
-            return self._evaluate_integrity_gate(project_id)
+            return self._evaluate_integrity_gate(topic_id)
         if gate_type == "experiment_gate":
-            return self._evaluate_experiment_gate(project_id, stage)
+            return self._evaluate_experiment_gate(topic_id, stage)
         return "pass"
 
     MIN_GAP_COUNT = MIN_GAP_COUNT
 
     def _evaluate_approval_gate(
-        self, project_id: int, stage: StageName
+        self, topic_id: int, stage: StageName
     ) -> GateDecision:
         """Check if required artifacts exist.
 
@@ -184,11 +184,11 @@ class GateEvaluator:
                 row = conn.execute(
                     f"""
                     SELECT 1 FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type = ? AND status = 'active'
                     LIMIT 1
                     """,
-                    (project_id, *stage_names, artifact_type),
+                    (topic_id, *stage_names, artifact_type),
                 ).fetchone()
                 if row is None:
                     return "needs_approval"
@@ -201,12 +201,12 @@ class GateEvaluator:
                 brief_row = conn.execute(
                     f"""
                     SELECT payload_json FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type = 'topic_brief'
                           AND status = 'active'
                     ORDER BY version DESC LIMIT 1
                     """,
-                    (project_id, *stage_names),
+                    (topic_id, *stage_names),
                 ).fetchone()
                 if brief_row:
                     try:
@@ -232,33 +232,28 @@ class GateEvaluator:
                         return "needs_approval"
 
                 # Verify seed paper count.
-                run_row = conn.execute(
-                    "SELECT topic_id FROM orchestrator_runs WHERE project_id = ?",
-                    (project_id,),
-                ).fetchone()
-                if run_row:
-                    seed_count = conn.execute(
-                        """
-                        SELECT COUNT(DISTINCT pt.paper_id) AS cnt
-                        FROM paper_topics pt
-                        WHERE pt.topic_id = ?
-                          AND pt.relevance != 'dismissed'
-                        """,
-                        (run_row["topic_id"],),
-                    ).fetchone()["cnt"]
-                    if seed_count < MIN_SEED_PAPER_COUNT:
-                        return "needs_approval"
+                seed_count = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT pt.paper_id) AS cnt
+                    FROM paper_topics pt
+                    WHERE pt.topic_id = ?
+                      AND pt.relevance != 'dismissed'
+                    """,
+                    (topic_id,),
+                ).fetchone()["cnt"]
+                if seed_count < MIN_SEED_PAPER_COUNT:
+                    return "needs_approval"
 
             if resolved == "analyze":
                 gap_row = conn.execute(
                     f"""
                     SELECT payload_json FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type IN ('gap_detect', 'gap_analysis')
                           AND status = 'active'
                     ORDER BY version DESC LIMIT 1
                     """,
-                    (project_id, *stage_names),
+                    (topic_id, *stage_names),
                 ).fetchone()
                 if gap_row:
                     try:
@@ -274,11 +269,11 @@ class GateEvaluator:
                 ev_row = conn.execute(
                     """
                     SELECT payload_json FROM project_artifacts
-                    WHERE project_id = ? AND artifact_type = 'evidence_trace_report'
+                    WHERE topic_id = ? AND artifact_type = 'evidence_trace_report'
                           AND status = 'active'
                     ORDER BY version DESC LIMIT 1
                     """,
-                    (project_id,),
+                    (topic_id,),
                 ).fetchone()
                 if ev_row:
                     try:
@@ -294,7 +289,7 @@ class GateEvaluator:
             conn.close()
 
     def _evaluate_coverage_gate(
-        self, project_id: int, stage: StageName
+        self, topic_id: int, stage: StageName
     ) -> GateDecision:
         """Check required artifacts + minimum corpus quality for Build exit.
 
@@ -314,11 +309,11 @@ class GateEvaluator:
                 row = conn.execute(
                     f"""
                     SELECT 1 FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type = ? AND status = 'active'
                     LIMIT 1
                     """,
-                    (project_id, *stage_names, artifact_type),
+                    (topic_id, *stage_names, artifact_type),
                 ).fetchone()
                 if row is None:
                     return "needs_coverage"
@@ -326,87 +321,79 @@ class GateEvaluator:
             # 2. Enhanced: check corpus size and diversity (for "build" stage)
             resolved = stages.resolve_stage(stage)
             if resolved == "build":
-                # Find topic_id from the orchestrator run
-                run_row = conn.execute(
-                    "SELECT topic_id FROM orchestrator_runs WHERE project_id = ?",
-                    (project_id,),
+                # Min papers (>=20)
+                paper_count = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT pt.paper_id) as cnt
+                    FROM paper_topics pt
+                    WHERE pt.topic_id = ?
+                      AND pt.relevance != 'dismissed'
+                    """,
+                    (topic_id,),
+                ).fetchone()["cnt"]
+                if paper_count < DEFAULT_MIN_PAPER_COUNT:
+                    return "needs_coverage"
+
+                # Min distinct years (>=2)
+                year_count = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT p.year) as cnt
+                    FROM papers p
+                    JOIN paper_topics pt ON pt.paper_id = p.id
+                    WHERE pt.topic_id = ? AND p.year IS NOT NULL
+                      AND pt.relevance != 'dismissed'
+                    """,
+                    (topic_id,),
+                ).fetchone()["cnt"]
+                if year_count < MIN_YEAR_SPAN:
+                    return "needs_coverage"
+
+                # Retrieval convergence (soft: only enforced when the
+                # iterative_retrieval_loop primitive has been invoked).
+                # Motivation: prevents advancing while the LLM still has
+                # fresh queries that hit mostly-new papers.
+                loop_row = conn.execute(
+                    f"""
+                    SELECT payload_json FROM project_artifacts
+                    WHERE topic_id = ? AND stage IN ({placeholders})
+                          AND artifact_type = 'iterative_retrieval_loop_result'
+                          AND status = 'active'
+                    ORDER BY version DESC LIMIT 1
+                    """,
+                    (topic_id, *stage_names),
                 ).fetchone()
-                if run_row:
-                    topic_id = run_row["topic_id"]
-
-                    # Min papers (≥20)
-                    paper_count = conn.execute(
-                        """
-                        SELECT COUNT(DISTINCT pt.paper_id) as cnt
-                        FROM paper_topics pt
-                        WHERE pt.topic_id = ?
-                          AND pt.relevance != 'dismissed'
-                        """,
-                        (topic_id,),
-                    ).fetchone()["cnt"]
-                    if paper_count < DEFAULT_MIN_PAPER_COUNT:
+                if loop_row:
+                    try:
+                        loop_payload = json.loads(loop_row["payload_json"] or "{}")
+                    except (TypeError, ValueError):
+                        loop_payload = {}
+                    if not bool(loop_payload.get("convergence_reached")):
                         return "needs_coverage"
 
-                    # Min distinct years (≥2)
-                    year_count = conn.execute(
-                        """
-                        SELECT COUNT(DISTINCT p.year) as cnt
-                        FROM papers p
-                        JOIN paper_topics pt ON pt.paper_id = p.id
-                        WHERE pt.topic_id = ? AND p.year IS NOT NULL
-                          AND pt.relevance != 'dismissed'
-                        """,
-                        (topic_id,),
-                    ).fetchone()["cnt"]
-                    if year_count < MIN_YEAR_SPAN:
-                        return "needs_coverage"
-
-                    # Retrieval convergence (soft: only enforced when the
-                    # iterative_retrieval_loop primitive has been invoked).
-                    # Motivation: prevents advancing while the LLM still has
-                    # fresh queries that hit mostly-new papers.
-                    loop_row = conn.execute(
-                        f"""
-                        SELECT payload_json FROM project_artifacts
-                        WHERE project_id = ? AND stage IN ({placeholders})
-                              AND artifact_type = 'iterative_retrieval_loop_result'
-                              AND status = 'active'
-                        ORDER BY version DESC LIMIT 1
-                        """,
-                        (project_id, *stage_names),
-                    ).fetchone()
-                    if loop_row:
-                        try:
-                            loop_payload = json.loads(loop_row["payload_json"] or "{}")
-                        except (TypeError, ValueError):
-                            loop_payload = {}
-                        if not bool(loop_payload.get("convergence_reached")):
-                            return "needs_coverage"
-
-                    # Citation expansion (mandatory): keyword search alone
-                    # is insufficient — must also traverse the citation
-                    # graph (forward + backward) from seed papers. Without
-                    # this, the pool misses seminal and follow-up work that
-                    # doesn't match keyword queries.
-                    cit_row = conn.execute(
-                        f"""
-                        SELECT payload_json FROM project_artifacts
-                        WHERE project_id = ? AND stage IN ({placeholders})
-                              AND artifact_type = 'citation_expansion_report'
-                              AND status = 'active'
-                        ORDER BY version DESC LIMIT 1
-                        """,
-                        (project_id, *stage_names),
-                    ).fetchone()
-                    if cit_row is None:
-                        return "needs_coverage"
+                # Citation expansion (mandatory): keyword search alone
+                # is insufficient — must also traverse the citation
+                # graph (forward + backward) from seed papers. Without
+                # this, the pool misses seminal and follow-up work that
+                # doesn't match keyword queries.
+                cit_row = conn.execute(
+                    f"""
+                    SELECT payload_json FROM project_artifacts
+                    WHERE topic_id = ? AND stage IN ({placeholders})
+                          AND artifact_type = 'citation_expansion_report'
+                          AND status = 'active'
+                    ORDER BY version DESC LIMIT 1
+                    """,
+                    (topic_id, *stage_names),
+                ).fetchone()
+                if cit_row is None:
+                    return "needs_coverage"
 
             return "pass"
         finally:
             conn.close()
 
     def _evaluate_adversarial_gate(
-        self, project_id: int, stage: StageName
+        self, topic_id: int, stage: StageName
     ) -> GateDecision:
         """Check for adversarial resolution with no unresolved fatal flaws."""
         stage_names = stages.stage_names_for_query(stage)
@@ -416,12 +403,12 @@ class GateEvaluator:
             row = conn.execute(
                 f"""
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND stage IN ({placeholders})
+                WHERE topic_id = ? AND stage IN ({placeholders})
                       AND artifact_type = 'adversarial_resolution'
                       AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id, *stage_names),
+                (topic_id, *stage_names),
             ).fetchone()
             if row is None:
                 return "needs_adversarial"
@@ -437,7 +424,7 @@ class GateEvaluator:
         finally:
             conn.close()
 
-    def _evaluate_review_gate(self, project_id: int) -> GateDecision:
+    def _evaluate_review_gate(self, topic_id: int) -> GateDecision:
         """Evaluate the write-stage review gate.
 
         Blocks when any of the following is true:
@@ -446,7 +433,7 @@ class GateEvaluator:
         - Any open critical-severity review issue exists.
         - ``final_bundle`` or ``process_summary`` artifact is missing.
         - A ``final_integrity_report`` exists but did not pass (critical>0).
-        - Any hallucinated citation was recorded for the project.
+        - Any hallucinated citation was recorded for the topic.
         """
         conn = self._db.connect()
         try:
@@ -454,9 +441,9 @@ class GateEvaluator:
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM review_issues
-                WHERE project_id = ? AND status = 'open' AND blocking = 1
+                WHERE topic_id = ? AND status = 'open' AND blocking = 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if row and row["cnt"] > 0:
                 return "needs_review"
@@ -465,9 +452,9 @@ class GateEvaluator:
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM review_issues
-                WHERE project_id = ? AND status = 'open' AND severity = 'critical'
+                WHERE topic_id = ? AND status = 'open' AND severity = 'critical'
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if row and row["cnt"] > 0:
                 return "needs_review"
@@ -477,11 +464,11 @@ class GateEvaluator:
                 row = conn.execute(
                     """
                     SELECT 1 FROM project_artifacts
-                    WHERE project_id = ? AND artifact_type = ?
+                    WHERE topic_id = ? AND artifact_type = ?
                           AND status = 'active'
                     LIMIT 1
                     """,
-                    (project_id, artifact_type),
+                    (topic_id, artifact_type),
                 ).fetchone()
                 if row is None:
                     return "needs_review"
@@ -490,11 +477,11 @@ class GateEvaluator:
             fi_row = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'final_integrity_report'
+                WHERE topic_id = ? AND artifact_type = 'final_integrity_report'
                       AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if fi_row:
                 try:
@@ -505,14 +492,14 @@ class GateEvaluator:
                     return "needs_review"
 
             # 5. No hallucinated citations.
-            if _hallucinated_citation_count(conn, project_id) > 0:
+            if _hallucinated_citation_count(conn, topic_id) > 0:
                 return "needs_review"
 
             return "pass"
         finally:
             conn.close()
 
-    def _evaluate_integrity_gate(self, project_id: int) -> GateDecision:
+    def _evaluate_integrity_gate(self, topic_id: int) -> GateDecision:
         """Evaluate the integrity gate (used by ``final_integrity``).
 
         Sub-checks:
@@ -530,26 +517,26 @@ class GateEvaluator:
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM review_issues
-                WHERE project_id = ? AND status = 'open' AND severity = 'critical'
+                WHERE topic_id = ? AND status = 'open' AND severity = 'critical'
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if row and row["cnt"] > 0:
                 return "needs_integrity"
 
             # 2. No hallucinated citations.
-            if _hallucinated_citation_count(conn, project_id) > 0:
+            if _hallucinated_citation_count(conn, topic_id) > 0:
                 return "needs_integrity"
 
             # 3. final_integrity_report must exist and pass.
             fi_row = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'final_integrity_report'
+                WHERE topic_id = ? AND artifact_type = 'final_integrity_report'
                       AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if fi_row is None:
                 return "needs_integrity"
@@ -566,11 +553,11 @@ class GateEvaluator:
             vr_row = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'verified_registry'
+                WHERE topic_id = ? AND artifact_type = 'verified_registry'
                       AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if vr_row:
                 try:
@@ -584,11 +571,11 @@ class GateEvaluator:
             ev_row = conn.execute(
                 """
                 SELECT payload_json FROM project_artifacts
-                WHERE project_id = ? AND artifact_type = 'evidence_trace_report'
+                WHERE topic_id = ? AND artifact_type = 'evidence_trace_report'
                       AND status = 'active'
                 ORDER BY version DESC LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if ev_row:
                 try:
@@ -605,7 +592,7 @@ class GateEvaluator:
 
     def evaluate_with_policy(
         self,
-        project_id: int,
+        topic_id: int,
         stage: str,
         auto_resolve: bool = False,
     ) -> tuple[str, bool]:
@@ -613,7 +600,7 @@ class GateEvaluator:
 
         Returns (decision, was_auto_resolved).
         """
-        decision = self.evaluate(project_id, stage)
+        decision = self.evaluate(topic_id, stage)
 
         if decision == "pass" or not auto_resolve:
             return decision, False
@@ -638,7 +625,7 @@ class GateEvaluator:
         return "pass", True
 
     def _evaluate_experiment_gate(
-        self, project_id: int, stage: StageName
+        self, topic_id: int, stage: StageName
     ) -> GateDecision:
         """Check experiment completion: result + verified registry + kept iterations."""
         stage_names = stages.stage_names_for_query(stage)
@@ -650,11 +637,11 @@ class GateEvaluator:
                 row = conn.execute(
                     f"""
                     SELECT 1 FROM project_artifacts
-                    WHERE project_id = ? AND stage IN ({placeholders})
+                    WHERE topic_id = ? AND stage IN ({placeholders})
                           AND artifact_type = ? AND status = 'active'
                     LIMIT 1
                     """,
-                    (project_id, *stage_names, artifact_type),
+                    (topic_id, *stage_names, artifact_type),
                 ).fetchone()
                 if row is None:
                     return "needs_experiment"
@@ -663,7 +650,7 @@ class GateEvaluator:
             try:
                 row = conn.execute(
                     "SELECT COUNT(*) as cnt FROM experiment_runs WHERE project_id = ? AND kept = 1",
-                    (project_id,),
+                    (topic_id,),
                 ).fetchone()
                 if not row or row["cnt"] == 0:
                     return "needs_experiment"
@@ -673,9 +660,9 @@ class GateEvaluator:
                 import logging
 
                 logging.getLogger(__name__).error(
-                    "experiment_runs query failed for project %s: %s. "
+                    "experiment_runs query failed for topic %s: %s. "
                     "Migration 012 may not have been applied.",
-                    project_id,
+                    topic_id,
                     exc,
                 )
                 return "fail"

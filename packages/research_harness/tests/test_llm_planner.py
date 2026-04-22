@@ -30,9 +30,10 @@ def _make_db(tmp_path: Path) -> Database:
             "INSERT INTO topics (name, description, target_venue) "
             "VALUES ('multimodal-ts', 'Multimodal time series forecasting', 'KDD')"
         )
+        # Bridge row for FK on project_artifacts.project_id
         conn.execute(
-            "INSERT INTO projects (topic_id, name, description) "
-            "VALUES (1, 'proj1', 'test project')"
+            "INSERT INTO projects (id, topic_id, name, description) "
+            "VALUES (1, 1, 'proj1', 'test project')"
         )
         conn.commit()
     finally:
@@ -113,14 +114,13 @@ class TestPlanStageDispatch:
         result = plan_stage(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="init",
             checkpoint_data={},
         )
         assert result["topic_description"]
         assert result["query"]
-        assert result["project_id"] == 1
+        assert result["topic_id"] == 1
 
     def test_unknown_stage_returns_empty(self, tmp_path):
         db = _make_db(tmp_path)
@@ -128,7 +128,6 @@ class TestPlanStageDispatch:
         result = plan_stage(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="unknown_stage",
             checkpoint_data={},
@@ -144,7 +143,6 @@ class TestPlanStageDispatch:
         result = plan_stage(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="build",
             checkpoint_data={},
@@ -159,12 +157,11 @@ class TestPlanStageDispatch:
         result = plan_stage(
             db=db,
             svc=svc,
-            project_id=42,
             topic_id=1,
             stage="build",
             checkpoint_data={},
         )
-        assert result["project_id"] == 42
+        assert result["topic_id"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +182,6 @@ class TestPlanBuild:
         result = _plan_build(
             db=db,
             svc=MagicMock(),
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -200,7 +196,6 @@ class TestPlanBuild:
         result = _plan_build(
             db=db,
             svc=MagicMock(),
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -221,7 +216,6 @@ class TestPlanAnalyze:
         result = _plan_analyze(
             db=db,
             svc=MagicMock(),
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -236,7 +230,6 @@ class TestPlanAnalyze:
         result = _plan_analyze(
             db=db,
             svc=MagicMock(),
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -258,7 +251,6 @@ class TestPlanPropose:
         result = _plan_propose(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -279,7 +271,6 @@ class TestPlanExperiment:
         result = _plan_experiment(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -308,7 +299,6 @@ class TestPlanWrite:
         result = _plan_write(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -325,7 +315,6 @@ class TestPlanWrite:
         result = _plan_write(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -366,7 +355,7 @@ class TestPlannerInExecutor:
         db = _make_db(tmp_path)
         svc = OrchestratorService(db)
 
-        cp = ckpt.new_checkpoint(1, 1)
+        cp = ckpt.new_checkpoint(1)
         cp["current_stage"] = "build"
 
         planner_output = {"query": "test-from-planner", "auto_ingest": True}
@@ -384,7 +373,6 @@ class TestPlannerInExecutor:
             _result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="build",
                 mode="standard",
@@ -429,7 +417,6 @@ class TestMultiSectionLoop:
             _result = dispatch_stage_tools(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="write",
                 tools=("section_draft",),
@@ -467,7 +454,7 @@ class TestB1ProposeMultiArtifact:
         captured_types: list[str] = []
 
         def capture_dispatch(
-            tool_name, *, db, svc, project_id, topic_id, stage, context
+            tool_name, *, db, svc, topic_id, stage, context
         ):
             captured_types.append(context.get("artifact_type", ""))
             return MagicMock(
@@ -484,7 +471,6 @@ class TestB1ProposeMultiArtifact:
             _result = dispatch_stage_tools(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 tools=("orchestrator_record_artifact",),
@@ -616,7 +602,6 @@ class TestB5InvariantCompliance:
         result = _plan_propose(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -641,7 +626,6 @@ class TestB5InvariantCompliance:
         result = _plan_propose(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -663,7 +647,6 @@ class TestB5InvariantCompliance:
         result = _plan_propose(
             db=db,
             svc=svc,
-            project_id=1,
             topic_id=1,
             checkpoint_data={},
         )
@@ -676,7 +659,7 @@ class TestB5InvariantCompliance:
 
 
 def _setup_integration_db(tmp_path: Path):
-    """Create DB with topic, project, and orchestrator run for integration tests."""
+    """Create DB with topic and orchestrator run for integration tests."""
     from research_harness.orchestrator.service import OrchestratorService
 
     db = Database(tmp_path / "gate_test.db")
@@ -687,15 +670,16 @@ def _setup_integration_db(tmp_path: Path):
             "INSERT INTO topics (name, description, target_venue) "
             "VALUES ('test-topic', 'Integration test topic', 'NeurIPS')"
         )
+        # Bridge row for FK on project_artifacts.project_id
         conn.execute(
-            "INSERT INTO projects (topic_id, name, description) "
-            "VALUES (1, 'test-project', 'Integration test project')"
+            "INSERT INTO projects (id, topic_id, name, description) "
+            "VALUES (1, 1, 'test-project', 'Integration test project')"
         )
         conn.commit()
     finally:
         conn.close()
     svc = OrchestratorService(db)
-    svc.resume_run(1, 1)
+    svc.resume_run(1)
     return db, svc
 
 
@@ -706,7 +690,6 @@ class TestProposeGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="propose",
             artifact_type="direction_proposal",
@@ -714,7 +697,6 @@ class TestProposeGateAdvancement:
             payload={"research_question": "Does X improve Y?"},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="propose",
             artifact_type="adversarial_resolution",
@@ -722,7 +704,6 @@ class TestProposeGateAdvancement:
             payload={"outcome": "approved"},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="propose",
             artifact_type="study_spec",
@@ -740,7 +721,6 @@ class TestProposeGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="propose",
             artifact_type="direction_proposal",
@@ -748,7 +728,6 @@ class TestProposeGateAdvancement:
             payload={"research_question": "Q?"},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="propose",
             artifact_type="study_spec",
@@ -771,7 +750,6 @@ class TestExperimentGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="experiment",
             artifact_type="experiment_code",
@@ -779,7 +757,6 @@ class TestExperimentGateAdvancement:
             payload={"files": ["main.py"], "entry_point": "main.py"},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="experiment",
             artifact_type="experiment_result",
@@ -787,7 +764,6 @@ class TestExperimentGateAdvancement:
             payload={"metrics": {"accuracy": 0.95}},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="experiment",
             artifact_type="verified_registry",
@@ -805,7 +781,6 @@ class TestExperimentGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="experiment",
             artifact_type="experiment_code",
@@ -813,7 +788,6 @@ class TestExperimentGateAdvancement:
             payload={"files": ["main.py"]},
         )
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="experiment",
             artifact_type="experiment_result",
@@ -859,7 +833,6 @@ class TestWriteGateArtifacts:
             dispatch_stage_tools(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="write",
                 tools=("section_draft",),
@@ -898,7 +871,6 @@ class TestAutoArtifactRecording:
         ):
             recorded = _record_auto_artifacts(
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 context={},
@@ -956,7 +928,6 @@ class TestAutoArtifactRecording:
 
         recorded = _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="experiment",
             context=context,
@@ -997,7 +968,7 @@ class TestAutoArtifactCheckpointTracking:
         from research_harness.auto_runner.stage_executor import execute_stage
 
         db, svc = _setup_integration_db(tmp_path)
-        cp = ckpt.new_checkpoint(1, 1)
+        cp = ckpt.new_checkpoint(1)
         cp["current_stage"] = "propose"
 
         planner_output = {
@@ -1031,7 +1002,6 @@ class TestAutoArtifactCheckpointTracking:
             _result = execute_stage(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="propose",
                 mode="autonomous",
@@ -1072,7 +1042,6 @@ class TestAutoArtifactCheckpointTracking:
             result = dispatch_stage_tools(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="write",
                 tools=("section_draft",),
@@ -1101,7 +1070,6 @@ class TestInitGateArtifacts:
 
         recorded = _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="init",
             context=context,
@@ -1154,7 +1122,6 @@ class TestBuildGateArtifacts:
 
         recorded = _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="build",
             context=context,
@@ -1204,7 +1171,6 @@ class TestAnalyzeGateArtifacts:
 
         recorded = _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="analyze",
             context=context,
@@ -1248,7 +1214,6 @@ class TestWriteGateComplete:
             result = dispatch_stage_tools(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 stage="write",
                 tools=("section_draft",),
@@ -1271,9 +1236,9 @@ class TestWriteTerminalCompletion:
         assert next_stage("write") is None, "write should be terminal stage"
 
         from research_harness.auto_runner import checkpoint as ckpt
-        from research_harness.auto_runner.runner import run_project
+        from research_harness.auto_runner.runner import run_topic
 
-        cp = ckpt.new_checkpoint(1, 1)
+        cp = ckpt.new_checkpoint(1)
         cp["current_stage"] = "write"
 
         stage_call_count = 0
@@ -1318,8 +1283,7 @@ class TestWriteTerminalCompletion:
             run_mock.current_stage = "write"
             mock_svc.get_run.return_value = run_mock
 
-            result = run_project(
-                project_id=1,
+            result = run_topic(
                 topic_id=1,
                 base_dir=tmp_path,
                 auto_approve=True,
@@ -1441,7 +1405,6 @@ class TestExperimentRunsInsertion:
 
         _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="experiment",
             context=context,
@@ -1501,7 +1464,6 @@ class TestExperimentRunsInsertion:
 
         _record_auto_artifacts(
             svc=svc,
-            project_id=1,
             topic_id=1,
             stage="experiment",
             context=context,
@@ -1530,7 +1492,6 @@ class TestProposeDirectionFallback:
         # Record a direction_proposal in analyze (which auto-artifacts create),
         # but NO direction_ranking.
         svc.record_artifact(
-            project_id=1,
             topic_id=1,
             stage="analyze",
             artifact_type="direction_proposal",
@@ -1556,7 +1517,6 @@ class TestProposeDirectionFallback:
             result = _plan_propose(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 checkpoint_data={},
             )
@@ -1594,7 +1554,6 @@ class TestStudySpecNonEmpty:
             result = _plan_propose(
                 db=db,
                 svc=svc,
-                project_id=1,
                 topic_id=1,
                 checkpoint_data={},
             )
@@ -1650,12 +1609,12 @@ class TestWriteTerminalGateCheck:
         from unittest.mock import MagicMock, patch as _patch
 
         from research_harness.auto_runner import checkpoint as ckpt
-        from research_harness.auto_runner.runner import run_project
+        from research_harness.auto_runner.runner import run_topic
 
         # Setup checkpoint at write stage
         ckpt_dir = tmp_path / "checkpoints"
         ckpt_dir.mkdir()
-        cp = ckpt.new_checkpoint(1, 1, mode="standard")
+        cp = ckpt.new_checkpoint(1, mode="standard")
         cp["current_stage"] = "write"
 
         ckpt_path = ckpt.checkpoint_path(tmp_path, 1)
@@ -1700,8 +1659,7 @@ class TestWriteTerminalGateCheck:
             # Gate returns "needs_review" (blocking review issue)
             mock_svc.check_gate.return_value = "needs_review"
 
-            result = run_project(
-                project_id=1,
+            result = run_topic(
                 topic_id=1,
                 base_dir=tmp_path,
                 auto_approve=False,
@@ -1716,9 +1674,9 @@ class TestWriteTerminalGateCheck:
         from unittest.mock import MagicMock, patch as _patch
 
         from research_harness.auto_runner import checkpoint as ckpt
-        from research_harness.auto_runner.runner import run_project
+        from research_harness.auto_runner.runner import run_topic
 
-        cp = ckpt.new_checkpoint(1, 1, mode="standard")
+        cp = ckpt.new_checkpoint(1, mode="standard")
         cp["current_stage"] = "write"
 
         ckpt_path = ckpt.checkpoint_path(tmp_path, 1)
@@ -1762,8 +1720,7 @@ class TestWriteTerminalGateCheck:
             mock_svc.get_run.return_value = run_mock
             mock_svc.check_gate.return_value = "pass"
 
-            result = run_project(
-                project_id=1,
+            result = run_topic(
                 topic_id=1,
                 base_dir=tmp_path,
                 auto_approve=True,
@@ -1920,9 +1877,9 @@ class TestBudgetHalt:
         from unittest.mock import MagicMock, patch as _patch
 
         from research_harness.auto_runner import checkpoint as ckpt
-        from research_harness.auto_runner.runner import run_project
+        from research_harness.auto_runner.runner import run_topic
 
-        cp = ckpt.new_checkpoint(1, 1, mode="standard")
+        cp = ckpt.new_checkpoint(1, mode="standard")
         cp["current_stage"] = "build"
 
         ckpt_path = ckpt.checkpoint_path(tmp_path, 1)
@@ -1975,8 +1932,7 @@ class TestBudgetHalt:
                 "research_harness.auto_runner.budget.BudgetMonitor.check",
                 return_value=BudgetCheckResult(action="halt", message="Over budget"),
             ):
-                result = run_project(
-                    project_id=1,
+                result = run_topic(
                     topic_id=1,
                     base_dir=tmp_path,
                     auto_approve=True,
@@ -2000,9 +1956,9 @@ class TestLoopbackPath:
         from unittest.mock import MagicMock, patch as _patch
 
         from research_harness.auto_runner import checkpoint as ckpt
-        from research_harness.auto_runner.runner import run_project
+        from research_harness.auto_runner.runner import run_topic
 
-        cp = ckpt.new_checkpoint(1, 1, mode="standard")
+        cp = ckpt.new_checkpoint(1, mode="standard")
         cp["current_stage"] = "analyze"
 
         ckpt_path = ckpt.checkpoint_path(tmp_path, 1)
@@ -2068,8 +2024,7 @@ class TestLoopbackPath:
             mock_svc.advance.side_effect = mock_advance
             mock_svc.check_gate.return_value = "pass"
 
-            result = run_project(
-                project_id=1,
+            result = run_topic(
                 topic_id=1,
                 base_dir=tmp_path,
             )

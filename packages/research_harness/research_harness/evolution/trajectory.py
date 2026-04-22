@@ -47,7 +47,6 @@ class TrajectoryRecorder:
         *,
         stage: str = "",
         topic_id: int | None = None,
-        project_id: int | None = None,
         input_summary: str = "",
         output_summary: str = "",
         reasoning: str = "",
@@ -62,7 +61,6 @@ class TrajectoryRecorder:
             tool_name=tool_name,
             stage=stage,
             topic_id=topic_id,
-            project_id=project_id,
             input_summary=_truncate(input_summary),
             output_summary=_truncate(output_summary),
             reasoning=_truncate(reasoning),
@@ -79,7 +77,6 @@ class TrajectoryRecorder:
         *,
         stage: str = "",
         topic_id: int | None = None,
-        project_id: int | None = None,
     ) -> int:
         """Record a decision event (e.g. stage transition, strategy choice)."""
         return self._insert(
@@ -87,7 +84,6 @@ class TrajectoryRecorder:
             tool_name=decision_type,
             stage=stage,
             topic_id=topic_id,
-            project_id=project_id,
             reasoning=_truncate(reasoning),
         )
 
@@ -99,7 +95,6 @@ class TrajectoryRecorder:
         *,
         stage: str = "",
         topic_id: int | None = None,
-        project_id: int | None = None,
     ) -> int:
         """Record a gate check outcome."""
         return self._insert(
@@ -107,7 +102,6 @@ class TrajectoryRecorder:
             tool_name=gate_type,
             stage=stage,
             topic_id=topic_id,
-            project_id=project_id,
             output_summary=outcome,
             reasoning=_truncate(reasoning),
         )
@@ -154,7 +148,6 @@ class TrajectoryRecorder:
         tool_name: str = "",
         stage: str = "",
         topic_id: int | None = None,
-        project_id: int | None = None,
         input_summary: str = "",
         output_summary: str = "",
         reasoning: str = "",
@@ -179,7 +172,7 @@ class TrajectoryRecorder:
                     tool_name,
                     stage,
                     topic_id,
-                    project_id,
+                    topic_id,  # write topic_id to project_id column for compat
                     input_summary,
                     output_summary,
                     reasoning,

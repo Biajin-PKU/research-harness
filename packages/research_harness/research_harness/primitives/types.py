@@ -94,12 +94,16 @@ class PaperIngestOutput:
 
 
 @dataclass(frozen=True)
-class ProjectSetContributionsOutput:
-    """Result of reading/writing project-level contributions config."""
+class TopicSetContributionsOutput:
+    """Result of reading/writing topic-level contributions config."""
 
-    project_id: int
+    topic_id: int
     contributions: str
     updated: bool = False  # True for setter, False for getter
+
+
+# Backward-compat alias
+ProjectSetContributionsOutput = TopicSetContributionsOutput
 
 
 @dataclass(frozen=True)
@@ -841,7 +845,7 @@ class ExperimentLogOutput:
 
     experiment_id: int = 0
     experiment_number: int = 0
-    project_id: int = 0
+    topic_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -1122,7 +1126,7 @@ class AuthorCoverageOutput:
 class RebuttalFormatOutput:
     rebuttal_text: str = ""
     issues_addressed: int = 0
-    project_id: int = 0
+    topic_id: int = 0
 
 
 @dataclass(frozen=True)

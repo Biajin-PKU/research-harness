@@ -46,8 +46,8 @@ print(result)
 gaps = api.execute_primitive("gap_detect", topic_id=1, focus="reasoning benchmarks")
 print(gaps)
 
-# 4. Check orchestrator status for a project
-status = api.orchestrator_status(project_id=1)
+# 4. Check orchestrator status for a topic
+status = api.orchestrator_status(topic_id=1)
 print(status["current_stage"], status["gate_status"])
 ```
 
@@ -60,12 +60,12 @@ convenience wrappers for the most common operations, plus a general escape hatch
 |--------|---------|
 | `paper_search(query, **kwargs)` | Delegate to the `paper_search` primitive |
 | `paper_ingest(source, **kwargs)` | Ingest a paper by arxiv ID, DOI, or PDF path |
-| `record_artifact(project_id, topic_id, stage, artifact_type, payload)` | Write a project artifact |
-| `orchestrator_status(project_id)` | Stage + gate status |
-| `gate_check(project_id, stage=None)` | Run the gate for a specific stage |
+| `record_artifact(topic_id, stage, artifact_type, payload)` | Write a topic artifact |
+| `orchestrator_status(topic_id)` | Stage + gate status |
+| `gate_check(topic_id, stage=None)` | Run the gate for a specific stage |
 | `add_artifact_dependency(from_id, to_id)` | Declare lineage between artifacts |
 | `mark_artifact_stale(artifact_id, reason)` | Invalidate + optionally propagate downstream |
-| `list_stale_artifacts(project_id)` | What needs refreshing |
+| `list_stale_artifacts(topic_id)` | What needs refreshing |
 | `execute_primitive(name, **kwargs)` | **Escape hatch** — run any of the 69 primitives |
 
 All 69 primitives are reachable via `execute_primitive("<name>", ...)`. To enumerate:

@@ -3,21 +3,18 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
-  FolderKanban,
+  Globe,
   BookOpen,
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
-import { fetchDashboardStats, fetchProjects } from "@/lib/api";
+import { fetchDashboardStats, fetchTopics } from "@/lib/api";
 import {
   RESEARCH_STAGES,
   STAGE_LABELS,
   STAGE_COLORS,
-  STAGE_TEXT_COLORS,
-  STAGE_BG_COLORS,
-  type ResearchStage,
   type DashboardStats,
-  type Project,
+  type Topic,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -79,84 +76,54 @@ function StatCardSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Stage progress mini bar
+// Relative time formatter
 // ---------------------------------------------------------------------------
 
-function stageIndex(stage: ResearchStage | null): number {
-  if (!stage) return 0;
-  const idx = RESEARCH_STAGES.indexOf(stage);
-  return idx === -1 ? 0 : idx + 1;
-}
-
-function StageProgress({ stage }: { stage: ResearchStage | null }) {
-  const completed = stageIndex(stage);
-  const total = RESEARCH_STAGES.length;
-
-  return (
-    <div className="flex items-center gap-1.5">
-      {RESEARCH_STAGES.map((s, i) => (
-        <div
-          key={s}
-          className={cn(
-            "h-1.5 flex-1 rounded-full transition-colors",
-            i < completed
-              ? STAGE_COLORS[s]
-              : "bg-slate-200 dark:bg-slate-700"
-          )}
-          title={STAGE_LABELS[s]}
-        />
-      ))}
-      <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-        {completed}/{total}
-      </span>
-    </div>
-  );
+function formatRelative(dateStr: string): string {
+  if (!dateStr) return "--";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 // ---------------------------------------------------------------------------
-// Project card
+// Topic card
 // ---------------------------------------------------------------------------
 
-function ProjectCard({ project }: { project: Project }) {
-  const stage = project.current_stage;
-
+function TopicCard({ topic }: { topic: Topic }) {
   return (
-    <Link href={`/projects/${project.id}`} className="block">
+    <Link href={`/topics/${topic.id}`} className="block">
       <Card className="transition-shadow hover:ring-2 hover:ring-blue-500/20">
         <CardHeader>
-          <CardTitle>{project.name}</CardTitle>
+          <CardTitle>{topic.name}</CardTitle>
           <CardDescription className="truncate">
-            {project.topic_name ?? `Topic #${project.topic_id}`}
+            {topic.domain_name ?? "No domain"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
-            {stage && (
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "text-xs font-medium",
-                  STAGE_BG_COLORS[stage],
-                  STAGE_TEXT_COLORS[stage]
-                )}
-              >
-                {STAGE_LABELS[stage]}
-              </Badge>
-            )}
-            {project.stage_status && (
-              <span className="text-xs text-muted-foreground">
-                {project.stage_status}
-              </span>
-            )}
+            <Badge variant="secondary" className="text-xs">
+              {topic.paper_count} paper{topic.paper_count !== 1 ? "s" : ""}
+            </Badge>
           </div>
-          <StageProgress stage={stage} />
+          <p className="text-xs text-muted-foreground">
+            Created {formatRelative(topic.created_at)}
+          </p>
         </CardContent>
       </Card>
     </Link>
   );
 }
 
-function ProjectCardSkeleton() {
+function TopicCardSkeleton() {
   return (
     <Card>
       <CardHeader>
@@ -166,9 +133,8 @@ function ProjectCardSkeleton() {
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-16 rounded-full" />
-          <Skeleton className="h-3 w-20" />
         </div>
-        <Skeleton className="h-1.5 w-full rounded-full" />
+        <Skeleton className="h-3 w-24" />
       </CardContent>
     </Card>
   );
@@ -184,9 +150,9 @@ export default function DashboardPage() {
     queryFn: fetchDashboardStats,
   });
 
-  const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: fetchProjects,
+  const topicsQuery = useQuery({
+    queryKey: ["topics"],
+    queryFn: () => fetchTopics(),
   });
 
   const stats: DashboardStats | undefined = statsQuery.data;
@@ -197,7 +163,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Overview of your research projects and paper library.
+          Overview of your research domains, topics, and paper library.
         </p>
       </div>
 
@@ -219,9 +185,9 @@ export default function DashboardPage() {
               accent="bg-blue-600"
             />
             <StatCard
-              label="Projects"
-              value={stats.total_projects}
-              icon={FolderKanban}
+              label="Domains"
+              value={stats.total_domains}
+              icon={Globe}
               accent="bg-violet-600"
             />
             <StatCard
@@ -244,28 +210,28 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Projects grid */}
+      {/* Topics grid */}
       <div>
         <h2 className="mb-4 text-lg font-semibold tracking-tight">
-          Projects
+          Topics
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {projectsQuery.isPending ? (
+          {topicsQuery.isPending ? (
             <>
-              <ProjectCardSkeleton />
-              <ProjectCardSkeleton />
-              <ProjectCardSkeleton />
-              <ProjectCardSkeleton />
-              <ProjectCardSkeleton />
-              <ProjectCardSkeleton />
+              <TopicCardSkeleton />
+              <TopicCardSkeleton />
+              <TopicCardSkeleton />
+              <TopicCardSkeleton />
+              <TopicCardSkeleton />
+              <TopicCardSkeleton />
             </>
-          ) : projectsQuery.data?.length ? (
-            projectsQuery.data.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+          ) : topicsQuery.data?.length ? (
+            topicsQuery.data.map((topic) => (
+              <TopicCard key={topic.id} topic={topic} />
             ))
           ) : (
             <p className="col-span-full text-sm text-muted-foreground">
-              No projects found. Create one to get started.
+              No topics found. Create one to get started.
             </p>
           )}
         </div>

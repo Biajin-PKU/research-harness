@@ -34,14 +34,14 @@ class AdvisoryEngine:
         self._db = db
         self._store = AdvisoryStore(db)
 
-    def run(self, topic_id: int, project_id: int | None = None) -> list[Advisory]:
+    def run(self, topic_id: int) -> list[Advisory]:
         advisories = (
-            self._coverage_low(topic_id, project_id)
-            + self._recency_gap(topic_id, project_id)
-            + self._source_bias(topic_id, project_id)
-            + self._dependency_stale(topic_id, project_id)
-            + self._missing_stage(topic_id, project_id)
-            + self._claim_contradiction(topic_id, project_id)
+            self._coverage_low(topic_id)
+            + self._recency_gap(topic_id)
+            + self._source_bias(topic_id)
+            + self._dependency_stale(topic_id)
+            + self._missing_stage(topic_id)
+            + self._claim_contradiction(topic_id)
         )
         saved: list[Advisory] = []
         for advisory in advisories:
@@ -58,7 +58,7 @@ class AdvisoryEngine:
     def acknowledge(self, advisory_id: int) -> Advisory | None:
         return self._store.acknowledge(advisory_id)
 
-    def _coverage_low(self, topic_id: int, project_id: int | None) -> list[Advisory]:
+    def _coverage_low(self, topic_id: int) -> list[Advisory]:
         conn = self._db.connect()
         try:
             row = conn.execute(
@@ -77,7 +77,6 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="info",
                 category="coverage_low",
                 message=f"Topic has only {count} papers; recommended minimum is {DEFAULT_MIN_PAPER_COUNT} before deeper analysis.",
@@ -88,7 +87,7 @@ class AdvisoryEngine:
             )
         ]
 
-    def _recency_gap(self, topic_id: int, project_id: int | None) -> list[Advisory]:
+    def _recency_gap(self, topic_id: int) -> list[Advisory]:
         current_year = datetime.now().year
         conn = self._db.connect()
         try:
@@ -109,7 +108,6 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="info",
                 category="recency_gap",
                 message=f"Latest paper is from {latest_year}; recent work may be missing.",
@@ -117,7 +115,7 @@ class AdvisoryEngine:
             )
         ]
 
-    def _source_bias(self, topic_id: int, project_id: int | None) -> list[Advisory]:
+    def _source_bias(self, topic_id: int) -> list[Advisory]:
         conn = self._db.connect()
         try:
             rows = conn.execute(
@@ -150,7 +148,6 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="info",
                 category="source_bias",
                 message=f"Author concentration is high: {top_author} appears in {share:.0%} of author slots.",
@@ -163,10 +160,8 @@ class AdvisoryEngine:
         ]
 
     def _dependency_stale(
-        self, topic_id: int, project_id: int | None
+        self, topic_id: int
     ) -> list[Advisory]:
-        if project_id is None:
-            return []
         conn = self._db.connect()
         try:
             if not _table_exists(conn, "artifact_dependencies"):
@@ -177,11 +172,11 @@ class AdvisoryEngine:
                 """
                 SELECT id, artifact_type, stage, stale_reason
                 FROM project_artifacts
-                WHERE project_id = ? AND status = 'active' AND stale = 1
+                WHERE topic_id = ? AND status = 'active' AND stale = 1
                 ORDER BY updated_at DESC
                 LIMIT 5
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchall()
         finally:
             conn.close()
@@ -199,7 +194,6 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="info",
                 category="dependency_stale",
                 message=f"{len(rows)} active artifacts are marked stale and should be refreshed.",
@@ -207,19 +201,17 @@ class AdvisoryEngine:
             )
         ]
 
-    def _missing_stage(self, topic_id: int, project_id: int | None) -> list[Advisory]:
-        if project_id is None:
-            return []
+    def _missing_stage(self, topic_id: int) -> list[Advisory]:
         conn = self._db.connect()
         try:
             run = conn.execute(
                 """
                 SELECT current_stage FROM orchestrator_runs
-                WHERE project_id = ?
+                WHERE topic_id = ?
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
             if run is None:
                 return []
@@ -229,12 +221,12 @@ class AdvisoryEngine:
             has_build = conn.execute(
                 """
                 SELECT 1 FROM project_artifacts
-                WHERE project_id = ?
+                WHERE topic_id = ?
                   AND stage IN ('build', 'literature_mapping', 'paper_acquisition')
                   AND status = 'active'
                 LIMIT 1
                 """,
-                (project_id,),
+                (topic_id,),
             ).fetchone()
         finally:
             conn.close()
@@ -243,16 +235,15 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="info",
                 category="missing_stage",
-                message=f"Project is at stage '{current_stage}' without active Build-stage artifacts.",
+                message=f"Topic is at stage '{current_stage}' without active Build-stage artifacts.",
                 details={"current_stage": current_stage},
             )
         ]
 
     def _claim_contradiction(
-        self, topic_id: int, project_id: int | None
+        self, topic_id: int
     ) -> list[Advisory]:
         conn = self._db.connect()
         try:
@@ -298,7 +289,6 @@ class AdvisoryEngine:
         return [
             Advisory(
                 topic_id=topic_id,
-                project_id=project_id,
                 level="warning",
                 category="claim_contradiction",
                 message="Claim set contains potentially contradictory directional findings.",

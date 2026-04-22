@@ -526,7 +526,6 @@ function ClaimsTab({ topicId }: { topicId: number }) {
 
 interface AnalysisPanelProps {
   topicId: number;
-  projectId: number;
 }
 
 export function AnalysisPanel({ topicId }: AnalysisPanelProps) {

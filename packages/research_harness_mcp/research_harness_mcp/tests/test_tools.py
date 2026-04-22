@@ -303,7 +303,6 @@ def test_orchestrator_stale_artifact_tools(db: Database) -> None:
     recorded = execute_tool(
         "orchestrator_record_artifact",
         {
-            "project_id": 1,
             "topic_id": 1,
             "stage": "build",
             "artifact_type": "literature_map",
@@ -320,7 +319,7 @@ def test_orchestrator_stale_artifact_tools(db: Database) -> None:
     _assert_envelope(marked)
     assert artifact_id in marked["output"]["stale_ids"]
 
-    listed = execute_tool("orchestrator_list_stale_artifacts", {"project_id": 1})
+    listed = execute_tool("orchestrator_list_stale_artifacts", {"topic_id": 1})
     _assert_envelope(listed)
     assert listed["output"]["count"] == 1
     assert listed["output"]["artifacts"][0]["id"] == artifact_id

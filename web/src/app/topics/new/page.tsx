@@ -8,15 +8,15 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  FolderKanban,
+  Globe,
+  BookOpen,
   Loader2,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import { fetchTopics, createTopic, createProject, ingestPaper } from "@/lib/api";
-import type { Topic } from "@/lib/types";
+import { fetchDomains, createDomain, createTopic, ingestPaper } from "@/lib/api";
+import type { Domain } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,8 +34,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const STEPS = [
-  { label: "Topic", icon: Sparkles },
-  { label: "Project", icon: FolderKanban },
+  { label: "Domain", icon: Globe },
+  { label: "Topic", icon: BookOpen },
   { label: "Seed Papers", icon: FileText },
   { label: "Confirm", icon: Check },
 ] as const;
@@ -56,7 +56,6 @@ function StepIndicator({ current }: { current: number }) {
 
         return (
           <div key={step.label} className="flex items-center">
-            {/* Connector line (before each step except the first) */}
             {i > 0 && (
               <div
                 className={cn(
@@ -66,7 +65,6 @@ function StepIndicator({ current }: { current: number }) {
               />
             )}
 
-            {/* Step circle */}
             <div className="flex flex-col items-center gap-1.5">
               <div
                 className={cn(
@@ -116,16 +114,135 @@ function parseSeedIds(raw: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1: Topic Setup
+// Step 1: Domain
 // ---------------------------------------------------------------------------
 
-function StepTopic({
-  topics,
-  topicsLoading,
-  useExisting,
-  setUseExisting,
-  existingTopicId,
-  setExistingTopicId,
+function StepDomain({
+  domains,
+  domainsLoading,
+  useExistingDomain,
+  setUseExistingDomain,
+  existingDomainId,
+  setExistingDomainId,
+  domainName,
+  setDomainName,
+  domainDescription,
+  setDomainDescription,
+}: {
+  domains: Domain[];
+  domainsLoading: boolean;
+  useExistingDomain: boolean;
+  setUseExistingDomain: (v: boolean) => void;
+  existingDomainId: number | null;
+  setExistingDomainId: (v: number | null) => void;
+  domainName: string;
+  setDomainName: (v: string) => void;
+  domainDescription: string;
+  setDomainDescription: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2">
+        <Button
+          variant={useExistingDomain ? "outline" : "default"}
+          size="sm"
+          onClick={() => setUseExistingDomain(false)}
+        >
+          Create new domain
+        </Button>
+        <Button
+          variant={useExistingDomain ? "default" : "outline"}
+          size="sm"
+          onClick={() => setUseExistingDomain(true)}
+        >
+          Use existing domain
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => {
+            setUseExistingDomain(false);
+            setExistingDomainId(null);
+            setDomainName("");
+            setDomainDescription("");
+          }}
+        >
+          Skip (no domain)
+        </Button>
+      </div>
+
+      {useExistingDomain ? (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-foreground">
+            Select domain
+          </label>
+          {domainsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading domains...
+            </div>
+          ) : domains.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No domains found. Create a new one instead.
+            </p>
+          ) : (
+            <select
+              value={existingDomainId ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setExistingDomainId(val ? Number(val) : null);
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="">-- Choose a domain --</option>
+              {domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.topic_count} topics)
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Domain name
+            </label>
+            <Input
+              placeholder="e.g., computational-advertising"
+              value={domainName}
+              onChange={(e) => setDomainName(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to create the topic without a domain.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Domain description
+            </label>
+            <Textarea
+              placeholder="Brief description of the research domain..."
+              value={domainDescription}
+              onChange={(e) => setDomainDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Topic details
+// ---------------------------------------------------------------------------
+
+function StepTopicDetails({
+  domainLabel,
   topicName,
   setTopicName,
   topicDescription,
@@ -135,12 +252,7 @@ function StepTopic({
   deadline,
   setDeadline,
 }: {
-  topics: Topic[];
-  topicsLoading: boolean;
-  useExisting: boolean;
-  setUseExisting: (v: boolean) => void;
-  existingTopicId: number | null;
-  setExistingTopicId: (v: number | null) => void;
+  domainLabel: string;
   topicName: string;
   setTopicName: (v: string) => void;
   topicDescription: string;
@@ -151,156 +263,57 @@ function StepTopic({
   setDeadline: (v: string) => void;
 }) {
   return (
-    <div className="space-y-6">
-      {/* Toggle: new vs existing */}
-      <div className="flex gap-2">
-        <Button
-          variant={useExisting ? "outline" : "default"}
-          size="sm"
-          onClick={() => setUseExisting(false)}
-        >
-          Create new topic
-        </Button>
-        <Button
-          variant={useExisting ? "default" : "outline"}
-          size="sm"
-          onClick={() => setUseExisting(true)}
-        >
-          Use existing topic
-        </Button>
-      </div>
-
-      {useExisting ? (
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-foreground">
-            Select topic
-          </label>
-          {topicsLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Loading topics...
-            </div>
-          ) : topics.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No topics found. Create a new one instead.
-            </p>
-          ) : (
-            <select
-              value={existingTopicId ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                setExistingTopicId(val ? Number(val) : null);
-              }}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              <option value="">-- Choose a topic --</option>
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.paper_count} papers)
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Topic name <span className="text-red-500">*</span>
-            </label>
-            <Input
-              placeholder="e.g., auto-bidding-budget-pacing"
-              value={topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Description
-            </label>
-            <Textarea
-              placeholder="Brief description of the research topic..."
-              value={topicDescription}
-              onChange={(e) => setTopicDescription(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Target venue
-              </label>
-              <Input
-                placeholder="e.g., KDD 2027"
-                value={targetVenue}
-                onChange={(e) => setTargetVenue(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
-                Deadline
-              </label>
-              <Input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: Project Info
-// ---------------------------------------------------------------------------
-
-function StepProject({
-  projectName,
-  setProjectName,
-  projectDescription,
-  setProjectDescription,
-  topicLabel,
-}: {
-  projectName: string;
-  setProjectName: (v: string) => void;
-  projectDescription: string;
-  setProjectDescription: (v: string) => void;
-  topicLabel: string;
-}) {
-  return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">
-        <Sparkles className="size-4 text-blue-500" />
-        <span className="text-muted-foreground">Topic:</span>
-        <span className="font-medium">{topicLabel}</span>
+        <Globe className="size-4 text-blue-500" />
+        <span className="text-muted-foreground">Domain:</span>
+        <span className="font-medium">{domainLabel}</span>
       </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground">
-          Project name <span className="text-red-500">*</span>
+          Topic name <span className="text-red-500">*</span>
         </label>
         <Input
-          placeholder="e.g., paper7-budget-pacing"
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
+          placeholder="e.g., auto-bidding-budget-pacing"
+          value={topicName}
+          onChange={(e) => setTopicName(e.target.value)}
         />
       </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground">
-          Project description
+          Description
         </label>
         <Textarea
-          placeholder="What this project is about, key research questions..."
-          value={projectDescription}
-          onChange={(e) => setProjectDescription(e.target.value)}
-          rows={4}
+          placeholder="Brief description of the research topic..."
+          value={topicDescription}
+          onChange={(e) => setTopicDescription(e.target.value)}
+          rows={3}
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Target venue
+          </label>
+          <Input
+            placeholder="e.g., KDD 2027"
+            value={targetVenue}
+            onChange={(e) => setTargetVenue(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Deadline
+          </label>
+          <Input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+          />
+        </div>
       </div>
     </div>
   );
@@ -361,48 +374,33 @@ function StepSeedPapers({
 // ---------------------------------------------------------------------------
 
 function StepConfirm({
-  useExisting,
-  existingTopicName,
+  domainLabel,
   topicName,
   topicDescription,
   targetVenue,
   deadline,
-  projectName,
-  projectDescription,
   seedPapers,
 }: {
-  useExisting: boolean;
-  existingTopicName: string | null;
+  domainLabel: string;
   topicName: string;
   topicDescription: string;
   targetVenue: string;
   deadline: string;
-  projectName: string;
-  projectDescription: string;
   seedPapers: string[];
 }) {
   const rows: Array<{ label: string; value: string }> = [
-    {
-      label: "Topic",
-      value: useExisting
-        ? `Existing: ${existingTopicName ?? "--"}`
-        : `New: ${topicName}`,
-    },
+    { label: "Domain", value: domainLabel },
+    { label: "Topic name", value: topicName },
   ];
 
-  if (!useExisting && topicDescription) {
-    rows.push({ label: "Topic description", value: topicDescription });
+  if (topicDescription) {
+    rows.push({ label: "Description", value: topicDescription });
   }
   if (targetVenue) {
     rows.push({ label: "Target venue", value: targetVenue });
   }
   if (deadline) {
     rows.push({ label: "Deadline", value: deadline });
-  }
-
-  rows.push({ label: "Project name", value: projectName });
-  if (projectDescription) {
-    rows.push({ label: "Project description", value: projectDescription });
   }
   rows.push({
     label: "Seed papers",
@@ -412,7 +410,7 @@ function StepConfirm({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Review the details below, then click &quot;Create Project&quot; to
+        Review the details below, then click &quot;Create Topic&quot; to
         proceed.
       </p>
 
@@ -444,23 +442,23 @@ function StepConfirm({
 // Main Wizard Page
 // ---------------------------------------------------------------------------
 
-export default function NewProjectPage() {
+export default function NewTopicPage() {
   const router = useRouter();
 
   // Step state
   const [step, setStep] = useState(0);
 
-  // Step 1: Topic
-  const [useExisting, setUseExisting] = useState(false);
-  const [existingTopicId, setExistingTopicId] = useState<number | null>(null);
+  // Step 1: Domain
+  const [useExistingDomain, setUseExistingDomain] = useState(false);
+  const [existingDomainId, setExistingDomainId] = useState<number | null>(null);
+  const [domainName, setDomainName] = useState("");
+  const [domainDescription, setDomainDescription] = useState("");
+
+  // Step 2: Topic
   const [topicName, setTopicName] = useState("");
   const [topicDescription, setTopicDescription] = useState("");
   const [targetVenue, setTargetVenue] = useState("");
   const [deadline, setDeadline] = useState("");
-
-  // Step 2: Project
-  const [projectName, setProjectName] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
 
   // Step 3: Seed papers
   const [seedPapersRaw, setSeedPapersRaw] = useState("");
@@ -470,24 +468,23 @@ export default function NewProjectPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Fetch existing topics
-  const { data: topics = [], isPending: topicsLoading } = useQuery({
-    queryKey: ["topics"],
-    queryFn: fetchTopics,
+  // Fetch existing domains
+  const { data: domains = [], isPending: domainsLoading } = useQuery({
+    queryKey: ["domains"],
+    queryFn: fetchDomains,
   });
 
   // Derived values
   const seedPapers = useMemo(() => parseSeedIds(seedPapersRaw), [seedPapersRaw]);
 
-  const existingTopicName = useMemo(() => {
-    if (!existingTopicId) return null;
-    const t = topics.find((topic) => topic.id === existingTopicId);
-    return t?.name ?? null;
-  }, [existingTopicId, topics]);
-
-  const topicLabel = useExisting
-    ? existingTopicName ?? "--"
-    : topicName || "(unnamed)";
+  const domainLabel = useMemo(() => {
+    if (useExistingDomain && existingDomainId) {
+      const d = domains.find((dom) => dom.id === existingDomainId);
+      return d?.name ?? "--";
+    }
+    if (domainName.trim()) return `New: ${domainName}`;
+    return "None (standalone topic)";
+  }, [useExistingDomain, existingDomainId, domainName, domains]);
 
   // ---------------------------------------------------------------------------
   // Validation
@@ -496,10 +493,11 @@ export default function NewProjectPage() {
   const canProceed = useCallback((): boolean => {
     switch (step) {
       case 0:
-        if (useExisting) return existingTopicId !== null;
-        return topicName.trim().length > 0;
+        // Domain step is always valid — domain is optional
+        if (useExistingDomain) return existingDomainId !== null;
+        return true;
       case 1:
-        return projectName.trim().length > 0;
+        return topicName.trim().length > 0;
       case 2:
         return true; // optional
       case 3:
@@ -507,7 +505,7 @@ export default function NewProjectPage() {
       default:
         return false;
     }
-  }, [step, useExisting, existingTopicId, topicName, projectName]);
+  }, [step, useExistingDomain, existingDomainId, topicName]);
 
   // ---------------------------------------------------------------------------
   // Navigation
@@ -530,35 +528,33 @@ export default function NewProjectPage() {
     setError(null);
 
     try {
-      let topicId: number;
+      // 1. Resolve domain_id (create new if needed)
+      let domainId: number | undefined;
 
-      // 1. Create or resolve topic
-      if (useExisting) {
-        topicId = existingTopicId!;
-      } else {
-        const newTopic = await createTopic({
-          name: topicName.trim(),
-          description: topicDescription.trim(),
-          target_venue: targetVenue.trim(),
-          deadline: deadline.trim(),
+      if (useExistingDomain && existingDomainId) {
+        domainId = existingDomainId;
+      } else if (domainName.trim()) {
+        const newDomain = await createDomain({
+          name: domainName.trim(),
+          description: domainDescription.trim() || undefined,
         });
-        topicId = newTopic.id;
+        domainId = newDomain.id;
       }
 
-      // 2. Create project
-      const result = (await createProject({
-        topic_id: topicId,
-        name: projectName.trim(),
-        description: projectDescription.trim(),
-        target_venue: targetVenue.trim(),
-        deadline: deadline.trim(),
-      })) as { id?: number };
+      // 2. Create topic
+      const newTopic = await createTopic({
+        name: topicName.trim(),
+        description: topicDescription.trim(),
+        domain_id: domainId,
+        target_venue: targetVenue.trim() || undefined,
+        deadline: deadline.trim() || undefined,
+      });
 
       // 3. Ingest seed papers
       const ingestErrors: string[] = [];
       for (const source of seedPapers) {
         try {
-          await ingestPaper({ source, topic_id: topicId, relevance: "high" });
+          await ingestPaper({ source, topic_id: newTopic.id, relevance: "high" });
         } catch (e) {
           ingestErrors.push(
             `${source}: ${e instanceof Error ? e.message : "Unknown error"}`
@@ -568,20 +564,15 @@ export default function NewProjectPage() {
 
       if (ingestErrors.length > 0) {
         setError(
-          `Project created, but ${ingestErrors.length} paper(s) failed to ingest:\n${ingestErrors.join("\n")}`
+          `Topic created, but ${ingestErrors.length} paper(s) failed to ingest:\n${ingestErrors.join("\n")}`
         );
       }
 
       setSuccess(true);
 
       // 4. Redirect after brief delay
-      const projectId = result?.id;
       setTimeout(() => {
-        if (projectId) {
-          router.push(`/projects/${projectId}`);
-        } else {
-          router.push("/projects");
-        }
+        router.push(`/topics/${newTopic.id}`);
       }, 1500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "An unknown error occurred.");
@@ -598,15 +589,15 @@ export default function NewProjectPage() {
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-violet-600">
-          <FolderKanban className="size-5 text-white" />
+        <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-600">
+          <BookOpen className="size-5 text-white" />
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            New Project
+            New Topic
           </h1>
           <p className="text-sm text-muted-foreground">
-            Set up a research topic and project in a few steps.
+            Set up a research domain and topic in a few steps.
           </p>
         </div>
       </div>
@@ -619,8 +610,8 @@ export default function NewProjectPage() {
         <CardHeader>
           <CardTitle>{STEPS[step].label}</CardTitle>
           <CardDescription>
-            {step === 0 && "Choose an existing topic or create a new one."}
-            {step === 1 && "Name your research project."}
+            {step === 0 && "Choose an existing domain or create a new one. You can also skip this step."}
+            {step === 1 && "Name your research topic and set workflow details."}
             {step === 2 && "Optionally add seed papers to bootstrap the literature pool."}
             {step === 3 && "Review everything before creating."}
           </CardDescription>
@@ -629,13 +620,22 @@ export default function NewProjectPage() {
         <CardContent>
           {/* Step content */}
           {step === 0 && (
-            <StepTopic
-              topics={topics}
-              topicsLoading={topicsLoading}
-              useExisting={useExisting}
-              setUseExisting={setUseExisting}
-              existingTopicId={existingTopicId}
-              setExistingTopicId={setExistingTopicId}
+            <StepDomain
+              domains={domains}
+              domainsLoading={domainsLoading}
+              useExistingDomain={useExistingDomain}
+              setUseExistingDomain={setUseExistingDomain}
+              existingDomainId={existingDomainId}
+              setExistingDomainId={setExistingDomainId}
+              domainName={domainName}
+              setDomainName={setDomainName}
+              domainDescription={domainDescription}
+              setDomainDescription={setDomainDescription}
+            />
+          )}
+          {step === 1 && (
+            <StepTopicDetails
+              domainLabel={domainLabel}
               topicName={topicName}
               setTopicName={setTopicName}
               topicDescription={topicDescription}
@@ -646,15 +646,6 @@ export default function NewProjectPage() {
               setDeadline={setDeadline}
             />
           )}
-          {step === 1 && (
-            <StepProject
-              projectName={projectName}
-              setProjectName={setProjectName}
-              projectDescription={projectDescription}
-              setProjectDescription={setProjectDescription}
-              topicLabel={topicLabel}
-            />
-          )}
           {step === 2 && (
             <StepSeedPapers
               seedPapersRaw={seedPapersRaw}
@@ -663,14 +654,11 @@ export default function NewProjectPage() {
           )}
           {step === 3 && (
             <StepConfirm
-              useExisting={useExisting}
-              existingTopicName={existingTopicName}
+              domainLabel={domainLabel}
               topicName={topicName}
               topicDescription={topicDescription}
               targetVenue={targetVenue}
               deadline={deadline}
-              projectName={projectName}
-              projectDescription={projectDescription}
               seedPapers={seedPapers}
             />
           )}
@@ -683,7 +671,7 @@ export default function NewProjectPage() {
           )}
           {success && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
-              Project created successfully! Redirecting...
+              Topic created successfully! Redirecting...
             </div>
           )}
         </CardContent>
@@ -697,7 +685,7 @@ export default function NewProjectPage() {
                 Back
               </Button>
             ) : (
-              <Button variant="ghost" size="sm" render={<Link href="/projects" />}>
+              <Button variant="ghost" size="sm" render={<Link href="/topics" />}>
                 Cancel
               </Button>
             )}
@@ -725,7 +713,7 @@ export default function NewProjectPage() {
                     Creating...
                   </>
                 ) : (
-                  "Create Project"
+                  "Create Topic"
                 )}
               </Button>
             )}

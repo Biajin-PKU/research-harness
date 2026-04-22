@@ -99,7 +99,7 @@ def experiment_run(
 def verified_registry_build(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     metrics: dict[str, float],
     primary_metric_name: str = "",
     **_: Any,
@@ -110,8 +110,8 @@ def verified_registry_build(
     # Persist to DB
     conn = db.connect()
     try:
-        # Clear previous entries for this project
-        conn.execute("DELETE FROM verified_numbers WHERE project_id = ?", (project_id,))
+        # Clear previous entries for this topic (use topic_id in both columns for compat)
+        conn.execute("DELETE FROM verified_numbers WHERE topic_id = ?", (topic_id,))
         for number, source in registry.values.items():
             # Compute variants
             rounded = round(number, 2)
@@ -119,9 +119,9 @@ def verified_registry_build(
             inv = number / 100.0 if abs(number) > 1.0 else None
             conn.execute(
                 """INSERT INTO verified_numbers
-                   (project_id, source, number_original, number_rounded, number_percentage, number_inverse)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (project_id, source[:200], number, rounded, pct, inv),
+                   (project_id, topic_id, source, number_original, number_rounded, number_percentage, number_inverse)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (topic_id, topic_id, source[:200], number, rounded, pct, inv),
             )
         conn.commit()
     except Exception as exc:
@@ -141,7 +141,7 @@ def verified_registry_build(
 def verified_registry_check(
     *,
     db: Database,
-    project_id: int,
+    topic_id: int,
     numbers: list[float],
     tolerance: float = 0.01,
     **_: Any,
@@ -151,8 +151,8 @@ def verified_registry_check(
     conn = db.connect()
     try:
         rows = conn.execute(
-            "SELECT number_original, source FROM verified_numbers WHERE project_id = ?",
-            (project_id,),
+            "SELECT number_original, source FROM verified_numbers WHERE topic_id = ?",
+            (topic_id,),
         ).fetchall()
     finally:
         conn.close()

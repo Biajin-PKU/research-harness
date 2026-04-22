@@ -28,7 +28,6 @@ def plan_stage(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     checkpoint_data: dict[str, Any],
@@ -43,7 +42,7 @@ def plan_stage(
         return {
             "topic_description": meta["description"] or meta["name"],
             "query": meta["description"][:200] or meta["name"],
-            "project_id": project_id,
+            "topic_id": topic_id,
         }
 
     planners = {
@@ -63,13 +62,12 @@ def plan_stage(
         result = planner_fn(
             db=db,
             svc=svc,
-            project_id=project_id,
             topic_id=topic_id,
             checkpoint_data=checkpoint_data,
         )
         if not isinstance(result, dict):
             return {}
-        result["project_id"] = project_id
+        result["topic_id"] = topic_id
         return result
     except Exception as exc:
         logger.warning("Planner failed for stage '%s': %s", stage, exc)
@@ -102,12 +100,12 @@ def _gather_topic_meta(db: Database, topic_id: int) -> dict[str, str]:
 
 def _gather_artifact_payload(
     svc: OrchestratorService,
-    project_id: int,
+    topic_id: int,
     stage: str,
     artifact_type: str,
 ) -> dict[str, Any]:
     """Load the latest artifact payload for a given stage+type."""
-    art = svc.get_latest_artifact(project_id, stage, artifact_type)
+    art = svc.get_latest_artifact(topic_id, stage, artifact_type)
     if art is None:
         return {}
     payload = art.payload_json if hasattr(art, "payload_json") else ""
@@ -169,12 +167,12 @@ def _get_search_queries(db: Database, topic_id: int) -> list[str]:
         conn.close()
 
 
-def _get_contributions(db: Database, project_id: int) -> str:
+def _get_contributions(db: Database, topic_id: int) -> str:
     conn = db.connect()
     try:
         row = conn.execute(
-            "SELECT contributions FROM projects WHERE id = ?",
-            (project_id,),
+            "SELECT contributions FROM topics WHERE id = ?",
+            (topic_id,),
         ).fetchone()
         return (row["contributions"] or "") if row else ""
     finally:
@@ -204,7 +202,6 @@ def _plan_build(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
@@ -247,7 +244,6 @@ def _plan_analyze(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
@@ -285,23 +281,22 @@ def _plan_propose(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
-    gaps = _gather_artifact_payload(svc, project_id, "analyze", "gap_detect")
+    gaps = _gather_artifact_payload(svc, topic_id, "analyze", "gap_detect")
     # direction_ranking is not in analyze's tool list; fall back to
     # direction_proposal (auto-recorded by analyze from gap_detect output)
     # or evidence_pack as additional context.
     directions = _gather_artifact_payload(
-        svc, project_id, "analyze", "direction_ranking"
+        svc, topic_id, "analyze", "direction_ranking"
     )
     if not directions:
         directions = _gather_artifact_payload(
-            svc, project_id, "analyze", "direction_proposal"
+            svc, topic_id, "analyze", "direction_proposal"
         )
     baselines = _gather_artifact_payload(
-        svc, project_id, "analyze", "baseline_identify"
+        svc, topic_id, "analyze", "baseline_identify"
     )
     meta = _gather_topic_meta(db, topic_id)
 
@@ -347,14 +342,13 @@ def _plan_experiment(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
     proposal = _gather_artifact_payload(
-        svc, project_id, "propose", "direction_proposal"
+        svc, topic_id, "propose", "direction_proposal"
     )
-    study_spec = _gather_artifact_payload(svc, project_id, "propose", "study_spec")
+    study_spec = _gather_artifact_payload(svc, topic_id, "propose", "study_spec")
 
     prompt = f"""You are an experiment planner. Design an experiment based on the research direction.
 
@@ -377,17 +371,16 @@ def _plan_write(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
     meta = _gather_topic_meta(db, topic_id)
-    contributions = _get_contributions(db, project_id)
+    contributions = _get_contributions(db, topic_id)
     experiment = _gather_artifact_payload(
-        svc, project_id, "experiment", "experiment_result"
+        svc, topic_id, "experiment", "experiment_result"
     )
     proposal = _gather_artifact_payload(
-        svc, project_id, "propose", "direction_proposal"
+        svc, topic_id, "propose", "direction_proposal"
     )
 
     prompt = f"""You are a paper writing planner. Plan the structure and parameters for drafting a research paper.

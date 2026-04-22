@@ -103,9 +103,9 @@ def _load_local_dispatch() -> None:
         "paper_ingest",
         "get_deep_reading",
         "enrich_affiliations",
-        # Project-level config (no LLM)
-        "project_set_contributions",
-        "project_get_contributions",
+        # Topic-level config (no LLM)
+        "topic_set_contributions",
+        "topic_get_contributions",
         # Citation expansion (S2 API, no LLM)
         "select_seeds",
         "expand_citations",

@@ -143,7 +143,6 @@ def dispatch(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     context: dict[str, Any],
@@ -162,7 +161,6 @@ def dispatch(
             return _dispatch_orchestrator(
                 tool_name,
                 svc=svc,
-                project_id=project_id,
                 topic_id=topic_id,
                 stage=stage,
                 context=context,
@@ -171,7 +169,6 @@ def dispatch(
             return _dispatch_service(
                 tool_name,
                 svc=svc,
-                project_id=project_id,
                 topic_id=topic_id,
                 stage=stage,
                 context=context,
@@ -191,7 +188,6 @@ def dispatch_stage_tools(
     *,
     db: Database,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     tools: tuple[str, ...],
@@ -225,7 +221,6 @@ def dispatch_stage_tools(
                     tool_name,
                     db=db,
                     svc=svc,
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     context=context,
@@ -255,7 +250,6 @@ def dispatch_stage_tools(
                     tool_name,
                     db=db,
                     svc=svc,
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     context=context,
@@ -279,7 +273,6 @@ def dispatch_stage_tools(
                     tool_name,
                     db=db,
                     svc=svc,
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     context=context,
@@ -305,7 +298,6 @@ def dispatch_stage_tools(
                 tool_name,
                 db=db,
                 svc=svc,
-                project_id=project_id,
                 topic_id=topic_id,
                 stage=stage,
                 context=context,
@@ -328,7 +320,6 @@ def dispatch_stage_tools(
                     tool_name,
                     db=db,
                     svc=svc,
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     context=context,
@@ -348,7 +339,6 @@ def dispatch_stage_tools(
             tool_name,
             db=db,
             svc=svc,
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             context=context,
@@ -372,7 +362,6 @@ def dispatch_stage_tools(
     # Post-tool artifact recording: ensure all gate-required artifacts exist.
     auto_artifacts = _record_auto_artifacts(
         svc=svc,
-        project_id=project_id,
         topic_id=topic_id,
         stage=stage,
         context=context,
@@ -469,7 +458,6 @@ Only return "revise" if there are critical issues. Return ONLY JSON."""
 def _record_auto_artifacts(
     *,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     context: dict[str, Any],
@@ -497,7 +485,6 @@ def _record_auto_artifacts(
             topic_desc = context.get("topic_description", context.get("query", ""))
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="topic_brief",
@@ -521,7 +508,6 @@ def _record_auto_artifacts(
         if ps_out and "paper_search" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="literature_map",
@@ -541,7 +527,6 @@ def _record_auto_artifacts(
 
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="paper_pool_snapshot",
@@ -560,7 +545,6 @@ def _record_auto_artifacts(
         if expand_out or "expand_citations" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="citation_expansion_report",
@@ -576,7 +560,6 @@ def _record_auto_artifacts(
         if acquire_out or "paper_acquire" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="acquisition_report",
@@ -597,7 +580,6 @@ def _record_auto_artifacts(
         if claims_out and "claim_extract" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="claim_candidate_set",
@@ -618,7 +600,6 @@ def _record_auto_artifacts(
         ):
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="evidence_pack",
@@ -637,7 +618,6 @@ def _record_auto_artifacts(
         if gaps_out and "gap_detect" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="direction_proposal",
@@ -661,7 +641,6 @@ def _record_auto_artifacts(
             outcome = _run_automated_adversarial(proposal)
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="adversarial_resolution",
@@ -686,7 +665,6 @@ def _record_auto_artifacts(
         if cg_out and "code_generate" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="experiment_code",
@@ -705,7 +683,6 @@ def _record_auto_artifacts(
         if er_out and "experiment_run" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="experiment_result",
@@ -721,7 +698,7 @@ def _record_auto_artifacts(
             # P0-2: Insert experiment_runs row with kept=1 to satisfy experiment_gate
             try:
                 svc.record_experiment_run(
-                    project_id,
+                    topic_id,
                     code_hash=cg_out.get("entry_point", "main.py"),
                     primary_metric_name=er_out.get(
                         "primary_metric_name", context.get("primary_metric", "")
@@ -735,7 +712,6 @@ def _record_auto_artifacts(
         if vr_out and "verified_registry_build" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="verified_registry",
@@ -758,7 +734,6 @@ def _record_auto_artifacts(
                     sections_map[sec] = text[:200]
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="draft_pack",
@@ -775,7 +750,6 @@ def _record_auto_artifacts(
         if latex_out and "latex_compile" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="final_bundle",
@@ -793,7 +767,6 @@ def _record_auto_artifacts(
         elif drafted:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="final_bundle",
@@ -809,7 +782,6 @@ def _record_auto_artifacts(
         if drafted:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id,
                     topic_id=topic_id,
                     stage=stage,
                     artifact_type="process_summary",
@@ -865,14 +837,13 @@ def _dispatch_orchestrator(
     name: str,
     *,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     context: dict[str, Any],
 ) -> ToolResult:
     """Execute an orchestrator operation."""
     if name == "orchestrator_status":
-        output = svc.get_status(project_id)
+        output = svc.get_status(topic_id)
         return ToolResult(tool=name, success=True, output=output)
 
     if name == "orchestrator_record_artifact":
@@ -884,7 +855,6 @@ def _dispatch_orchestrator(
                 tool=name, success=False, error="No artifact_type in context"
             )
         artifact = svc.record_artifact(
-            project_id=project_id,
             topic_id=topic_id,
             stage=stage,
             artifact_type=artifact_type,
@@ -902,15 +872,15 @@ def _dispatch_orchestrator(
         )
 
     if name == "orchestrator_advance":
-        result = svc.advance(project_id)
+        result = svc.advance(topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
     if name == "orchestrator_gate_check":
-        decision = svc.check_gate(project_id, stage=stage)
+        decision = svc.check_gate(topic_id, stage=stage)
         return ToolResult(tool=name, success=True, output={"decision": decision})
 
     if name == "orchestrator_resume":
-        result = svc.resume_run(project_id, topic_id)
+        result = svc.resume_run(topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
     return ToolResult(
@@ -922,7 +892,6 @@ def _dispatch_service(
     name: str,
     *,
     svc: OrchestratorService,
-    project_id: int,
     topic_id: int,
     stage: str,
     context: dict[str, Any],
@@ -934,12 +903,12 @@ def _dispatch_service(
     raise an explicit error so the caller knows to delegate to the MCP layer.
     """
     if name == "adversarial_status":
-        result = svc.check_adversarial_status(project_id)
+        result = svc.check_adversarial_status(topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
     if name == "review_issues":
         result = svc.list_review_issues(
-            project_id,
+            topic_id,
             stage=context.get("review_stage"),
             status=context.get("review_status"),
             blocking_only=context.get("blocking_only", False),
@@ -947,7 +916,7 @@ def _dispatch_service(
         return ToolResult(tool=name, success=True, output=result)
 
     if name == "review_status":
-        result = svc.get_review_status(project_id)
+        result = svc.get_review_status(topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
     if name == "review_resolve":
@@ -960,14 +929,14 @@ def _dispatch_service(
 
     if name == "review_bundle_create":
         result = svc.create_review_bundle(
-            project_id,
+            topic_id,
             integrity_artifact_id=context.get("integrity_artifact_id"),
             scholarly_artifact_id=context.get("scholarly_artifact_id"),
         )
         return ToolResult(tool=name, success=True, output=result)
 
     if name == "finalize_project":
-        result = svc.finalize_project(project_id)
+        result = svc.finalize_project(topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
     # Tools requiring LLM-driven parameter construction
@@ -1139,7 +1108,7 @@ def _build_primitive_params(
         params["numbers"] = list(metrics.values()) if metrics else []
 
     elif name == "outline_generate":
-        pass  # topic_id + project_id are sufficient
+        pass  # topic_id is sufficient
 
     elif name == "section_review":
         drafted = context.get("_drafted_sections", [])
@@ -1178,7 +1147,7 @@ def _build_primitive_params(
         params["citations"] = citations
 
     elif name == "evidence_trace":
-        pass  # topic_id + project_id are sufficient
+        pass  # topic_id is sufficient
 
     elif name == "latex_compile":
         sections_map: dict[str, str] = {}
@@ -1196,8 +1165,8 @@ def _build_primitive_params(
         )
         params["abstract"] = ""
 
-    # Pass through project_id when available in context
-    if "project_id" in context:
-        params.setdefault("project_id", context["project_id"])
+    # Pass through topic_id when available in context
+    if "topic_id" in context:
+        params.setdefault("topic_id", context["topic_id"])
 
     return params

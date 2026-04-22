@@ -166,7 +166,7 @@ class DBLessonStore:
         *,
         source: str = "manual",
         source_session_id: str = "",
-        source_project_id: int | None = None,
+        source_topic_id: int | None = None,
         topic_id: int | None = None,
     ) -> int:
         """Append a lesson. Returns the new row ID."""
@@ -185,7 +185,7 @@ class DBLessonStore:
                     lesson.weight,
                     source,
                     source_session_id,
-                    source_project_id,
+                    source_topic_id,  # write to source_project_id column for compat
                     topic_id,
                 ),
             )

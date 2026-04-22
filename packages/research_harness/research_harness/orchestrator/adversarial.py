@@ -166,7 +166,6 @@ class AdversarialLoop:
 
     def run_round(
         self,
-        project_id: int,
         topic_id: int,
         target_artifact_id: int,
         target_stage: str,
@@ -191,7 +190,6 @@ class AdversarialLoop:
         )
 
         artifact = self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage=target_stage,
             artifact_type="adversarial_round",
@@ -210,7 +208,6 @@ class AdversarialLoop:
 
     def resolve_round(
         self,
-        project_id: int,
         topic_id: int,
         target_stage: str,
         round_number: int,
@@ -257,7 +254,6 @@ class AdversarialLoop:
         )
 
         artifact = self._artifact_manager.record(
-            project_id=project_id,
             topic_id=topic_id,
             stage=target_stage,
             artifact_type="adversarial_resolution",
@@ -278,7 +274,7 @@ class AdversarialLoop:
 
     def should_repeat(
         self,
-        project_id: int,
+        topic_id: int,
         target_stage: str,
         mode: str,
     ) -> tuple[bool, str]:
@@ -288,7 +284,7 @@ class AdversarialLoop:
         """
         # Fetch latest resolution
         resolution_artifact = self._artifact_manager.get_latest(
-            project_id, target_stage, "adversarial_resolution"
+            topic_id, target_stage, "adversarial_resolution"
         )
         if resolution_artifact is None:
             return True, "No resolution recorded yet"
@@ -303,7 +299,7 @@ class AdversarialLoop:
 
         # Check max rounds
         max_rounds = self.get_max_rounds(mode)
-        round_count = self._count_rounds(project_id, target_stage)
+        round_count = self._count_rounds(topic_id, target_stage)
         if round_count >= max_rounds:
             return False, f"Max rounds ({max_rounds}) reached"
 
@@ -373,16 +369,16 @@ class AdversarialLoop:
             return "reject_and_return"
         return "revise_and_repeat"
 
-    def _count_rounds(self, project_id: int, target_stage: str) -> int:
+    def _count_rounds(self, topic_id: int, target_stage: str) -> int:
         """Count how many adversarial rounds have been recorded."""
         conn = self._db.connect()
         try:
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM project_artifacts
-                WHERE project_id = ? AND stage = ? AND artifact_type = 'adversarial_round' AND status = 'active'
+                WHERE topic_id = ? AND stage = ? AND artifact_type = 'adversarial_round' AND status = 'active'
                 """,
-                (project_id, target_stage),
+                (topic_id, target_stage),
             ).fetchone()
             return row["cnt"] if row else 0
         finally:

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **Data model: Domain → Topic → Papers.** The standalone `projects` table has been
+  merged into `topics`. Orchestrator state, artifacts, reviews, and experiment runs
+  now key off `topic_id`. The `projects` table and `project_id` columns remain in the
+  SQLite schema for backward compat (SQLite cannot DROP COLUMN) but are no longer
+  written by code. Migrations `037_domains_and_project_merge.sql` and
+  `038_reviews_drop_project_not_null.sql` apply automatically on first DB open.
+- **CLI:** `rh project add/list/show/update` removed. Use `rh topic init` (with optional
+  `--domain`). Orchestrator commands that took `--project-id` now take `--topic` (by
+  name) or `--topic-id`. New `rh domain init/list/show` commands added.
+- **Python API:** `run_project`/`resume_project` renamed to `run_topic`/`resume_topic`.
+  `ResearchAPI` methods (`record_artifact`, `orchestrator_status`, `gate_check`,
+  `list_stage_artifacts`, `list_stale_artifacts`) take `topic_id` instead of `project_id`.
+- **HTTP API:** `/api/projects` endpoints replaced by richer `/api/topics` endpoints
+  (with orchestrator state inline) plus new `/api/domains`. Web dashboard updated to
+  navigate Domain → Topic.
+- **MCP tools:** all orchestrator/review/adversarial tools now take `topic_id`
+  (no longer accept `project_id`).
+
 ## [0.1.0] — 2026-04-21
 
 ### Added

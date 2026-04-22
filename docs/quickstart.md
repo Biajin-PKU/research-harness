@@ -110,30 +110,34 @@ If you installed via conda, point `command` at the env's Python
 Once configured, Claude Code has direct access to all 112 MCP tools — no other
 setup required.
 
-## First Research Project
+## First Research Topic
 
 ```bash
-# 1. Initialize a topic
-rh topic init "my-research-topic"
+# 1. (Optional) Group related topics under a domain
+rh domain init "auto-bidding"
 
-# 2. Search and ingest papers
+# 2. Initialize a topic
+rh topic init "my-research-topic" --domain auto-bidding
+
+# 3. Search and ingest papers
 rh paper search "my research query" --topic-id 1 --auto-ingest
 
-# 3. Start the orchestrated workflow
-rh orchestrator init --project-id 1 --topic-id 1 --mode standard
+# 4. Start the orchestrated workflow
+rh orchestrator init --topic my-research-topic --mode standard
 
-# 4. Check status
-rh orchestrator status --project-id 1
+# 5. Check status
+rh orchestrator status --topic my-research-topic
 
-# 5. Advance through evidence-gated stages
-rh orchestrator advance --project-id 1
+# 6. Advance through evidence-gated stages
+rh orchestrator advance --topic my-research-topic
 ```
 
 ## Autonomous Mode
 
 ```bash
 # Run with autonomous gate resolution (for well-defined tasks)
-rh auto-runner start --project-id 1 --autonomy autonomous --task-profile bounded
+rh auto-runner start --topic-id 1 --mode standard \
+  --direction "your research direction here"
 ```
 
 ## Launch the Dashboard

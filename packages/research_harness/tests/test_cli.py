@@ -10,23 +10,6 @@ def test_cli_end_to_end_json_contracts(runner):
     assert topic.exit_code == 0
     assert json.loads(topic.output)["id"] == 1
 
-    project = runner.invoke(
-        main,
-        [
-            "--json",
-            "project",
-            "add",
-            "--topic",
-            "auto-bidding",
-            "--name",
-            "paper1",
-            "--venue",
-            "KDD",
-        ],
-    )
-    assert project.exit_code == 0
-    assert json.loads(project.output)["id"] == 1
-
     ingest = runner.invoke(
         main,
         [
@@ -60,8 +43,6 @@ def test_cli_end_to_end_json_contracts(runner):
             "add",
             "--topic",
             "auto-bidding",
-            "--project",
-            "paper1",
             "--title",
             "Read paper",
             "--priority",
@@ -69,7 +50,7 @@ def test_cli_end_to_end_json_contracts(runner):
         ],
     )
     assert task.exit_code == 0
-    assert json.loads(task.output)["project_id"] == 1
+    assert json.loads(task.output)["task_id"] == 1
 
     update = runner.invoke(
         main, ["--json", "task", "update", "1", "--status", "in_progress"]
@@ -106,8 +87,6 @@ def test_cli_end_to_end_json_contracts(runner):
             "add",
             "--topic",
             "auto-bidding",
-            "--project",
-            "paper1",
             "--gate",
             "novelty",
             "--reviewer",
@@ -128,8 +107,6 @@ def test_cli_end_to_end_json_contracts(runner):
 def test_review_scoped_by_topic(runner):
     runner.invoke(main, ["topic", "init", "t1"])
     runner.invoke(main, ["topic", "init", "t2"])
-    runner.invoke(main, ["project", "add", "--topic", "t1", "--name", "paper1"])
-    runner.invoke(main, ["project", "add", "--topic", "t2", "--name", "paper1"])
     result = runner.invoke(
         main,
         [
@@ -137,8 +114,6 @@ def test_review_scoped_by_topic(runner):
             "add",
             "--topic",
             "t2",
-            "--project",
-            "paper1",
             "--gate",
             "method",
             "--reviewer",

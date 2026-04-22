@@ -527,11 +527,11 @@ VERIFIED_REGISTRY_BUILD_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "metrics": {"type": "object", "description": "Experiment metrics dict."},
             "primary_metric_name": {"type": "string", "default": ""},
         },
-        "required": ["project_id", "metrics"],
+        "required": ["topic_id", "metrics"],
     },
     output_type="VerifiedRegistryOutput",
     requires_llm=False,
@@ -544,11 +544,11 @@ VERIFIED_REGISTRY_CHECK_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "numbers": {"type": "array", "items": {"type": "number"}},
             "tolerance": {"type": "number", "default": 0.01},
         },
-        "required": ["project_id", "numbers"],
+        "required": ["topic_id", "numbers"],
     },
     output_type="VerifiedRegistryCheckOutput",
     requires_llm=False,
@@ -566,7 +566,7 @@ PAPER_VERIFY_NUMBERS_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "text": {"type": "string", "description": "Paper text (LaTeX or plain)."},
             "section": {
                 "type": "string",
@@ -575,7 +575,7 @@ PAPER_VERIFY_NUMBERS_SPEC = PrimitiveSpec(
             },
             "tolerance": {"type": "number", "default": 0.01},
         },
-        "required": ["project_id", "text"],
+        "required": ["topic_id", "text"],
     },
     output_type="PaperVerifyOutput",
     requires_llm=False,
@@ -616,10 +616,9 @@ EVIDENCE_TRACE_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
             "topic_id": {"type": "integer"},
         },
-        "required": ["project_id", "topic_id"],
+        "required": ["topic_id"],
     },
     output_type="EvidenceTraceOutput",
     requires_llm=False,
@@ -634,13 +633,12 @@ OUTLINE_GENERATE_SPEC = PrimitiveSpec(
     name="outline_generate",
     category=PrimitiveCategory.GENERATION,
     description="Generate paper outline from contributions, evidence pack, and experiment results. "
-    "Contribution fallback chain: explicit argument → projects.contributions → writing_architecture artifact. "
-    "Set contributions once per project via project_set_contributions — then every writing primitive reuses it automatically.",
+    "Contribution fallback chain: explicit argument → topics.contributions → writing_architecture artifact. "
+    "Set contributions once per topic via topic_set_contributions — then every writing primitive reuses it automatically.",
     input_schema={
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "project_id": {"type": "integer"},
             "template": {
                 "type": "string",
                 "default": "neurips",
@@ -650,11 +648,11 @@ OUTLINE_GENERATE_SPEC = PrimitiveSpec(
                 "type": "string",
                 "default": "",
                 "description": "Optional override. Fallback order: this argument → "
-                "projects.contributions for this project → latest writing_architecture "
-                "artifact. Declare once via project_set_contributions to avoid repetition.",
+                "topics.contributions for this topic → latest writing_architecture "
+                "artifact. Declare once via topic_set_contributions to avoid repetition.",
             },
         },
-        "required": ["topic_id", "project_id"],
+        "required": ["topic_id"],
     },
     output_type="OutlineGenerateOutput",
     requires_llm=True,
@@ -705,7 +703,7 @@ LATEX_COMPILE_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "output_dir": {
                 "type": "string",
                 "description": "Directory for output files.",
@@ -724,7 +722,7 @@ LATEX_COMPILE_SPEC = PrimitiveSpec(
                 "description": "BibTeX entries.",
             },
         },
-        "required": ["project_id", "output_dir"],
+        "required": ["topic_id", "output_dir"],
     },
     output_type="LatexCompileOutput",
     requires_llm=False,
@@ -762,7 +760,6 @@ EXPERIENCE_INGEST_SPEC = PrimitiveSpec(
             "diff_summary": {"type": "string"},
             "quality_delta": {"type": "number"},
             "topic_id": {"type": "integer"},
-            "project_id": {"type": "integer"},
             "paper_id": {"type": "integer"},
         },
         "required": ["source_kind", "stage"],
@@ -863,7 +860,6 @@ EXPERIMENT_LOG_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
             "topic_id": {"type": "integer"},
             "hypothesis": {"type": "string"},
             "primary_metric_name": {"type": "string"},
@@ -874,7 +870,7 @@ EXPERIMENT_LOG_SPEC = PrimitiveSpec(
             },
             "notes": {"type": "string"},
         },
-        "required": ["project_id", "topic_id", "hypothesis"],
+        "required": ["topic_id", "hypothesis"],
     },
     output_type="ExperimentLogOutput",
     requires_llm=False,
@@ -890,11 +886,10 @@ META_REFLECT_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
             "topic_id": {"type": "integer"},
             "force": {"type": "boolean", "default": False},
         },
-        "required": ["project_id", "topic_id"],
+        "required": ["topic_id"],
     },
     output_type="MetaReflectOutput",
     requires_llm=False,  # manages its own LLM calls internally
@@ -1131,9 +1126,9 @@ REBUTTAL_FORMAT_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
         },
-        "required": ["project_id"],
+        "required": ["topic_id"],
     },
     output_type="RebuttalFormatOutput",
     requires_llm=True,
@@ -1280,9 +1275,9 @@ WRITING_ARCHITECTURE_SPEC = PrimitiveSpec(
                 "type": "string",
                 "default": "",
                 "description": "Description of the paper's key contributions. "
-                "Optional: if omitted, falls back to projects.contributions for "
-                "the most recently updated project of this topic. Set once via "
-                "project_set_contributions and all writing primitives reuse it.",
+                "Optional: if omitted, falls back to topics.contributions for "
+                "this topic. Set once via "
+                "topic_set_contributions and all writing primitives reuse it.",
             },
             "writing_patterns": {
                 "type": "string",
@@ -1309,7 +1304,7 @@ PAPER_FINALIZE_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "output_dir": {
                 "type": "string",
                 "description": "Directory to write paper.tex, references.bib, paper.pdf.",
@@ -1333,7 +1328,7 @@ PAPER_FINALIZE_SPEC = PrimitiveSpec(
                 "description": "Template: arxiv (default, recommended for drafts), neurips, icml, iclr, acl, generic.",
             },
         },
-        "required": ["project_id", "output_dir"],
+        "required": ["topic_id", "output_dir"],
     },
     output_type="PaperFinalizeOutput",
     requires_llm=False,
@@ -1353,8 +1348,8 @@ FIGURE_PLAN_SPEC = PrimitiveSpec(
                 "type": "string",
                 "default": "",
                 "description": "Description of the paper's key contributions. "
-                "Optional: if omitted, falls back to projects.contributions for "
-                "the most recently updated project of this topic.",
+                "Optional: if omitted, falls back to topics.contributions for "
+                "this topic.",
             },
             "outline": {
                 "type": "string",
@@ -1426,17 +1421,17 @@ WRITING_PATTERN_EXTRACT_SPEC = PrimitiveSpec(
     requires_llm=True,
 )
 
-PROJECT_SET_CONTRIBUTIONS_SPEC = PrimitiveSpec(
-    name="project_set_contributions",
+TOPIC_SET_CONTRIBUTIONS_SPEC = PrimitiveSpec(
+    name="topic_set_contributions",
     category=PrimitiveCategory.ANALYSIS,
-    description="Set the authoritative paper contributions on a project. "
+    description="Set the authoritative paper contributions on a topic. "
     "Writing primitives (writing_architecture, outline_generate, figure_plan, "
     "competitive_learning) read this as a fallback when their contributions "
-    "argument is empty, so you only need to declare contributions ONCE per project.",
+    "argument is empty, so you only need to declare contributions ONCE per topic.",
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
             "contributions": {
                 "type": "string",
                 "description": "Full contributions text: paper title, method name, "
@@ -1444,27 +1439,31 @@ PROJECT_SET_CONTRIBUTIONS_SPEC = PrimitiveSpec(
                 "writing primitives.",
             },
         },
-        "required": ["project_id", "contributions"],
+        "required": ["topic_id", "contributions"],
     },
-    output_type="ProjectSetContributionsOutput",
+    output_type="TopicSetContributionsOutput",
     requires_llm=False,
 )
 
 
-PROJECT_GET_CONTRIBUTIONS_SPEC = PrimitiveSpec(
-    name="project_get_contributions",
+TOPIC_GET_CONTRIBUTIONS_SPEC = PrimitiveSpec(
+    name="topic_get_contributions",
     category=PrimitiveCategory.ANALYSIS,
-    description="Read the authoritative paper contributions from a project.",
+    description="Read the authoritative paper contributions from a topic.",
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "integer"},
+            "topic_id": {"type": "integer"},
         },
-        "required": ["project_id"],
+        "required": ["topic_id"],
     },
-    output_type="ProjectSetContributionsOutput",
+    output_type="TopicSetContributionsOutput",
     requires_llm=False,
 )
+
+# Backward-compat aliases
+PROJECT_SET_CONTRIBUTIONS_SPEC = TOPIC_SET_CONTRIBUTIONS_SPEC
+PROJECT_GET_CONTRIBUTIONS_SPEC = TOPIC_GET_CONTRIBUTIONS_SPEC
 
 
 WRITING_SKILL_AGGREGATE_SPEC = PrimitiveSpec(
@@ -1624,7 +1623,6 @@ ALGORITHM_DESIGN_LOOP_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "project_id": {"type": "integer"},
             "direction": {
                 "type": "string",
                 "description": "Research direction from direction_ranking",
@@ -1636,7 +1634,7 @@ ALGORITHM_DESIGN_LOOP_SPEC = PrimitiveSpec(
                 "description": "Optional design constraints",
             },
         },
-        "required": ["topic_id", "project_id", "direction"],
+        "required": ["topic_id", "direction"],
     },
     output_type="AlgorithmDesignLoopOutput",
 )
@@ -1667,8 +1665,8 @@ COLD_START_RUN_SPEC = PrimitiveSpec(
 
 
 for spec in (
-    PROJECT_SET_CONTRIBUTIONS_SPEC,
-    PROJECT_GET_CONTRIBUTIONS_SPEC,
+    TOPIC_SET_CONTRIBUTIONS_SPEC,
+    TOPIC_GET_CONTRIBUTIONS_SPEC,
     SELECT_SEEDS_SPEC,
     EXPAND_CITATIONS_SPEC,
     PAPER_SEARCH_SPEC,

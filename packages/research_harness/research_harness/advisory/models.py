@@ -15,7 +15,6 @@ class Advisory:
 
     id: int = 0
     topic_id: int = 0
-    project_id: int | None = None
     level: str = "info"  # "info" | "warning"
     category: str = (
         ""  # coverage | recency | bias | dependency | contradiction | missing_stage
@@ -46,7 +45,7 @@ class AdvisoryStore:
                 """,
                 (
                     advisory.topic_id,
-                    advisory.project_id,
+                    advisory.topic_id,  # write topic_id to project_id column for compat
                     advisory.level,
                     advisory.category,
                     advisory.message,
@@ -137,7 +136,6 @@ class AdvisoryStore:
         return Advisory(
             id=row["id"],
             topic_id=row["topic_id"],
-            project_id=row["project_id"],
             level=row["level"],
             category=row["category"],
             message=row["message"],

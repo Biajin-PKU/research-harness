@@ -17,7 +17,7 @@ class TrajectoryEvent:
     tool_name: str = ""
     stage: str = ""
     topic_id: int | None = None
-    project_id: int | None = None
+    project_id: int | None = None  # deprecated, kept for DB compat
     input_summary: str = ""
     output_summary: str = ""
     reasoning: str = ""
@@ -69,7 +69,6 @@ class ExperimentEntry:
     """A logged experiment for outer-loop tracking."""
 
     id: int = 0
-    project_id: int = 0
     topic_id: int = 0
     experiment_number: int = 0
     hypothesis: str = ""
@@ -88,7 +87,6 @@ class MetaReflection:
     """An outer-loop meta-reflection across experiments."""
 
     id: int = 0
-    project_id: int = 0
     topic_id: int = 0
     reflection_number: int = 0
     trigger_type: str = ""  # periodic | failure_streak | manual

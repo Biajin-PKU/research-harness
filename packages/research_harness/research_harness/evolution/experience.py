@@ -38,7 +38,6 @@ class ExperienceRecord:
     diff_summary: str = ""
     quality_delta: float = 0.0
     topic_id: int | None = None
-    project_id: int | None = None
     paper_id: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     gate_verdict: str = "pending"
@@ -80,7 +79,7 @@ class ExperienceStore:
                     record.diff_summary,
                     record.quality_delta,
                     record.topic_id,
-                    record.project_id,
+                    record.topic_id,  # write topic_id to project_id column for compat
                     record.paper_id,
                     json.dumps(record.metadata, ensure_ascii=False),
                     record.gate_verdict,
@@ -225,7 +224,7 @@ class ExperienceStore:
         return self._lesson_store.append(
             lesson,
             source=f"experience_v2:{record.source_kind}",
-            source_project_id=record.project_id,
+            source_topic_id=record.topic_id,
             topic_id=record.topic_id,
         )
 
@@ -247,7 +246,6 @@ class ExperienceStore:
             diff_summary=row["diff_summary"] or "",
             quality_delta=row["quality_delta"] or 0.0,
             topic_id=row["topic_id"],
-            project_id=row["project_id"],
             paper_id=row["paper_id"],
             metadata=metadata,
             gate_verdict=row["gate_verdict"] or "pending",

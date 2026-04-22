@@ -39,23 +39,9 @@ def test_topic_update_json(runner):
     assert data["status"] == "paused"
 
 
-def test_project_show_and_update_json(runner):
-    runner.invoke(main, ["topic", "init", "t1"])
-    runner.invoke(
-        main,
-        [
-            "project",
-            "add",
-            "--topic",
-            "t1",
-            "--name",
-            "paper1",
-            "--venue",
-            "KDD",
-            "--description",
-            "seed idea",
-        ],
-    )
+def test_topic_show_and_update_json(runner):
+    """Verify topic show/update lifecycle (project commands removed)."""
+    runner.invoke(main, ["topic", "init", "t1", "--venue", "KDD", "-d", "seed idea"])
     runner.invoke(
         main,
         [
@@ -63,8 +49,6 @@ def test_project_show_and_update_json(runner):
             "add",
             "--topic",
             "t1",
-            "--project",
-            "paper1",
             "--title",
             "Read paper",
         ],
@@ -76,8 +60,6 @@ def test_project_show_and_update_json(runner):
             "add",
             "--topic",
             "t1",
-            "--project",
-            "paper1",
             "--gate",
             "novelty",
             "--reviewer",
@@ -87,26 +69,20 @@ def test_project_show_and_update_json(runner):
         ],
     )
 
-    show_before = runner.invoke(
-        main, ["--json", "project", "show", "--topic", "t1", "paper1"]
-    )
+    show_before = runner.invoke(main, ["--json", "topic", "show", "t1"])
     assert show_before.exit_code == 0, show_before.output
     before = json.loads(show_before.output)
-    assert before["task_count"] == 1
-    assert before["review_count"] == 1
-    assert before["status"] == "planning"
+    assert before["status"] == "active"
 
     update = runner.invoke(
         main,
         [
             "--json",
-            "project",
+            "topic",
             "update",
-            "--topic",
             "t1",
-            "paper1",
             "--new-name",
-            "paper1-v2",
+            "t1-v2",
             "--description",
             "tightened scope",
             "--venue",
@@ -114,22 +90,18 @@ def test_project_show_and_update_json(runner):
             "--deadline",
             "2026-10-15",
             "--status",
-            "active",
+            "paused",
         ],
     )
     assert update.exit_code == 0, update.output
 
-    show_after = runner.invoke(
-        main, ["--json", "project", "show", "--topic", "t1", "paper1-v2"]
-    )
+    show_after = runner.invoke(main, ["--json", "topic", "show", "t1-v2"])
     after = json.loads(show_after.output)
-    assert after["name"] == "paper1-v2"
+    assert after["name"] == "t1-v2"
     assert after["description"] == "tightened scope"
     assert after["target_venue"] == "ICLR"
     assert after["deadline"] == "2026-10-15"
-    assert after["status"] == "active"
-    assert after["task_count"] == 1
-    assert after["review_count"] == 1
+    assert after["status"] == "paused"
 
 
 def test_search_list_filters_and_limit(runner):

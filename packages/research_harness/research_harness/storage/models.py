@@ -6,6 +6,15 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class Domain:
+    id: int | None = None
+    name: str = ""
+    description: str = ""
+    status: str = "active"
+    created_at: str = ""
+
+
+@dataclass
 class Topic:
     id: int | None = None
     name: str = ""
@@ -17,6 +26,8 @@ class Topic:
     last_search_at: str = ""
     freshness_warn_days: int = 7
     freshness_stale_days: int = 30
+    domain_id: int | None = None
+    contributions: str = ""
 
 
 @dataclass
@@ -107,7 +118,7 @@ class Task:
 @dataclass
 class Review:
     id: int | None = None
-    project_id: int = 0
+    topic_id: int = 0
     gate: str = ""
     reviewer: str = ""
     verdict: str = ""
