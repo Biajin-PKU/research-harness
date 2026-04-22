@@ -1103,9 +1103,15 @@ def draft_section(topic_id: int, body: SectionDraftRequest):
 if __name__ == "__main__":
     import uvicorn
 
+    # Restrict reload watcher to the Python package so web/node_modules and other
+    # large trees don't trigger spurious reloads when running alongside the
+    # Next.js dashboard.
+    _package_dir = str(Path(__file__).resolve().parent)
+
     uvicorn.run(
         "research_harness_mcp.http_api:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
+        reload_dirs=[_package_dir],
     )
