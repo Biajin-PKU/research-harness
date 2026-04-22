@@ -20,3 +20,14 @@ paper_library/
 .DS_Store
 .conda/
 .claude/
+
+# Next.js dashboard (web/)
+web/node_modules/
+web/.next/
+web/out/
+web/.ruff_cache/
+web/tsconfig.tsbuildinfo
+web/next-env.d.ts
+web/.env*
+web/.vercel/
+web/build/

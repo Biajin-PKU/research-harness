@@ -148,40 +148,56 @@ class SearchAggregator:
         The merged output is capped at ``output_limit`` when provided, otherwise
         all unique merged results are returned so callers can apply their own cap.
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         merged: dict[str, PaperRecord] = {}
         title_index: dict[str, str] = {}
         provider_errors: list[ProviderError] = []
-        for provider in self.providers:
-            try:
-                records = provider.search(query)
-            except Exception as exc:
-                provider_errors.append(
-                    ProviderError(
-                        provider=getattr(provider, "name", provider.__class__.__name__),
-                        error_type=exc.__class__.__name__,
-                        message=str(exc),
+
+        if not self.providers:
+            return SearchOutcome(results=[], provider_errors=[])
+
+        def _query_one(
+            provider: SearchProvider,
+        ) -> tuple[SearchProvider, list[PaperRecord]]:
+            return provider, provider.search(query)
+
+        with ThreadPoolExecutor(max_workers=len(self.providers)) as pool:
+            futures = {pool.submit(_query_one, p): p for p in self.providers}
+            for future in as_completed(futures):
+                provider = futures[future]
+                try:
+                    _, records = future.result()
+                except Exception as exc:
+                    provider_errors.append(
+                        ProviderError(
+                            provider=getattr(
+                                provider, "name", provider.__class__.__name__
+                            ),
+                            error_type=exc.__class__.__name__,
+                            message=str(exc),
+                        )
                     )
-                )
-                continue
-            for record in records:
-                provider_name = record.provider or provider.name
-                record.provider = provider_name
-                record.source_rank = provider_priority(
-                    provider_name, SEARCH_PROVIDER_PRIORITY
-                )
-                key = record.fingerprint()
-                title_key = title_year_key(record)
-                existing_key = key if key in merged else title_index.get(title_key)
-                if existing_key is not None:
-                    merged_record = merge_records(merged[existing_key], record)
-                    canonical_key = merged_record.fingerprint()
-                    if canonical_key != existing_key:
-                        del merged[existing_key]
-                    merged[canonical_key] = merged_record
-                    title_index[title_key] = canonical_key
-                else:
-                    merged[key] = clone_record(record)
-                    title_index[title_key] = key
+                    continue
+                for record in records:
+                    provider_name = record.provider or provider.name
+                    record.provider = provider_name
+                    record.source_rank = provider_priority(
+                        provider_name, SEARCH_PROVIDER_PRIORITY
+                    )
+                    key = record.fingerprint()
+                    title_key = title_year_key(record)
+                    existing_key = key if key in merged else title_index.get(title_key)
+                    if existing_key is not None:
+                        merged_record = merge_records(merged[existing_key], record)
+                        canonical_key = merged_record.fingerprint()
+                        if canonical_key != existing_key:
+                            del merged[existing_key]
+                        merged[canonical_key] = merged_record
+                        title_index[title_key] = canonical_key
+                    else:
+                        merged[key] = clone_record(record)
+                        title_index[title_key] = key
         ranked = sorted(
             merged.values(),
             key=lambda record: rank_record(record, query.query),

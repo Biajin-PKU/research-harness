@@ -171,13 +171,14 @@ For a purely manual walkthrough (one primitive at a time, no runner), see [`docs
 
 ## Interfaces
 
-All three clients call the same primitive registry against the same `pool.db`. Pick whichever fits the task.
+All four surfaces call the same primitive registry against the same `pool.db`. Pick whichever fits the task.
 
 | Surface | Best for | Entry point |
 |---------|----------|-------------|
 | **MCP server** | Claude Code / Codex / any MCP client | `python -m research_harness_mcp` |
 | **Python API** | Notebooks, pipelines, existing code | `from research_harness import ResearchAPI` |
 | **`rh` CLI** | Terminal workflows, scripts, CI | `rh --help` |
+| **HTTP API + Web dashboard** | Browse pool.db, trigger ingestion/analysis from a browser | `python -m research_harness_mcp.http_api` + `cd web && npm run dev` |
 
 Provenance note: MCP server and `rh primitive exec` route calls through `TrackedBackend`, which records every execution. Direct Python API calls go straight to primitive implementations — wrap them in `TrackedBackend` yourself when auditability is required. See [`docs/python-api.md`](docs/python-api.md).
 
@@ -210,6 +211,21 @@ startup_timeout_sec = 30.0
 ```
 
 Or via CLI: `codex mcp add research-harness -- /abs/path/python -m research_harness_mcp`.
+
+### HTTP API + Web dashboard
+
+For operators who prefer a browser over a chat prompt, the repo ships a FastAPI backend (28 REST endpoints, paginated reads + action endpoints) and a Next.js 16 / React 19 dashboard under [`web/`](web/). Start both:
+
+```bash
+# Backend — installs FastAPI + uvicorn extras
+pip install -e "packages/research_harness_mcp[api]"
+python -m research_harness_mcp.http_api   # http://localhost:8000
+
+# Frontend
+cd web && npm install && npm run dev      # http://localhost:3000
+```
+
+The dashboard surfaces topics, papers, projects, artifacts, and provenance stats, and exposes buttons for paper search/ingest, gap detection, claim extraction, outline generation, and section drafting — each wired through the same primitive registry as the MCP server.
 
 ## Skills for Vibe Coding
 
@@ -332,6 +348,12 @@ Primitives are registered via `@register_primitive(spec)`; gates subclass `GateE
 ## Recent Updates
 
 A running log of the iterations that shape the public fork. Most recent first.
+
+### 2026-04-22 — HTTP API + Web dashboard, concurrent provider search
+
+- **New FastAPI HTTP API** (`research_harness_mcp.http_api`, 28 endpoints, ~1064 LOC). Paginated read endpoints for topics/papers/projects/artifacts/provenance plus action endpoints (paper search, ingest, gap detect, claim extract, outline, section draft) that delegate to the same primitive registry as the MCP server. Install with `pip install -e "packages/research_harness_mcp[api]"`.
+- **New Next.js 16 / React 19 dashboard** under `web/`. Sidebar layout with dashboard home, library, and project pages; shadcn/ui components; tanstack/react-query for data fetching. Target: researchers who prefer a browser over a chat prompt.
+- **Concurrent paper-provider search** — `SearchAggregator.search` now queries every configured provider in parallel via `ThreadPoolExecutor`, cutting cold-cache search latency in proportion to the number of providers while preserving merge and ranking semantics.
 
 ### 2026-04-22 — CI green on public fork
 
