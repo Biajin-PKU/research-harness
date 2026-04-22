@@ -8,6 +8,15 @@ from typing import Any
 
 DEFAULT_MIN_PAPER_COUNT = int(os.environ.get("RH_MIN_CORPUS_SIZE", "50"))
 
+# Gate thresholds (env-overridable)
+MIN_GAP_COUNT = int(os.environ.get("RH_MIN_GAP_COUNT", "3"))
+MAX_GAP_LOOPBACKS = int(os.environ.get("RH_MAX_GAP_LOOPBACKS", "2"))
+MAX_EVIDENCE_LOOPBACKS = int(os.environ.get("RH_MAX_EVIDENCE_LOOPBACKS", "2"))
+MAX_EXPERIMENT_LOOPBACKS = int(os.environ.get("RH_MAX_EXPERIMENT_LOOPBACKS", "2"))
+MIN_YEAR_SPAN = int(os.environ.get("RH_MIN_YEAR_SPAN", "2"))
+MIN_EVIDENCE_COVERAGE = float(os.environ.get("RH_MIN_EVIDENCE_COVERAGE", "0.8"))
+MIN_SEED_PAPER_COUNT = int(os.environ.get("RH_MIN_SEED_PAPER_COUNT", "3"))
+
 
 # ---------------------------------------------------------------------------
 # Enums (as string constants for SQLite compatibility)

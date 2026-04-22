@@ -14,6 +14,9 @@ from .adversarial import AdversarialLoop, Objection
 from .artifacts import ArtifactManager
 from .integrity import FinalizeManager, IntegrityVerifier
 from .models import (
+    MAX_EVIDENCE_LOOPBACKS,
+    MAX_EXPERIMENT_LOOPBACKS,
+    MAX_GAP_LOOPBACKS,
     STAGE_GRAPH,
     SUBSTEP_TO_STAGE,
     GateDecision,
@@ -90,10 +93,20 @@ class OrchestratorService:
             conn.close()
 
     def infer_stage_from_artifacts(self, project_id: int) -> str:
-        """Return the furthest V2 stage that has at least one artifact covering it.
+        """Return the furthest V2 stage the project has actually completed.
 
-        Handles artifacts stored under both V2 stage names and legacy substep
-        names.  Falls back to ``init`` if no matching artifacts exist.
+        A stage is considered "completed" only if:
+
+        1. All of its ``required_artifacts`` are present, AND
+        2. Its gate evaluates to ``pass`` (i.e. the gate has been satisfied).
+
+        The function returns the first stage in canonical order that has NOT
+        completed — i.e. the stage the run should resume at. If a later stage
+        has partial artifacts but an earlier stage's gate has not passed, we
+        resume at the earlier stage to avoid silently skipping unresolved
+        blockers.
+
+        Falls back to ``init`` if no artifacts exist at all.
         """
         conn = self._db.connect()
         try:
@@ -108,15 +121,12 @@ class OrchestratorService:
         for row in rows:
             stage = row["stage"]
             artifact_type = row["artifact_type"]
-            # Resolve stage column (may be V2 name or legacy substep)
             resolved = resolve_stage(stage)
             if resolved in STAGE_ORDER:
                 covered_stages.add(resolved)
-            # Also resolve via legacy substep mapping
             substep_mapped = SUBSTEP_TO_STAGE.get(stage)
             if substep_mapped:
                 covered_stages.add(substep_mapped)
-            # Alias lookup by artifact_type
             alias_mapped = ARTIFACT_STAGE_ALIASES.get(artifact_type)
             if alias_mapped:
                 covered_stages.add(alias_mapped)
@@ -124,11 +134,32 @@ class OrchestratorService:
         if not covered_stages:
             return "init"
 
-        # Return the last (furthest) stage in canonical V2 order that is covered
-        for stage in reversed(STAGE_ORDER):
-            if stage in covered_stages:
+        # Walk forward through stages. For each stage that has any coverage,
+        # verify required artifacts AND gate status. Stop at the first stage
+        # that is incomplete — that's where we resume.
+        for stage in STAGE_ORDER:
+            if stage not in covered_stages:
                 return stage
-        return "init"
+            artifacts_ok = all(
+                self._validator.check_artifacts_for_stage(project_id, stage).values()
+            )
+            if not artifacts_ok:
+                return stage
+            try:
+                gate_decision = self._gate_evaluator.evaluate(project_id, stage)
+            except Exception:
+                logger.debug(
+                    "Gate evaluation failed during infer_stage for project %s at %s",
+                    project_id,
+                    stage,
+                    exc_info=True,
+                )
+                return stage
+            if gate_decision != "pass":
+                return stage
+
+        # All stages completed — resume at the final stage (write).
+        return STAGE_ORDER[-1]
 
     def resume_run(
         self,
@@ -153,6 +184,7 @@ class OrchestratorService:
         existing = self.get_run(project_id)
         if existing is not None:
             # Update stop_before if provided
+            stop_before_changed = False
             if stop_before is not None:
                 conn = self._db.connect()
                 try:
@@ -161,6 +193,7 @@ class OrchestratorService:
                         (stop_before, project_id),
                     )
                     conn.commit()
+                    stop_before_changed = True
                 except Exception:
                     logger.warning(
                         "Failed to persist stop_before for project %s",
@@ -200,6 +233,9 @@ class OrchestratorService:
                     conn.commit()
                 finally:
                     conn.close()
+                return self.get_run(project_id)
+            if stop_before_changed:
+                # Refresh so the returned run reflects the new stop_before.
                 return self.get_run(project_id)
             return existing
 
@@ -506,10 +542,11 @@ class OrchestratorService:
         # 3. Check gate
         if auto_run_gates:
             gate_decision = self._gate_evaluator.evaluate(project_id, current)
-            if gate_decision == "needs_expansion" and current == "analyze":
-                loopback_result = self._try_gap_loopback(run, actor)
-                if loopback_result is not None:
-                    return loopback_result
+            loopback_result = self._try_auto_loopback(
+                run, current, gate_decision, actor
+            )
+            if loopback_result is not None:
+                return loopback_result
             if gate_decision != "pass":
                 return {
                     "success": False,
@@ -565,41 +602,105 @@ class OrchestratorService:
             result["advisories"] = advisories
         return result
 
-    MAX_GAP_LOOPBACKS = 2
+    MAX_GAP_LOOPBACKS = MAX_GAP_LOOPBACKS
 
-    def _try_gap_loopback(
+    # (from_stage, gate_decision) → (target_stage, max_rounds, reason, checkpoint)
+    #
+    # Each entry declares: "when the gate at ``from_stage`` returns
+    # ``gate_decision``, automatically loop back to ``target_stage`` up to
+    # ``max_rounds`` times before surfacing the gate failure to the caller."
+    AUTO_LOOPBACK_RULES: dict[
+        tuple[str, str], tuple[str, int, str, str]
+    ] = {
+        ("analyze", "needs_expansion"): (
+            "build",
+            MAX_GAP_LOOPBACKS,
+            "insufficient research gaps detected — expanding paper pool",
+            "gap_expansion_loopback",
+        ),
+        ("propose", "needs_coverage"): (
+            "build",
+            MAX_EVIDENCE_LOOPBACKS,
+            "proposal lacks method-layer evidence — expanding paper pool",
+            "evidence_expansion_loopback",
+        ),
+        ("propose", "needs_expansion"): (
+            "analyze",
+            MAX_EVIDENCE_LOOPBACKS,
+            "proposal lacks claim support — re-running analysis",
+            "claim_expansion_loopback",
+        ),
+        ("experiment", "needs_experiment"): (
+            "propose",
+            MAX_EXPERIMENT_LOOPBACKS,
+            "experiment incomplete — revisiting study design",
+            "experiment_redesign_loopback",
+        ),
+        ("write", "needs_review"): (
+            "experiment",
+            MAX_EXPERIMENT_LOOPBACKS,
+            "write-stage review failed integrity checks — rerunning experiments",
+            "write_integrity_loopback",
+        ),
+    }
+
+    def _try_auto_loopback(
         self,
         run: OrchestratorRun,
+        current: str,
+        gate_decision: str,
         actor: str,
     ) -> dict[str, Any] | None:
-        """Attempt an automatic analyze→build loopback when gaps are insufficient.
+        """Attempt a stage-appropriate auto-loopback.
 
-        Returns a result dict if the loopback was performed (or exhausted),
+        Returns a result dict if a loopback was performed (or exhausted),
         or None to fall through to the normal gate-failure path.
         """
+        if gate_decision == "pass":
+            return None
+
+        rule = self.AUTO_LOOPBACK_RULES.get((current, gate_decision))
+        if rule is None:
+            return None
+
+        target_stage, max_rounds, reason_text, checkpoint = rule
+
+        # Respect stop_before guard for the loopback target.
+        if run.stop_before and target_stage == run.stop_before:
+            return None
+
         conn = self._db.connect()
         try:
             loopback_count = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM orchestrator_stage_events
-                WHERE project_id = ? AND from_stage = 'analyze' AND to_stage = 'build'
+                WHERE project_id = ? AND from_stage = ? AND to_stage = ?
                       AND event_type = 'transition'
                 """,
-                (run.project_id,),
+                (run.project_id, current, target_stage),
             ).fetchone()["cnt"]
         finally:
             conn.close()
 
-        if loopback_count >= self.MAX_GAP_LOOPBACKS:
+        if loopback_count >= max_rounds:
+            logger.info(
+                "Auto loopback %s→%s exhausted for project %d (%d/%d)",
+                current,
+                target_stage,
+                run.project_id,
+                loopback_count,
+                max_rounds,
+            )
             return None
 
         rationale = (
-            f"Gap-triggered loopback (round {loopback_count + 1}/{self.MAX_GAP_LOOPBACKS}): "
-            f"insufficient research gaps detected — expanding paper pool"
+            f"Auto loopback {current}→{target_stage} "
+            f"(round {loopback_count + 1}/{max_rounds}, "
+            f"gate={gate_decision}): {reason_text}"
         )
         result = self.transition_to(
             run.project_id,
-            "build",
+            target_stage,
             rationale=rationale,
             actor=actor,
         )
@@ -609,25 +710,27 @@ class OrchestratorService:
         self.record_decision(
             project_id=run.project_id,
             topic_id=run.topic_id,
-            stage="analyze",
-            checkpoint="gap_expansion_loopback",
+            stage=current,
+            checkpoint=checkpoint,
             choice=f"loopback_round_{loopback_count + 1}",
             reasoning=rationale,
         )
 
         logger.info(
-            "Auto loopback analyze→build for project %d (round %d)",
+            "Auto loopback %s→%s for project %d (round %d)",
+            current,
+            target_stage,
             run.project_id,
             loopback_count + 1,
         )
         return {
             "success": True,
             "loopback": True,
-            "from_stage": "analyze",
-            "to_stage": "build",
+            "from_stage": current,
+            "to_stage": target_stage,
             "round": loopback_count + 1,
-            "max_rounds": self.MAX_GAP_LOOPBACKS,
-            "gate_decision": "needs_expansion",
+            "max_rounds": max_rounds,
+            "gate_decision": gate_decision,
         }
 
     def _auto_housekeeping(self) -> None:

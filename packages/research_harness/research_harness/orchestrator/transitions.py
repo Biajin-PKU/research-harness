@@ -5,8 +5,35 @@ from __future__ import annotations
 import json
 
 from . import stages
-from .models import DEFAULT_MIN_PAPER_COUNT, GateDecision, StageName
+from .models import (
+    DEFAULT_MIN_PAPER_COUNT,
+    MIN_EVIDENCE_COVERAGE,
+    MIN_GAP_COUNT,
+    MIN_SEED_PAPER_COUNT,
+    MIN_YEAR_SPAN,
+    GateDecision,
+    StageName,
+)
 from .invariants import InvariantChecker, is_blocking
+
+
+def _hallucinated_citation_count(conn, project_id: int) -> int:
+    """Return the number of hallucinated citations for a project.
+
+    Returns 0 if the ``citation_verifications`` table does not exist (e.g. pre-
+    migration DB) or the project has no records. Never raises.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) as cnt FROM citation_verifications
+            WHERE project_id = ? AND status = 'hallucinated'
+            """,
+            (project_id,),
+        ).fetchone()
+        return int(row["cnt"]) if row else 0
+    except Exception:
+        return 0
 
 
 class TransitionValidator:
@@ -133,12 +160,16 @@ class GateEvaluator:
             return self._evaluate_experiment_gate(project_id, stage)
         return "pass"
 
-    MIN_GAP_COUNT = 3
+    MIN_GAP_COUNT = MIN_GAP_COUNT
 
     def _evaluate_approval_gate(
         self, project_id: int, stage: StageName
     ) -> GateDecision:
         """Check if required artifacts exist.
+
+        For the 'init' stage, also verifies that a topic_brief has scope /
+        exclusion fields defined and at least ``MIN_SEED_PAPER_COUNT`` seed
+        papers were ingested under the topic.
 
         For the 'analyze' stage, also verifies that gap_detect produced
         enough gaps (>= MIN_GAP_COUNT) to warrant advancing. If not,
@@ -163,6 +194,61 @@ class GateEvaluator:
                     return "needs_approval"
 
             resolved = stages.resolve_stage(stage)
+
+            if resolved == "init":
+                # Inspect topic_brief payload: scope must be non-empty and
+                # at least one exclusion-style field should exist.
+                brief_row = conn.execute(
+                    f"""
+                    SELECT payload_json FROM project_artifacts
+                    WHERE project_id = ? AND stage IN ({placeholders})
+                          AND artifact_type = 'topic_brief'
+                          AND status = 'active'
+                    ORDER BY version DESC LIMIT 1
+                    """,
+                    (project_id, *stage_names),
+                ).fetchone()
+                if brief_row:
+                    try:
+                        brief = json.loads(brief_row["payload_json"] or "{}")
+                    except (TypeError, ValueError):
+                        brief = {}
+                    scope_raw = brief.get("scope", "")
+                    scope_ok = bool(
+                        scope_raw
+                        if isinstance(scope_raw, str)
+                        else scope_raw
+                    )
+                    has_exclusion = any(
+                        brief.get(k)
+                        for k in (
+                            "exclusion_criteria",
+                            "exclusions",
+                            "out_of_scope",
+                            "scope_boundaries",
+                        )
+                    )
+                    if not scope_ok or not has_exclusion:
+                        return "needs_approval"
+
+                # Verify seed paper count.
+                run_row = conn.execute(
+                    "SELECT topic_id FROM orchestrator_runs WHERE project_id = ?",
+                    (project_id,),
+                ).fetchone()
+                if run_row:
+                    seed_count = conn.execute(
+                        """
+                        SELECT COUNT(DISTINCT pt.paper_id) AS cnt
+                        FROM paper_topics pt
+                        WHERE pt.topic_id = ?
+                          AND pt.relevance != 'dismissed'
+                        """,
+                        (run_row["topic_id"],),
+                    ).fetchone()["cnt"]
+                    if seed_count < MIN_SEED_PAPER_COUNT:
+                        return "needs_approval"
+
             if resolved == "analyze":
                 gap_row = conn.execute(
                     f"""
@@ -181,6 +267,26 @@ class GateEvaluator:
                         payload = {}
                     gaps = payload.get("gaps", [])
                     if len(gaps) < self.MIN_GAP_COUNT:
+                        return "needs_expansion"
+
+                # Evidence coverage soft-check: if evidence_trace artifact is
+                # present, require coverage_ratio >= MIN_EVIDENCE_COVERAGE.
+                ev_row = conn.execute(
+                    """
+                    SELECT payload_json FROM project_artifacts
+                    WHERE project_id = ? AND artifact_type = 'evidence_trace_report'
+                          AND status = 'active'
+                    ORDER BY version DESC LIMIT 1
+                    """,
+                    (project_id,),
+                ).fetchone()
+                if ev_row:
+                    try:
+                        ev_payload = json.loads(ev_row["payload_json"] or "{}")
+                    except (TypeError, ValueError):
+                        ev_payload = {}
+                    coverage = float(ev_payload.get("coverage_ratio", 0.0) or 0.0)
+                    if coverage < MIN_EVIDENCE_COVERAGE:
                         return "needs_expansion"
 
             return "pass"
@@ -252,7 +358,7 @@ class GateEvaluator:
                         """,
                         (topic_id,),
                     ).fetchone()["cnt"]
-                    if year_count < 2:
+                    if year_count < MIN_YEAR_SPAN:
                         return "needs_coverage"
 
                     # Retrieval convergence (soft: only enforced when the
@@ -332,10 +438,19 @@ class GateEvaluator:
             conn.close()
 
     def _evaluate_review_gate(self, project_id: int) -> GateDecision:
-        """Check for open blocking review issues and minimum score."""
+        """Evaluate the write-stage review gate.
+
+        Blocks when any of the following is true:
+
+        - Any open blocking review issue exists.
+        - Any open critical-severity review issue exists.
+        - ``final_bundle`` or ``process_summary`` artifact is missing.
+        - A ``final_integrity_report`` exists but did not pass (critical>0).
+        - Any hallucinated citation was recorded for the project.
+        """
         conn = self._db.connect()
         try:
-            # Existing: no blocking issues
+            # 1. No blocking issues.
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM review_issues
@@ -345,14 +460,73 @@ class GateEvaluator:
             ).fetchone()
             if row and row["cnt"] > 0:
                 return "needs_review"
+
+            # 2. No open critical-severity issues.
+            row = conn.execute(
+                """
+                SELECT COUNT(*) as cnt FROM review_issues
+                WHERE project_id = ? AND status = 'open' AND severity = 'critical'
+                """,
+                (project_id,),
+            ).fetchone()
+            if row and row["cnt"] > 0:
+                return "needs_review"
+
+            # 3. final_bundle + process_summary artifacts must exist.
+            for artifact_type in ("final_bundle", "process_summary"):
+                row = conn.execute(
+                    """
+                    SELECT 1 FROM project_artifacts
+                    WHERE project_id = ? AND artifact_type = ?
+                          AND status = 'active'
+                    LIMIT 1
+                    """,
+                    (project_id, artifact_type),
+                ).fetchone()
+                if row is None:
+                    return "needs_review"
+
+            # 4. If final_integrity_report was generated, it must be passing.
+            fi_row = conn.execute(
+                """
+                SELECT payload_json FROM project_artifacts
+                WHERE project_id = ? AND artifact_type = 'final_integrity_report'
+                      AND status = 'active'
+                ORDER BY version DESC LIMIT 1
+                """,
+                (project_id,),
+            ).fetchone()
+            if fi_row:
+                try:
+                    fi = json.loads(fi_row["payload_json"] or "{}")
+                except (TypeError, ValueError):
+                    fi = {}
+                if fi.get("passed") is False or int(fi.get("critical_count", 0) or 0) > 0:
+                    return "needs_review"
+
+            # 5. No hallucinated citations.
+            if _hallucinated_citation_count(conn, project_id) > 0:
+                return "needs_review"
+
             return "pass"
         finally:
             conn.close()
 
     def _evaluate_integrity_gate(self, project_id: int) -> GateDecision:
-        """Check for open critical integrity issues."""
+        """Evaluate the integrity gate (used by ``final_integrity``).
+
+        Sub-checks:
+
+        1. No open critical review issues.
+        2. No hallucinated citations in ``citation_verifications``.
+        3. ``final_integrity_report`` exists AND ``passed`` is true.
+        4. ``verified_registry`` artifact exists with ``whitelist_size`` > 0.
+        5. If an ``evidence_trace_report`` artifact exists, its
+           ``coverage_ratio`` must be >= ``MIN_EVIDENCE_COVERAGE``.
+        """
         conn = self._db.connect()
         try:
+            # 1. No open critical review issues.
             row = conn.execute(
                 """
                 SELECT COUNT(*) as cnt FROM review_issues
@@ -362,6 +536,69 @@ class GateEvaluator:
             ).fetchone()
             if row and row["cnt"] > 0:
                 return "needs_integrity"
+
+            # 2. No hallucinated citations.
+            if _hallucinated_citation_count(conn, project_id) > 0:
+                return "needs_integrity"
+
+            # 3. final_integrity_report must exist and pass.
+            fi_row = conn.execute(
+                """
+                SELECT payload_json FROM project_artifacts
+                WHERE project_id = ? AND artifact_type = 'final_integrity_report'
+                      AND status = 'active'
+                ORDER BY version DESC LIMIT 1
+                """,
+                (project_id,),
+            ).fetchone()
+            if fi_row is None:
+                return "needs_integrity"
+            try:
+                fi = json.loads(fi_row["payload_json"] or "{}")
+            except (TypeError, ValueError):
+                fi = {}
+            if not fi.get("passed"):
+                return "needs_integrity"
+            if int(fi.get("critical_count", 0) or 0) > 0:
+                return "needs_integrity"
+
+            # 4. verified_registry with non-empty whitelist.
+            vr_row = conn.execute(
+                """
+                SELECT payload_json FROM project_artifacts
+                WHERE project_id = ? AND artifact_type = 'verified_registry'
+                      AND status = 'active'
+                ORDER BY version DESC LIMIT 1
+                """,
+                (project_id,),
+            ).fetchone()
+            if vr_row:
+                try:
+                    vr = json.loads(vr_row["payload_json"] or "{}")
+                except (TypeError, ValueError):
+                    vr = {}
+                if int(vr.get("whitelist_size", 0) or 0) <= 0:
+                    return "needs_integrity"
+
+            # 5. Evidence trace coverage (if available).
+            ev_row = conn.execute(
+                """
+                SELECT payload_json FROM project_artifacts
+                WHERE project_id = ? AND artifact_type = 'evidence_trace_report'
+                      AND status = 'active'
+                ORDER BY version DESC LIMIT 1
+                """,
+                (project_id,),
+            ).fetchone()
+            if ev_row:
+                try:
+                    ev = json.loads(ev_row["payload_json"] or "{}")
+                except (TypeError, ValueError):
+                    ev = {}
+                coverage = float(ev.get("coverage_ratio", 0.0) or 0.0)
+                if coverage < MIN_EVIDENCE_COVERAGE:
+                    return "needs_integrity"
+
             return "pass"
         finally:
             conn.close()
@@ -430,9 +667,18 @@ class GateEvaluator:
                 ).fetchone()
                 if not row or row["cnt"] == 0:
                     return "needs_experiment"
-            except Exception:
-                # experiment_runs table may not exist yet during migration
-                return "needs_experiment"
+            except Exception as exc:
+                # experiment_runs table may not exist yet during migration;
+                # surface as a hard fail so the operator notices.
+                import logging
+
+                logging.getLogger(__name__).error(
+                    "experiment_runs query failed for project %s: %s. "
+                    "Migration 012 may not have been applied.",
+                    project_id,
+                    exc,
+                )
+                return "fail"
 
             return "pass"
         finally:

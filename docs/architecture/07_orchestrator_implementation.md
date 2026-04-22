@@ -612,7 +612,6 @@ This section is intended to guide Claude Code implementation order.
 - `packages/research_harness/research_harness/orchestrator/__init__.py`
 - `packages/research_harness/research_harness/orchestrator/models.py`
 - `packages/research_harness/research_harness/orchestrator/stages.py`
-- `packages/research_harness/research_harness/orchestrator/gates.py`
 - `packages/research_harness/research_harness/orchestrator/artifacts.py`
 - `packages/research_harness/research_harness/orchestrator/adversarial.py`
 - `packages/research_harness/research_harness/orchestrator/review.py`

@@ -79,6 +79,7 @@ class InvariantChecker:
         violations.extend(self.check_artifact_schemas(project_id, stage))
         violations.extend(self.check_no_stale_artifacts(project_id, stage))
         violations.extend(self.check_provenance_linkage(project_id, stage))
+        violations.extend(self.check_section_citations(project_id, stage))
         return violations
 
     def check_artifact_schemas(
