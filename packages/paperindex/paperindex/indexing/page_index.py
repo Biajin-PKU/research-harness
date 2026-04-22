@@ -7,7 +7,7 @@ from typing import Any
 
 import fitz
 
-from ..llm.client import LLMClient, resolve_llm_config
+from llm_router.client import LLMClient, resolve_llm_config
 from ..types import SectionNode
 from ..utils import assign_node_ids, first_nonempty_line
 

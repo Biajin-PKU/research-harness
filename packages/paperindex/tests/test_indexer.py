@@ -65,7 +65,7 @@ def _fake_llm_chat(
 
 
 def _indexer_with_llm(monkeypatch) -> PaperIndexer:
-    monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
+    monkeypatch.setattr("llm_router.client.LLMClient.chat", _fake_llm_chat)
     return PaperIndexer(
         llm_config={
             "provider": "kimi",

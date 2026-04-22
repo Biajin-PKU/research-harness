@@ -98,6 +98,9 @@ echo "Upgrading pip..."
 # 4. Install packages (editable)
 # ---------------------------------------------------------------------------
 
+echo "Installing llm_router..."
+"$PIP" install --quiet -e "$REPO_ROOT/packages/llm_router[dev]"
+
 echo "Installing paperindex..."
 "$PIP" install --quiet -e "$REPO_ROOT/packages/paperindex[dev]"
 

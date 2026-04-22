@@ -85,7 +85,7 @@ def _fake_llm_chat(
 
 
 def test_build_card_uses_llm_output(sample_pdf, monkeypatch):
-    monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
+    monkeypatch.setattr("llm_router.client.LLMClient.chat", _fake_llm_chat)
 
     indexer = PaperIndexer(
         llm_config={

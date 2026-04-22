@@ -8,7 +8,7 @@ from .extraction.section_extractor import extract_section_content
 from .indexing.page_index import extract_structure_tree
 from .indexing.section_text import attach_section_text, normalize_section_title
 from .library import PaperLibrary
-from .llm.client import resolve_llm_config
+from llm_router.client import resolve_llm_config
 from .retrieval import find_structure_matches, search_catalog, search_records
 from .types import (
     EXTRACTABLE_SECTIONS,

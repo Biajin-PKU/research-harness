@@ -97,9 +97,7 @@ def _usage_from_openai_dict(payload: Any) -> tuple[int | None, int | None]:
 # Types
 # ---------------------------------------------------------------------------
 
-Provider = Literal[
-    "anthropic", "openai", "kimi", "cursor_agent", "codex", "joy_kimi", "joy_gpt"
-]
+Provider = Literal["anthropic", "openai", "kimi", "cursor_agent", "codex"]
 TaskTier = Literal["light", "medium", "heavy"]
 ProviderFn = Callable[..., str]  # (prompt, model, **kwargs) -> response
 
@@ -134,9 +132,9 @@ def list_providers() -> list[str]:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_ROUTES: dict[TaskTier, tuple[str, str]] = {
-    "light": ("joy_gpt", "gpt-5"),
-    "medium": ("joy_gpt", "gpt-5"),
-    "heavy": ("codex", "gpt-5.4"),
+    "light": ("openai", "gpt-4o-mini"),
+    "medium": ("openai", "gpt-4o"),
+    "heavy": ("anthropic", "claude-opus-4-6"),
 }
 
 # ---------------------------------------------------------------------------
@@ -153,8 +151,8 @@ _BLOCKED_PROVIDERS_BY_TIER: dict[TaskTier, frozenset[str]] = {
 }
 
 _TIER_FALLBACKS: dict[TaskTier, tuple[str, str]] = {
-    "light": ("joy_gpt", "gpt-5"),
-    "medium": ("joy_gpt", "gpt-5"),
+    "light": ("openai", "gpt-4o-mini"),
+    "medium": ("openai", "gpt-4o"),
 }
 
 
@@ -424,235 +422,6 @@ def _chat_openai(
 
 
 # ---------------------------------------------------------------------------
-# JoyCode Providers — direct call via local login state (OpenAI format)
-#
-# JoyCode exposes multiple models (Kimi, GPT-5, GLM, Claude, Gemini, ...) behind
-# a single OpenAI-compatible endpoint. We register two logical providers on top
-# of that shared transport:
-#   - joy_kimi → Kimi-K2.5 (single-paper reading, cheap/fast)
-#   - joy_gpt  → gpt-5      (general worker, largest 200k+ context, replaces cursor_agent)
-# Both share the same login state and rate limiter because they hit the same
-# backend.
-# ---------------------------------------------------------------------------
-
-_JOY_KIMI_DEFAULT_MODEL = "Kimi-K2.5"
-_JOY_GPT_DEFAULT_MODEL = "gpt-5"  # OpenAI flagship via JoyCode; 400k context window
-_JOYCODE_MAX_RPS = 5  # max requests per second (shared across joy_* providers)
-_JOYCODE_MAX_TOKENS = 4096
-
-# Backward-compat alias (tests and older code reference _JOY_KIMI_MAX_RPS).
-_JOY_KIMI_MAX_RPS = _JOYCODE_MAX_RPS
-
-# Tasks that should use joy_kimi when enabled (single-paper reading + light analysis).
-# Kimi handles all basic paper comprehension; joy_gpt / cross-paper synthesis
-# handle heavy analysis that needs broader context.
-_JOY_KIMI_TASKS: frozenset[str] = frozenset(
-    {
-        # Core reading
-        "paper_summarize",
-        "deep_read_pass1",
-        "build_paper_card",
-        # Light-tier extraction (single-paper scope)
-        "compiled_summary",
-        "claim_extract",
-        "paper_coverage_check",
-        "query_refine",
-        # Quantitative extraction (single-paper scope)
-        "table_extract",
-        "figure_interpret",
-        # Evolution (lightweight)
-        "lesson_extract",
-        "strategy_distill",
-    }
-)
-
-# Shared token-bucket rate limiter for all joycode-backend providers.
-_joycode_timestamps: list[float] = []
-_joycode_lock = __import__("threading").Lock()
-
-# Backward-compat aliases (older code may reference the joy_kimi-prefixed names).
-_joy_kimi_timestamps = _joycode_timestamps
-_joy_kimi_lock = _joycode_lock
-
-
-def _joycode_rate_limit() -> None:
-    """Block until a request slot is available (max _JOYCODE_MAX_RPS per second)."""
-    with _joycode_lock:
-        now = time.time()
-        window = now - 1.0
-        # Evict timestamps older than 1 second
-        while _joycode_timestamps and _joycode_timestamps[0] < window:
-            _joycode_timestamps.pop(0)
-        if len(_joycode_timestamps) >= _JOYCODE_MAX_RPS:
-            sleep_until = _joycode_timestamps[0] + 1.0
-            sleep_dur = sleep_until - now
-            if sleep_dur > 0:
-                time.sleep(sleep_dur)
-            # Re-evict after sleeping
-            now = time.time()
-            window = now - 1.0
-            while _joycode_timestamps and _joycode_timestamps[0] < window:
-                _joycode_timestamps.pop(0)
-        _joycode_timestamps.append(time.time())
-
-
-# Backward-compat alias.
-_joy_kimi_rate_limit = _joycode_rate_limit
-
-
-def _call_joycode_chat(
-    prompt: str,
-    model: str,
-    *,
-    temperature: float = 0.0,
-    max_tokens: int = _JOYCODE_MAX_TOKENS,
-) -> str:
-    """Shared transport for JoyCode-backed providers.
-
-    NOTE: JoyCode is an internal provider that depends on a private library
-    (``~/code/joycode``) not included in this open-source release. The
-    ``joy_kimi`` and ``joy_gpt`` providers are therefore unavailable to
-    public users. Use the standard ``anthropic``, ``openai``, ``codex``, or
-    ``cursor_agent`` providers instead. Contributors who want to re-enable
-    JoyCode on their own infrastructure can provide an equivalent transport
-    that exposes ``build_headers``, ``get_chat_url``, ``load_login_info``,
-    ``load_state``, and ``request_json``.
-    """
-    _joycode_rate_limit()
-
-    import sys as _sys
-
-    _joycode_path = os.path.expanduser(os.environ.get("JOYCODE_PATH", "~/code/joycode"))
-    if not os.path.isdir(_joycode_path):
-        raise RuntimeError(
-            "JoyCode provider is not available in the open-source build. "
-            "Set JOY_KIMI_ENABLED=0 and JOY_GPT_ENABLED=0, or point "
-            "JOYCODE_PATH at a local JoyCode checkout. "
-            "Alternatives: use provider='anthropic', 'openai', 'codex', or 'cursor_agent'."
-        )
-    if _joycode_path not in _sys.path:
-        _sys.path.insert(0, _joycode_path)
-
-    from joycode_api_probe import (  # type: ignore[import-untyped]
-        build_headers,
-        get_chat_url,
-        load_login_info,
-        load_state,
-        request_json,
-    )
-
-    state = load_state()
-    login_info = load_login_info(state)
-    headers = build_headers(login_info)
-
-    # Enable streaming to bypass nginx upstream timeout (504 Gateway Timeout).
-    # nginx proxy_read_timeout is inter-frame silence (~60s), not total duration.
-    # With stream=True, backend flushes tokens continuously so nginx never
-    # sees a 60s silence gap — long prompts / long outputs stop triggering 504.
-    # The curl-based transport buffers all SSE frames and
-    # _parse_json_response / _merge_chunked_json already merge them into the
-    # standard non-streaming shape, so callers need no changes.
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": True,
-        # Ask the backend to include a final usage-only frame so provenance
-        # token accounting survives under streaming (OpenAI spec §stream_options).
-        "stream_options": {"include_usage": True},
-    }
-
-    resp = request_json(get_chat_url(login_info), payload, headers, timeout=600)
-
-    prompt_tokens, completion_tokens = _usage_from_openai_dict(resp)
-    _record_usage(prompt_tokens, completion_tokens)
-
-    # Extract content from OpenAI-format response
-    choices = resp.get("choices", [])
-    if choices and isinstance(choices[0], dict):
-        msg = choices[0].get("message", {})
-        if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-            return msg["content"].strip()
-    return json.dumps(resp, ensure_ascii=False)
-
-
-def _chat_joy_kimi(
-    prompt: str, model: str, *, temperature: float = 0.0, **_: Any
-) -> str:
-    """Call JoyCode Kimi K2.5 via the shared joycode transport."""
-    return _call_joycode_chat(
-        prompt, model or _JOY_KIMI_DEFAULT_MODEL, temperature=temperature
-    )
-
-
-def _chat_joy_gpt(
-    prompt: str, model: str, *, temperature: float = 0.0, **_: Any
-) -> str:
-    """Call JoyCode GPT (default: gpt-5) via the shared joycode transport.
-
-    Replaces the Cursor Agent worker for light/medium tiers: the JoyCode
-    backend exposes OpenAI's flagship GPT-5 (400k context window), which is
-    more than sufficient for paper reading / summarization / gap detection
-    and far cheaper than the Anthropic API path.
-    """
-    return _call_joycode_chat(
-        prompt, model or _JOY_GPT_DEFAULT_MODEL, temperature=temperature
-    )
-
-
-_JOY_GPT_TASKS: frozenset[str] = frozenset(
-    {
-        # Heavy-tier paper reading (cross-paper synthesis, critical analysis)
-        "deep_read_pass2",
-        "gap_detect",
-        "baseline_identify",
-        "method_taxonomy",
-        "evidence_matrix",
-        "contradiction_detect",
-        "direction_ranking",
-        "consistency_check",
-        # Auto-runner stage planner
-        "stage_planner",
-    }
-)
-
-
-def is_joy_kimi_task(task_name: str) -> bool:
-    """Check if *task_name* should be routed to joy_kimi (when enabled via env)."""
-    if os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return False
-    return task_name in _JOY_KIMI_TASKS
-
-
-def is_joy_gpt_task(task_name: str) -> bool:
-    """Check if *task_name* should be routed to joy_gpt (when enabled via env)."""
-    if os.environ.get("JOY_GPT_ENABLED", "").strip().lower() not in (
-        "1",
-        "true",
-        "yes",
-    ):
-        return False
-    return task_name in _JOY_GPT_TASKS
-
-
-def joy_kimi_route() -> tuple[str, str]:
-    """Return ``(provider, model)`` tuple for joy_kimi tasks."""
-    model = os.environ.get("JOY_KIMI_MODEL", "").strip() or _JOY_KIMI_DEFAULT_MODEL
-    return ("joy_kimi", model)
-
-
-def joy_gpt_route() -> tuple[str, str]:
-    """Return ``(provider, model)`` tuple for joy_gpt tasks."""
-    model = os.environ.get("JOY_GPT_MODEL", "").strip() or _JOY_GPT_DEFAULT_MODEL
-    return ("joy_gpt", model)
-
-
-# ---------------------------------------------------------------------------
 # Register Built-in Providers
 # ---------------------------------------------------------------------------
 
@@ -661,8 +430,6 @@ register_provider("codex", _chat_codex)
 register_provider("anthropic", _chat_anthropic)
 register_provider("openai", _chat_openai)
 register_provider("kimi", _chat_kimi)
-register_provider("joy_kimi", _chat_joy_kimi)
-register_provider("joy_gpt", _chat_joy_gpt)
 
 
 # ---------------------------------------------------------------------------
@@ -693,22 +460,12 @@ class ResolvedLLMConfig:
 def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMConfig:
     """Resolve LLM config from overrides -> env vars, auto-detecting provider.
 
-    Priority: explicit override > joy_gpt > cursor_agent > codex > anthropic > openai > kimi
+    Priority: explicit override > cursor_agent > codex > anthropic > openai > kimi
     """
     overrides = overrides or {}
     provider_override = str(overrides.get("provider", "")).strip().lower()
 
     # Env detection
-    joy_kimi_enabled = os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    )
-    joy_gpt_enabled = os.environ.get("JOY_GPT_ENABLED", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-    )
     cursor_enabled = os.environ.get("CURSOR_AGENT_ENABLED", "").strip().lower() in (
         "1",
         "true",
@@ -734,10 +491,6 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
         provider = provider_override
     elif overrides.get("api_key"):
         provider = "openai"
-    elif joy_kimi_enabled and provider_override == "joy_kimi":
-        provider = "joy_kimi"
-    elif joy_gpt_enabled:
-        provider = "joy_gpt"
     elif cursor_enabled:
         provider = "cursor_agent"
     elif codex_enabled:
@@ -756,23 +509,7 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
     api_key: str
     base_url: str
 
-    if provider == "joy_kimi":
-        model = str(
-            overrides.get("model")
-            or os.environ.get("JOY_KIMI_MODEL")
-            or _JOY_KIMI_DEFAULT_MODEL
-        )
-        api_key = ""
-        base_url = ""
-    elif provider == "joy_gpt":
-        model = str(
-            overrides.get("model")
-            or os.environ.get("JOY_GPT_MODEL")
-            or _JOY_GPT_DEFAULT_MODEL
-        )
-        api_key = ""
-        base_url = ""
-    elif provider == "cursor_agent":
+    if provider == "cursor_agent":
         model = str(
             overrides.get("model")
             or os.environ.get("CURSOR_AGENT_MODEL")

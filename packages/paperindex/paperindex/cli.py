@@ -9,7 +9,7 @@ from .cards.extraction import CARD_EXTRACTION_SECTIONS
 from .indexer import PaperIndexer
 from .indexing.markdown import structure_to_markdown_outline
 from .library import DEFAULT_LIBRARY_DIRNAME
-from .llm.client import resolve_llm_config
+from llm_router.client import resolve_llm_config
 
 
 def _default_library_root() -> Path:
@@ -269,7 +269,7 @@ def doctor_cmd(json_output: bool) -> None:
 
     if config.api_key and config.model:
         try:
-            from .llm.client import LLMClient
+            from llm_router.client import LLMClient
 
             client = LLMClient(config)
             client.chat(prompt="Reply with exactly: ok", temperature=0.0)

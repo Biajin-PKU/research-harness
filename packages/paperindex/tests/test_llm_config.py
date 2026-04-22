@@ -1,4 +1,4 @@
-from paperindex.llm.client import (
+from llm_router.client import (
     LLMClient,
     ResolvedLLMConfig,
     _extract_kimi_text,
@@ -28,10 +28,6 @@ ALL_ENV_VARS = [
     "CURSOR_AGENT_MODEL",
     "CODEX_ENABLED",
     "CODEX_MODEL",
-    "JOY_KIMI_ENABLED",
-    "JOY_KIMI_MODEL",
-    "JOY_GPT_ENABLED",
-    "JOY_GPT_MODEL",
     "LLM_ROUTE_LIGHT",
     "LLM_ROUTE_MEDIUM",
     "LLM_ROUTE_HEAVY",
@@ -247,7 +243,7 @@ def test_llm_client_kimi_uses_anthropic_streaming(monkeypatch):
             self.messages = DummyMessages()
 
     monkeypatch.setattr(
-        "paperindex.llm.client._build_anthropic_client",
+        "llm_router.client._build_anthropic_client",
         lambda api_key, base_url: DummyClient(),
     )
 
@@ -266,105 +262,6 @@ def test_llm_client_kimi_uses_anthropic_streaming(monkeypatch):
     assert captured["max_tokens"] == 20480
     assert captured["messages"] == [{"role": "user", "content": "你好，请介绍一下自己"}]
 
-
-def test_resolve_joy_gpt_via_env(monkeypatch):
-    _clear_env(monkeypatch)
-    monkeypatch.setenv("JOY_GPT_ENABLED", "1")
-
-    config = resolve_llm_config()
-    assert config.provider == "joy_gpt"
-    assert config.model == "gpt-5"
-    assert config.api_key == ""
-    assert config.base_url == ""
-
-
-def test_resolve_joy_gpt_honors_model_override(monkeypatch):
-    _clear_env(monkeypatch)
-    monkeypatch.setenv("JOY_GPT_ENABLED", "1")
-    monkeypatch.setenv("JOY_GPT_MODEL", "GPT 5.3-codex")
-
-    config = resolve_llm_config()
-    assert config.provider == "joy_gpt"
-    assert config.model == "GPT 5.3-codex"
-
-
-def test_resolve_joy_gpt_explicit_provider_override(monkeypatch):
-    _clear_env(monkeypatch)
-    # No env enable, but explicit override should still select joy_gpt.
-    config = resolve_llm_config({"provider": "joy_gpt"})
-    assert config.provider == "joy_gpt"
-    assert config.model == "gpt-5"
-
-
-def test_joy_gpt_preferred_over_cursor_when_both_enabled(monkeypatch):
-    _clear_env(monkeypatch)
-    monkeypatch.setenv("CURSOR_AGENT_ENABLED", "1")
-    monkeypatch.setenv("JOY_GPT_ENABLED", "1")
-
-    config = resolve_llm_config()
-    assert config.provider == "joy_gpt"
-
-
-def test_default_routes_use_joy_gpt_for_light_and_medium(monkeypatch):
-    _clear_env(monkeypatch)
-    from paperindex.llm.client import resolve_route
-
-    assert resolve_route("light") == ("joy_gpt", "gpt-5")
-    assert resolve_route("medium") == ("joy_gpt", "gpt-5")
-    # Heavy tier still routes to codex.
-    prov, _ = resolve_route("heavy")
-    assert prov == "codex"
-
-
-def test_joy_gpt_provider_registered():
-    from paperindex.llm.client import list_providers
-
-    providers = list_providers()
-    assert "joy_gpt" in providers
-    # Cursor agent is still registered for backward compatibility.
-    assert "cursor_agent" in providers
-
-
-def test_joy_gpt_route_helper(monkeypatch):
-    _clear_env(monkeypatch)
-    from paperindex.llm.client import joy_gpt_route
-
-    assert joy_gpt_route() == ("joy_gpt", "gpt-5")
-
-    monkeypatch.setenv("JOY_GPT_MODEL", "GPT 5.3-codex")
-    assert joy_gpt_route() == ("joy_gpt", "GPT 5.3-codex")
-
-
-def test_joy_gpt_and_joy_kimi_share_rate_limiter():
-    from paperindex.llm.client import (
-        _joy_kimi_timestamps,
-        _joycode_timestamps,
-    )
-
-    # Backward-compat alias must point to the same list instance.
-    assert _joy_kimi_timestamps is _joycode_timestamps
-
-
-def test_chat_joy_gpt_calls_shared_transport(monkeypatch):
-    from paperindex.llm import client as client_mod
-
-    captured: dict = {}
-
-    def fake_call(prompt, model, *, temperature=0.0, max_tokens=4096):
-        captured["prompt"] = prompt
-        captured["model"] = model
-        captured["temperature"] = temperature
-        return "joy_gpt ok"
-
-    monkeypatch.setattr(client_mod, "_call_joycode_chat", fake_call)
-
-    result = client_mod._chat_joy_gpt("hello", "", temperature=0.2)
-    assert result == "joy_gpt ok"
-    assert captured["model"] == "gpt-5"  # default when blank
-    assert captured["temperature"] == 0.2
-
-    result = client_mod._chat_joy_gpt("hi", "GPT 5.3-codex")
-    assert captured["model"] == "GPT 5.3-codex"
 
 
 def test_post_json_retries_transient_errors(monkeypatch):
@@ -386,8 +283,8 @@ def test_post_json_retries_transient_errors(monkeypatch):
             raise ConnectionResetError("peer reset")
         return DummyResponse()
 
-    monkeypatch.setattr("paperindex.llm.client.request.urlopen", fake_urlopen)
-    monkeypatch.setattr("paperindex.llm.client.time.sleep", lambda _: None)
+    monkeypatch.setattr("llm_router.client.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("llm_router.client.time.sleep", lambda _: None)
 
     payload = _post_json("https://example.com/messages", {"ping": 1}, {"x-test": "1"})
     assert payload == {"ok": True}

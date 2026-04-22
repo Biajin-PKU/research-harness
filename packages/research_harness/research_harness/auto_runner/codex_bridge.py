@@ -5,12 +5,11 @@ ANTHROPIC_* env vars. Used for adversarial review at quality gates.
 
 Fallback chain (tried in order):
   1. ``codex`` CLI — preferred, independent cross-model review
-  2. Opus via joycode (joy_gpt) — when codex times out or is unavailable
-  3. Anthropic API (claude-opus-4-6) — when running inside Codex sandbox
+  2. Anthropic API (claude-opus-4-6) — when codex CLI is unavailable or times out
 
 How to invoke adversarial review in other sessions:
   - From Claude Code: use Agent tool with subagent_type="codex:codex-rescue"
-  - From any session: set RESEARCH_HARNESS_ADVERSARIAL_BACKEND=joycode|anthropic
+  - From any session: set RESEARCH_HARNESS_ADVERSARIAL_BACKEND=anthropic
   - Programmatically: call run_codex_review() which handles the fallback chain
 """
 
@@ -88,60 +87,6 @@ def _find_codex() -> str | None:
     return None
 
 
-def _adversarial_via_joycode(
-    *,
-    artifact_path: Path,
-    stage: str,
-    focus: str,
-    evidence_summary: str = "",
-) -> dict[str, Any]:
-    """Run adversarial review via Opus (joycode/joy_gpt).
-
-    Second-choice fallback when codex CLI times out or is unavailable.
-    Uses the joy_gpt router (task_name="stage_planner") for cost-effective
-    Opus-level review.
-    """
-    try:
-        from ..execution.llm_primitives import _client_chat, _get_client
-    except ImportError:
-        return {
-            "success": False,
-            "error": "LLM primitives not available for joycode fallback",
-            "verdict": "",
-            "issues": [],
-            "scores": {},
-            "notes": "",
-            "raw_output": "",
-        }
-
-    prompt = ADVERSARIAL_REVIEW_TEMPLATE.format(
-        artifact_path=artifact_path,
-        stage=stage,
-        focus=focus,
-        evidence_summary=evidence_summary[:3000],
-    )
-
-    try:
-        client = _get_client(tier="medium", task_name="stage_planner")
-        raw = _client_chat(client, prompt)
-        parsed = _parse_codex_output(raw)
-        parsed["success"] = True
-        parsed["raw_output"] = raw
-        parsed["backend"] = "joycode"
-        logger.info("Adversarial review completed via joycode (Opus fallback)")
-        return parsed
-    except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Joycode adversarial review failed: {exc}",
-            "verdict": "",
-            "issues": [],
-            "scores": {},
-            "notes": "",
-            "raw_output": "",
-        }
-
-
 def _adversarial_via_anthropic(
     *,
     artifact_path: Path,
@@ -156,7 +101,7 @@ def _adversarial_via_anthropic(
     be recursive or unavailable.
     """
     try:
-        from paperindex.llm.client import LLMClient, ResolvedLLMConfig
+        from llm_router.client import LLMClient, ResolvedLLMConfig
     except ImportError:
         return {
             "success": False,
@@ -228,12 +173,10 @@ def run_codex_review(
 
     Fallback chain:
       1. ``codex`` CLI — independent cross-model review (preferred)
-      2. Opus via joycode — when codex times out or CLI not found
-      3. Anthropic API — when ``RESEARCH_HARNESS_ADVERSARIAL_BACKEND=anthropic``
+      2. Anthropic API (Opus) — when codex times out or CLI not found
 
     Set ``RESEARCH_HARNESS_ADVERSARIAL_BACKEND`` to force a specific backend:
       - ``codex`` (default): try codex CLI first
-      - ``joycode``: skip codex, use joy_gpt Opus directly
       - ``anthropic``: use Anthropic API directly
 
     Returns a dict with keys: success, verdict, issues, scores, notes,
@@ -249,20 +192,12 @@ def run_codex_review(
             evidence_summary=evidence_summary,
         )
 
-    if backend_env == "joycode":
-        return _adversarial_via_joycode(
-            artifact_path=artifact_path,
-            stage=stage,
-            focus=focus,
-            evidence_summary=evidence_summary,
-        )
-
     codex = _find_codex()
     if codex is None:
         logger.info(
-            "codex CLI not found — falling back to joycode (Opus) for adversarial review"
+            "codex CLI not found — falling back to Anthropic API for adversarial review"
         )
-        return _adversarial_via_joycode(
+        return _adversarial_via_anthropic(
             artifact_path=artifact_path,
             stage=stage,
             focus=focus,
@@ -328,10 +263,10 @@ def run_codex_review(
     except subprocess.TimeoutExpired:
         Path(out_path).unlink(missing_ok=True)
         logger.warning(
-            "codex timed out after %ds — falling back to joycode (Opus)",
+            "codex timed out after %ds — falling back to Anthropic API",
             timeout_seconds,
         )
-        return _adversarial_via_joycode(
+        return _adversarial_via_anthropic(
             artifact_path=artifact_path,
             stage=stage,
             focus=focus,
@@ -340,10 +275,10 @@ def run_codex_review(
     except Exception as exc:
         Path(out_path).unlink(missing_ok=True)
         logger.warning(
-            "codex subprocess failed: %s — falling back to joycode (Opus)",
+            "codex subprocess failed: %s — falling back to Anthropic API",
             exc,
         )
-        return _adversarial_via_joycode(
+        return _adversarial_via_anthropic(
             artifact_path=artifact_path,
             stage=stage,
             focus=focus,

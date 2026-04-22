@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Literal
 
-from ..llm.client import LLMClient, ResolvedLLMConfig
+from llm_router.client import LLMClient, ResolvedLLMConfig
 from ..types import SearchResult
 
 RerankMode = Literal["none", "heuristic", "llm"]

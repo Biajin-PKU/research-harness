@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from paperindex.llm.client import resolve_llm_config
+from llm_router.client import resolve_llm_config
 
 from ..primitives.registry import get_primitive_impl, get_primitive_spec
 from ..primitives.types import EvidenceLink, EvidenceLinkOutput, PrimitiveResult

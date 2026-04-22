@@ -14,6 +14,7 @@ dependencies = [
   "pyyaml>=6.0",
   "tiktoken>=0.7.0",
   "click>=8.1",
+  "llm-router>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ dev = [
   "pytest-cov>=5.0",
   "ruff>=0.11.0",
   "pdfplumber>=0.11.0",
+  "openai>=1.0.0",
 ]
 
 [project.scripts]

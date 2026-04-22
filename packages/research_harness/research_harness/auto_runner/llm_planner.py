@@ -6,7 +6,7 @@ parameters for the current stage's tools (as a JSON dict).
 
 Design constraints:
   - One LLM call per stage (cost control)
-  - Routes to joy_gpt via task_name="stage_planner"
+  - Routes via the medium tier (`LLM_ROUTE_MEDIUM` env override)
   - Idempotent: same DB state → same output
   - Fail-safe: planner error → returns {} without blocking execution
   - init stage skipped (parameters already known)

@@ -38,7 +38,7 @@ class StaleCheckResult:
 
 
 def _get_llm_client(tier: str) -> Any:
-    from paperindex.llm.client import LLMClient, resolve_llm_config
+    from llm_router.client import LLMClient, resolve_llm_config
 
     client = LLMClient(resolve_llm_config())
     client._default_tier = tier  # type: ignore[attr-defined]

@@ -83,7 +83,7 @@ def _fake_llm_chat(
 
 
 def test_paper_annotate_cli(runner, tmp_path, monkeypatch):
-    monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
+    monkeypatch.setattr("llm_router.client.LLMClient.chat", _fake_llm_chat)
     pdf_path = _make_pdf(tmp_path / "sample.pdf")
 
     topic = runner.invoke(main, ["topic", "init", "demo"])
@@ -153,7 +153,7 @@ def test_paper_annotate_cli(runner, tmp_path, monkeypatch):
 def test_paper_annotate_incremental_reuses_cached_sections(
     runner, tmp_path, monkeypatch
 ):
-    monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
+    monkeypatch.setattr("llm_router.client.LLMClient.chat", _fake_llm_chat)
     pdf_path = _make_pdf(tmp_path / "incremental.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
     assert (

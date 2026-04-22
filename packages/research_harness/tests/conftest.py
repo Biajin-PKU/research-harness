@@ -58,7 +58,7 @@ def _stub_paperindex_llm_chat(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_chat)
+    monkeypatch.setattr("llm_router.client.LLMClient.chat", _fake_chat)
 
 
 @pytest.fixture

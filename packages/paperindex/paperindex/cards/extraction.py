@@ -5,11 +5,9 @@ import json
 import re
 from typing import Any
 
-from ..llm.client import (
+from llm_router.client import (
     LLMClient,
     ResolvedLLMConfig,
-    is_joy_kimi_task,
-    joy_kimi_route,
     resolve_llm_config,
     resolve_route,
 )
@@ -295,12 +293,8 @@ def build_paper_card(
     llm_config: dict[str, Any] | None = None,
     pdf_path: str | None = None,
 ) -> PaperCard:
-    # Paper card extraction: use joy_kimi for single-paper reading when enabled,
-    # otherwise fall back to medium tier routing (RED LINE enforced).
-    if is_joy_kimi_task("build_paper_card"):
-        prov, model = joy_kimi_route()
-    else:
-        prov, model = resolve_route("medium")
+    # Paper card extraction: medium tier (override via LLM_ROUTE_MEDIUM env).
+    prov, model = resolve_route("medium")
     config = resolve_llm_config(
         {"provider": prov, "model": model, **(llm_config or {})}
     )

@@ -357,7 +357,7 @@ def test_token_report_by_topic_isolation(db) -> None:
 def test_llm_primitives_token_accumulator() -> None:
     """_client_chat accumulates usage across multiple calls."""
     from research_harness.execution import llm_primitives
-    from paperindex.llm import client as pclient
+    from llm_router import client as pclient
 
     llm_primitives._reset_token_accumulator()
     # No calls yet

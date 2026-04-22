@@ -9,14 +9,10 @@ import re
 import threading as _threading
 from typing import Any
 
-from paperindex.llm.client import (
+from llm_router.client import (
     LLMClient,
     TaskTier,
     get_last_usage,
-    is_joy_gpt_task,
-    is_joy_kimi_task,
-    joy_gpt_route,
-    joy_kimi_route,
     resolve_llm_config,
 )
 
@@ -149,18 +145,6 @@ _ANTHROPIC_BLOCKED_PRIMITIVES: frozenset[str] = frozenset(
 def _get_client(
     model_override: str | None = None, tier: TaskTier | None = None, task_name: str = ""
 ) -> LLMClient:
-    # joy_kimi override for single-paper reading tasks (light/medium tier)
-    if task_name and not model_override and is_joy_kimi_task(task_name):
-        prov, mdl = joy_kimi_route()
-        client = LLMClient(resolve_llm_config({"provider": prov, "model": mdl}))
-        client._default_tier = None  # type: ignore[attr-defined]
-        return client
-    # joy_gpt override for heavy-tier paper analysis tasks
-    if task_name and not model_override and is_joy_gpt_task(task_name):
-        prov, mdl = joy_gpt_route()
-        client = LLMClient(resolve_llm_config({"provider": prov, "model": mdl}))
-        client._default_tier = None  # type: ignore[attr-defined]
-        return client
     overrides = {"model": model_override} if model_override else None
     client = LLMClient(resolve_llm_config(overrides))
     # Store tier so chat() can use it
@@ -2070,7 +2054,7 @@ def deep_read(
             confidence=0.0,
         )
 
-    # --- Pass 1: deep extraction (medium tier, or joy_kimi for single-paper reading) ---
+    # --- Pass 1: deep extraction (medium tier) ---
     client1 = _get_client(
         _model,
         tier=_PRIMITIVE_TIERS.get("deep_read_pass1"),
@@ -3312,7 +3296,7 @@ def iterative_retrieval_loop(
                 # Crude cost estimate: $0.005 per primitive call already baked
                 # into estimate_cost. Use accumulated token count as proxy:
                 # assume $0.5 per million tokens in + $1.5 per million out
-                # (matches joy_gpt rough pricing tier).
+                # (matches gpt-4o rough pricing tier).
                 est_cost = ((prompt_so_far or 0) / 1_000_000) * 0.5 + (
                     (completion_so_far or 0) / 1_000_000
                 ) * 1.5

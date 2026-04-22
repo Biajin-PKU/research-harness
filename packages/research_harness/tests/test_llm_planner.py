@@ -1756,9 +1756,9 @@ class TestCodeValidateParams:
 
 
 class TestCodexBridgeFallback:
-    """Codex timeout falls back to joycode."""
+    """Codex timeout / CLI missing falls back to Anthropic."""
 
-    def test_timeout_falls_back_to_joycode(self, tmp_path):
+    def test_timeout_falls_back_to_anthropic(self, tmp_path):
         from unittest.mock import patch
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
@@ -1773,17 +1773,17 @@ class TestCodexBridgeFallback:
                 side_effect=__import__("subprocess").TimeoutExpired("codex", 300),
             ),
             patch(
-                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
-            ) as mock_joy,
+                "research_harness.auto_runner.codex_bridge._adversarial_via_anthropic"
+            ) as mock_anth,
         ):
-            mock_joy.return_value = {
+            mock_anth.return_value = {
                 "success": True,
                 "verdict": "approve",
                 "issues": [],
                 "scores": {},
-                "notes": "Joycode fallback",
+                "notes": "Anthropic fallback",
                 "raw_output": "",
-                "backend": "joycode",
+                "backend": "anthropic",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1792,10 +1792,10 @@ class TestCodexBridgeFallback:
             )
 
         assert result["success"] is True
-        assert result["backend"] == "joycode"
-        mock_joy.assert_called_once()
+        assert result["backend"] == "anthropic"
+        mock_anth.assert_called_once()
 
-    def test_no_codex_cli_uses_joycode(self, tmp_path):
+    def test_no_codex_cli_uses_anthropic(self, tmp_path):
         from unittest.mock import patch
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
@@ -1806,17 +1806,17 @@ class TestCodexBridgeFallback:
                 return_value=None,
             ),
             patch(
-                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
-            ) as mock_joy,
+                "research_harness.auto_runner.codex_bridge._adversarial_via_anthropic"
+            ) as mock_anth,
         ):
-            mock_joy.return_value = {
+            mock_anth.return_value = {
                 "success": True,
                 "verdict": "approve",
                 "issues": [],
                 "scores": {},
                 "notes": "",
                 "raw_output": "",
-                "backend": "joycode",
+                "backend": "anthropic",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1824,10 +1824,10 @@ class TestCodexBridgeFallback:
                 focus="test",
             )
 
-        assert result["backend"] == "joycode"
+        assert result["backend"] == "anthropic"
 
-    def test_subprocess_error_falls_back_to_joycode(self, tmp_path):
-        """Non-timeout subprocess exceptions also fallback to joycode."""
+    def test_subprocess_error_falls_back_to_anthropic(self, tmp_path):
+        """Non-timeout subprocess exceptions also fallback to Anthropic."""
         from unittest.mock import patch
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
@@ -1842,17 +1842,17 @@ class TestCodexBridgeFallback:
                 side_effect=OSError("Permission denied"),
             ),
             patch(
-                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
-            ) as mock_joy,
+                "research_harness.auto_runner.codex_bridge._adversarial_via_anthropic"
+            ) as mock_anth,
         ):
-            mock_joy.return_value = {
+            mock_anth.return_value = {
                 "success": True,
                 "verdict": "approve",
                 "issues": [],
                 "scores": {},
                 "notes": "",
                 "raw_output": "",
-                "backend": "joycode",
+                "backend": "anthropic",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1861,8 +1861,8 @@ class TestCodexBridgeFallback:
             )
 
         assert result["success"] is True
-        assert result["backend"] == "joycode"
-        mock_joy.assert_called_once()
+        assert result["backend"] == "anthropic"
+        mock_anth.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
