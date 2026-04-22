@@ -4,8 +4,6 @@ import json
 import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from paperindex import PaperIndexer
 from paperindex.types import SectionNode, SectionResult, StructureResult
 from paperindex.utils import sha256_file
@@ -13,18 +11,34 @@ from paperindex.utils import sha256_file
 from ..core.paper_pool import PaperPool
 from ..storage.models import PaperAnnotation
 
+logger = logging.getLogger(__name__)
+
 
 class PaperIndexAdapter:
     def __init__(self, conn, artifacts_root: str | Path):
         self._conn = conn
         self._artifacts_root = Path(artifacts_root)
 
-    def annotate_paper(self, paper_id: int, pdf_path: str | Path, sections: list[str] | None = None, *, skip_card: bool = False) -> dict[str, object]:
+    def annotate_paper(
+        self,
+        paper_id: int,
+        pdf_path: str | Path,
+        sections: list[str] | None = None,
+        *,
+        skip_card: bool = False,
+    ) -> dict[str, object]:
         pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(pdf_path)
 
-        selected_sections = sections or ["summary", "methodology", "experiments", "equations", "limitations", "reproduction_notes"]
+        selected_sections = sections or [
+            "summary",
+            "methodology",
+            "experiments",
+            "equations",
+            "limitations",
+            "reproduction_notes",
+        ]
         current_pdf_hash = sha256_file(pdf_path)
         artifact_dir = self._artifacts_root / f"paper_{paper_id}"
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -36,7 +50,9 @@ class PaperIndexAdapter:
         if structure is None:
             structure = PaperIndexer().extract_structure(pdf_path)
             structure_source = "fresh"
-            structure_path.write_text(json.dumps(structure.to_dict(), ensure_ascii=False, indent=2))
+            structure_path.write_text(
+                json.dumps(structure.to_dict(), ensure_ascii=False, indent=2)
+            )
 
         pool = PaperPool(self._conn)
         cached_annotations = {
@@ -44,8 +60,14 @@ class PaperIndexAdapter:
             for item in pool.get_annotations(paper_id)
             if item.pdf_hash_at_extraction == current_pdf_hash
         }
-        reused_sections = [section for section in selected_sections if section in cached_annotations]
-        extracted_sections = [section for section in selected_sections if section not in cached_annotations]
+        reused_sections = [
+            section for section in selected_sections if section in cached_annotations
+        ]
+        extracted_sections = [
+            section
+            for section in selected_sections
+            if section not in cached_annotations
+        ]
 
         indexer = PaperIndexer()
         extracted_results: dict[str, SectionResult] = {}
@@ -91,7 +113,11 @@ class PaperIndexAdapter:
                 card_path.write_text(json.dumps(card, ensure_ascii=False, indent=2))
                 card_ok = True
             except Exception as card_err:
-                logger.warning("build_card failed for paper %d (section annotations still saved): %s", paper_id, card_err)
+                logger.warning(
+                    "build_card failed for paper %d (section annotations still saved): %s",
+                    paper_id,
+                    card_err,
+                )
 
         self._conn.execute(
             "DELETE FROM paper_artifacts WHERE paper_id = ? AND artifact_type IN (?, ?)",
@@ -103,7 +129,13 @@ class PaperIndexAdapter:
                 paper_id,
                 "paperindex_structure",
                 str(structure_path),
-                json.dumps({"pdf_hash": structure.pdf_hash, "page_count": structure.page_count, "source": structure_source}),
+                json.dumps(
+                    {
+                        "pdf_hash": structure.pdf_hash,
+                        "page_count": structure.page_count,
+                        "source": structure_source,
+                    }
+                ),
             ),
         )
         if card_ok and card is not None:
@@ -113,7 +145,12 @@ class PaperIndexAdapter:
                     paper_id,
                     "paperindex_card",
                     str(card_path),
-                    json.dumps({"fields": sorted(card.keys()), "section_count": len(merged_sections)}),
+                    json.dumps(
+                        {
+                            "fields": sorted(card.keys()),
+                            "section_count": len(merged_sections),
+                        }
+                    ),
                 ),
             )
         self._conn.execute(
@@ -139,7 +176,9 @@ class PaperIndexAdapter:
         }
 
     @staticmethod
-    def _load_cached_structure(structure_path: Path, expected_pdf_hash: str) -> StructureResult | None:
+    def _load_cached_structure(
+        structure_path: Path, expected_pdf_hash: str
+    ) -> StructureResult | None:
         if not structure_path.exists():
             return None
         try:

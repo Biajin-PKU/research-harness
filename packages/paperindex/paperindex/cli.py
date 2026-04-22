@@ -53,7 +53,9 @@ def section_cmd(pdf_path: Path, section_name: str, json_output: bool) -> None:
 def card_cmd(pdf_path: Path, json_output: bool) -> None:
     indexer = PaperIndexer()
     structure = indexer.extract_structure(pdf_path)
-    sections = [indexer.extract_section(structure, name) for name in CARD_EXTRACTION_SECTIONS]
+    sections = [
+        indexer.extract_section(structure, name) for name in CARD_EXTRACTION_SECTIONS
+    ]
     card = indexer.build_card(structure, sections)
     payload = card.to_dict()
     if json_output:
@@ -64,7 +66,9 @@ def card_cmd(pdf_path: Path, json_output: bool) -> None:
 
 @main.command("ingest")
 @click.argument("pdf_path", type=click.Path(exists=True, path_type=Path))
-@click.option("--library-root", type=click.Path(path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root", type=click.Path(path_type=Path), default=_default_library_root
+)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
 def ingest_cmd(pdf_path: Path, library_root: Path, json_output: bool) -> None:
     record = PaperIndexer().ingest(pdf_path, library_root)
@@ -76,7 +80,11 @@ def ingest_cmd(pdf_path: Path, library_root: Path, json_output: bool) -> None:
 
 
 @main.command("catalog")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
 def catalog_cmd(library_root: Path, json_output: bool) -> None:
     payload = [item.to_dict() for item in PaperIndexer().list_catalog(library_root)]
@@ -89,14 +97,34 @@ def catalog_cmd(library_root: Path, json_output: bool) -> None:
 
 @main.command("search")
 @click.argument("query")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--limit", type=int, default=5, show_default=True)
 @click.option("--catalog-only", is_flag=True, default=False)
-@click.option("--rerank-mode", type=click.Choice(["heuristic", "none", "llm"]), default="heuristic", show_default=True)
+@click.option(
+    "--rerank-mode",
+    type=click.Choice(["heuristic", "none", "llm"]),
+    default="heuristic",
+    show_default=True,
+)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
-def search_cmd(query: str, library_root: Path, limit: int, catalog_only: bool, rerank_mode: str, json_output: bool) -> None:
+def search_cmd(
+    query: str,
+    library_root: Path,
+    limit: int,
+    catalog_only: bool,
+    rerank_mode: str,
+    json_output: bool,
+) -> None:
     indexer = PaperIndexer()
-    results = indexer.search_catalog_only(query, library_root, limit=limit) if catalog_only else indexer.search(query, library_root, limit=limit, rerank_mode=rerank_mode)
+    results = (
+        indexer.search_catalog_only(query, library_root, limit=limit)
+        if catalog_only
+        else indexer.search(query, library_root, limit=limit, rerank_mode=rerank_mode)
+    )
     payload = [item.to_dict() for item in results]
     if json_output:
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
@@ -111,12 +139,18 @@ def search_cmd(query: str, library_root: Path, limit: int, catalog_only: bool, r
         if item["snippet"]:
             click.echo(item["snippet"])
         for match in item.get("structure_matches", []):
-            click.echo(f"  - {match['node_id']} {match['title']} ({match['start_page']}-{match['end_page']})")
+            click.echo(
+                f"  - {match['node_id']} {match['title']} ({match['start_page']}-{match['end_page']})"
+            )
 
 
 @main.command("show")
 @click.argument("paper_id")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
 def show_cmd(paper_id: str, library_root: Path, json_output: bool) -> None:
     record = PaperIndexer().load_record(paper_id, library_root)
@@ -129,21 +163,35 @@ def show_cmd(paper_id: str, library_root: Path, json_output: bool) -> None:
 
 @main.command("show-structure")
 @click.argument("paper_id")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--with-text", is_flag=True, default=False)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
-def show_structure_cmd(paper_id: str, library_root: Path, with_text: bool, json_output: bool) -> None:
+def show_structure_cmd(
+    paper_id: str, library_root: Path, with_text: bool, json_output: bool
+) -> None:
     indexer = PaperIndexer()
     payload = indexer.get_structure(paper_id, library_root, include_text=with_text)
     if json_output:
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
-    click.echo(structure_to_markdown_outline(indexer.load_record(paper_id, library_root).structure.tree))
+    click.echo(
+        structure_to_markdown_outline(
+            indexer.load_record(paper_id, library_root).structure.tree
+        )
+    )
 
 
 @main.command("show-content")
 @click.argument("paper_id")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--section-name", type=str)
 @click.option("--node-id", type=str)
 @click.option("--title-query", type=str)
@@ -175,11 +223,22 @@ def show_content_cmd(
 @main.command("structure-search")
 @click.argument("paper_id")
 @click.argument("query")
-@click.option("--library-root", type=click.Path(exists=True, file_okay=False, path_type=Path), default=_default_library_root)
+@click.option(
+    "--library-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=_default_library_root,
+)
 @click.option("--limit", type=int, default=5, show_default=True)
 @click.option("--json-output", "json_output", is_flag=True, default=False)
-def structure_search_cmd(paper_id: str, query: str, library_root: Path, limit: int, json_output: bool) -> None:
-    payload = [item.to_dict() for item in PaperIndexer().get_structure_matches(paper_id, query, library_root, limit=limit)]
+def structure_search_cmd(
+    paper_id: str, query: str, library_root: Path, limit: int, json_output: bool
+) -> None:
+    payload = [
+        item.to_dict()
+        for item in PaperIndexer().get_structure_matches(
+            paper_id, query, library_root, limit=limit
+        )
+    ]
     if json_output:
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
@@ -187,7 +246,9 @@ def structure_search_cmd(paper_id: str, query: str, library_root: Path, limit: i
         click.echo("No structure matches found.")
         return
     for item in payload:
-        click.echo(f"[{item['score']:.1f}] {item['node_id']} {item['title']} ({item['start_page']}-{item['end_page']})")
+        click.echo(
+            f"[{item['score']:.1f}] {item['node_id']} {item['title']} ({item['start_page']}-{item['end_page']})"
+        )
         if item["snippet"]:
             click.echo(item["snippet"])
 
@@ -200,13 +261,16 @@ def doctor_cmd(json_output: bool) -> None:
     status: dict[str, str] = {
         "provider": config.provider,
         "model": config.model or "(not set)",
-        "api_key": ("***" + config.api_key[-4:]) if len(config.api_key) > 4 else ("(not set)" if not config.api_key else "***"),
+        "api_key": ("***" + config.api_key[-4:])
+        if len(config.api_key) > 4
+        else ("(not set)" if not config.api_key else "***"),
         "base_url": config.base_url or "(default)",
     }
 
     if config.api_key and config.model:
         try:
             from .llm.client import LLMClient
+
             client = LLMClient(config)
             client.chat(prompt="Reply with exactly: ok", temperature=0.0)
             status["connectivity"] = "ok"

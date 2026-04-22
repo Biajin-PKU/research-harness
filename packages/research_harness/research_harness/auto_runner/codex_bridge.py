@@ -285,9 +285,11 @@ def run_codex_review(
     out_file.close()
 
     cmd = [
-        codex, "exec",
+        codex,
+        "exec",
         "--full-auto",
-        "-o", out_path,
+        "-o",
+        out_path,
         prompt,
     ]
 
@@ -338,7 +340,8 @@ def run_codex_review(
     except Exception as exc:
         Path(out_path).unlink(missing_ok=True)
         logger.warning(
-            "codex subprocess failed: %s — falling back to joycode (Opus)", exc,
+            "codex subprocess failed: %s — falling back to joycode (Opus)",
+            exc,
         )
         return _adversarial_via_joycode(
             artifact_path=artifact_path,
@@ -391,8 +394,12 @@ def _normalize_review(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize parsed review data to expected schema."""
     return {
         "verdict": str(data.get("verdict", "")).strip().lower(),
-        "issues": data.get("issues", []) if isinstance(data.get("issues"), list) else [],
-        "scores": data.get("scores", {}) if isinstance(data.get("scores"), dict) else {},
+        "issues": data.get("issues", [])
+        if isinstance(data.get("issues"), list)
+        else [],
+        "scores": data.get("scores", {})
+        if isinstance(data.get("scores"), dict)
+        else {},
         "notes": str(data.get("notes", "")),
     }
 
@@ -409,12 +416,16 @@ def save_handoff_request(
     handoff_dir.mkdir(parents=True, exist_ok=True)
     request_path = handoff_dir / "request.json"
     request_path.write_text(
-        json.dumps({
-            "stage": stage,
-            "artifact_path": artifact_path,
-            "focus": focus,
-            "evidence_summary": evidence_summary[:3000],
-        }, indent=2, ensure_ascii=False),
+        json.dumps(
+            {
+                "stage": stage,
+                "artifact_path": artifact_path,
+                "focus": focus,
+                "evidence_summary": evidence_summary[:3000],
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
     return request_path
@@ -448,11 +459,13 @@ def codex_issues_to_objections(issues: list[dict[str, Any]]) -> list[dict[str, A
     for issue in issues:
         if not isinstance(issue, dict):
             continue
-        objections.append({
-            "category": str(issue.get("category", "general")),
-            "severity": str(issue.get("severity", "minor")),
-            "target": str(issue.get("target", "")),
-            "reasoning": str(issue.get("reasoning", "")),
-            "suggested_fix": str(issue.get("suggested_fix", "")),
-        })
+        objections.append(
+            {
+                "category": str(issue.get("category", "general")),
+                "severity": str(issue.get("severity", "minor")),
+                "target": str(issue.get("target", "")),
+                "reasoning": str(issue.get("reasoning", "")),
+                "suggested_fix": str(issue.get("suggested_fix", "")),
+            }
+        )
     return objections

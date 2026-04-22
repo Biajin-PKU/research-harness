@@ -19,7 +19,9 @@ import re
 logger = logging.getLogger(__name__)
 
 # Patterns
-_PLAIN_METRIC = re.compile(r"^([a-zA-Z_][\w./]*)\s*[:=]\s*([+-]?\d+\.?\d*(?:[eE][+-]?\d+)?)")
+_PLAIN_METRIC = re.compile(
+    r"^([a-zA-Z_][\w./]*)\s*[:=]\s*([+-]?\d+\.?\d*(?:[eE][+-]?\d+)?)"
+)
 _COND_METRIC = re.compile(
     r"condition=(\S+)\s+([a-zA-Z_][\w./]*)\s*[:=]\s*([+-]?\d+\.?\d*(?:[eE][+-]?\d+)?)"
 )

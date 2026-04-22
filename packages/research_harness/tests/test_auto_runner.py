@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -25,7 +24,6 @@ from research_harness.auto_runner.codex_bridge import (
     codex_issues_to_objections,
 )
 from research_harness.auto_runner.stage_policy import (
-    STAGE_POLICIES,
     decide_recovery,
     get_policy,
     max_retries,
@@ -70,8 +68,13 @@ class TestCheckpoint:
 
     def test_record_artifact(self):
         cp = new_checkpoint(1, 2)
-        record_artifact(cp, stage="topic_framing", artifact_type="topic_brief",
-                        artifact_id=5, version=1)
+        record_artifact(
+            cp,
+            stage="topic_framing",
+            artifact_type="topic_brief",
+            artifact_id=5,
+            version=1,
+        )
         assert cp["artifacts"]["topic_framing"]["topic_brief"]["artifact_id"] == 5
 
     def test_record_and_clear_error(self):
@@ -86,16 +89,20 @@ class TestCheckpoint:
 
     def test_update_stage(self):
         cp = new_checkpoint(1, 2)
-        update_stage(cp, stage="literature_mapping", state="running",
-                     summary_md="searching...")
+        update_stage(
+            cp, stage="literature_mapping", state="running", summary_md="searching..."
+        )
         assert cp["current_stage"] == "literature_mapping"
         assert cp["stage_state"] == "running"
 
     def test_codex_handoff(self):
         cp = new_checkpoint(1, 2)
-        set_codex_handoff(cp, stage="adversarial_optimization",
-                          request_path="/tmp/req.json",
-                          response_path="/tmp/resp.json")
+        set_codex_handoff(
+            cp,
+            stage="adversarial_optimization",
+            request_path="/tmp/req.json",
+            response_path="/tmp/resp.json",
+        )
         assert cp["codex_handoff"]["requested"] is True
         clear_codex_handoff(cp, verdict="approve")
         assert cp["codex_handoff"]["requested"] is False
@@ -116,6 +123,7 @@ class TestCheckpoint:
 class TestStagePolicy:
     def test_all_stages_have_policy(self):
         from research_harness.orchestrator.stages import STAGE_ORDER
+
         for stage in STAGE_ORDER:
             assert get_policy(stage) is not None, f"Missing policy: {stage}"
 
@@ -160,20 +168,28 @@ class TestStagePolicy:
 
 class TestCodexBridge:
     def test_parse_json_output(self):
-        raw = json.dumps({
-            "verdict": "approve",
-            "issues": [{"severity": "minor", "category": "clarity",
-                         "target": "abstract", "reasoning": "unclear"}],
-            "scores": {"novelty": 4.5, "clarity": 3.0},
-            "notes": "good work",
-        })
+        raw = json.dumps(
+            {
+                "verdict": "approve",
+                "issues": [
+                    {
+                        "severity": "minor",
+                        "category": "clarity",
+                        "target": "abstract",
+                        "reasoning": "unclear",
+                    }
+                ],
+                "scores": {"novelty": 4.5, "clarity": 3.0},
+                "notes": "good work",
+            }
+        )
         result = _parse_codex_output(raw)
         assert result["verdict"] == "approve"
         assert len(result["issues"]) == 1
         assert result["scores"]["novelty"] == 4.5
 
     def test_parse_fenced_json(self):
-        raw = "Here is my review:\n```json\n{\"verdict\": \"revise\", \"issues\": [], \"scores\": {}, \"notes\": \"fix it\"}\n```\n"
+        raw = 'Here is my review:\n```json\n{"verdict": "revise", "issues": [], "scores": {}, "notes": "fix it"}\n```\n'
         result = _parse_codex_output(raw)
         assert result["verdict"] == "revise"
 
@@ -183,7 +199,12 @@ class TestCodexBridge:
         assert result["verdict"] == "approve"
 
     def test_normalize_review(self):
-        data = {"verdict": "APPROVE", "issues": "not a list", "scores": 42, "notes": "ok"}
+        data = {
+            "verdict": "APPROVE",
+            "issues": "not a list",
+            "scores": 42,
+            "notes": "ok",
+        }
         norm = _normalize_review(data)
         assert norm["verdict"] == "approve"
         assert norm["issues"] == []
@@ -191,10 +212,18 @@ class TestCodexBridge:
 
     def test_issues_to_objections(self):
         issues = [
-            {"severity": "major", "category": "novelty",
-             "target": "method", "reasoning": "not new"},
-            {"severity": "minor", "category": "clarity",
-             "target": "abstract", "reasoning": "unclear"},
+            {
+                "severity": "major",
+                "category": "novelty",
+                "target": "method",
+                "reasoning": "not new",
+            },
+            {
+                "severity": "minor",
+                "category": "clarity",
+                "target": "abstract",
+                "reasoning": "unclear",
+            },
         ]
         objs = codex_issues_to_objections(issues)
         assert len(objs) == 2
@@ -257,7 +286,6 @@ class TestStageExecutorIntegration:
 
         from research_harness.auto_runner import checkpoint as ckpt
         from research_harness.auto_runner.stage_executor import execute_stage
-        from research_harness.auto_runner.tool_dispatch import ToolResult
 
         db, svc, tmp_path = setup_db
         checkpoint_data = ckpt.new_checkpoint(1, 1)
@@ -277,9 +305,14 @@ class TestStageExecutorIntegration:
             side_effect=fake_dispatch_all_fail,
         ):
             result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="build", mode="standard",
-                checkpoint_data=checkpoint_data, base_dir=tmp_path,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="build",
+                mode="standard",
+                checkpoint_data=checkpoint_data,
+                base_dir=tmp_path,
             )
 
         # Should trigger retry (build has retry_twice policy)
@@ -310,9 +343,14 @@ class TestStageExecutorIntegration:
             side_effect=fake_dispatch_ok,
         ):
             result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="analyze", mode="standard",
-                checkpoint_data=checkpoint_data, base_dir=tmp_path,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="analyze",
+                mode="standard",
+                checkpoint_data=checkpoint_data,
+                base_dir=tmp_path,
             )
 
         # analyze has human_checkpoint="always" → needs_human in standard mode
@@ -348,7 +386,9 @@ class TestBudgetWallClockResume:
         data = monitor.to_dict()
         assert data["cumulative_elapsed_min"] >= 30.0
 
-        restored = BudgetMonitor.from_checkpoint(data, BudgetLimits(max_wall_time_min=60))
+        restored = BudgetMonitor.from_checkpoint(
+            data, BudgetLimits(max_wall_time_min=60)
+        )
         assert restored._cumulative_elapsed_min >= 30.0
 
     def test_budget_sync_from_provenance(self, tmp_path):
@@ -395,7 +435,9 @@ class TestDeferredToolsExclusion:
         conn = db.connect()
         try:
             conn.execute("INSERT INTO topics (name, description) VALUES ('t', 't')")
-            conn.execute("INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')")
+            conn.execute(
+                "INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -409,9 +451,16 @@ class TestDeferredToolsExclusion:
                 "tool_results": [
                     {"tool": "paper_search", "success": True, "error": ""},
                     {"tool": "adversarial_run", "success": False, "error": "deferred"},
-                    {"tool": "adversarial_resolve", "success": False, "error": "deferred"},
+                    {
+                        "tool": "adversarial_resolve",
+                        "success": False,
+                        "error": "deferred",
+                    },
                 ],
-                "errors": ["adversarial_run: deferred", "adversarial_resolve: deferred"],
+                "errors": [
+                    "adversarial_run: deferred",
+                    "adversarial_resolve: deferred",
+                ],
             }
 
         with patch(
@@ -419,9 +468,14 @@ class TestDeferredToolsExclusion:
             side_effect=fake_dispatch_mixed,
         ):
             result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="propose", mode="standard",
-                checkpoint_data=checkpoint_data, base_dir=tmp_path,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="propose",
+                mode="standard",
+                checkpoint_data=checkpoint_data,
+                base_dir=tmp_path,
             )
 
         # Should NOT trigger all-failed recovery because non-deferred tools succeeded
@@ -452,9 +506,12 @@ class TestCodexScopedByStage:
         )
 
         cp = new_checkpoint(1, 2)
-        set_codex_handoff(cp, stage="propose",
-                          request_path="/tmp/req.json",
-                          response_path="/tmp/resp.json")
+        set_codex_handoff(
+            cp,
+            stage="propose",
+            request_path="/tmp/req.json",
+            response_path="/tmp/resp.json",
+        )
         clear_codex_handoff(cp, verdict="approve")
 
         # The verdict is for "propose" — should not match "write"
@@ -481,7 +538,9 @@ class TestCodexReviseVerdictBlocks:
         conn = db.connect()
         try:
             conn.execute("INSERT INTO topics (name, description) VALUES ('t', 't')")
-            conn.execute("INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')")
+            conn.execute(
+                "INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -490,15 +549,23 @@ class TestCodexReviseVerdictBlocks:
         checkpoint_data = ckpt.new_checkpoint(1, 1)
 
         # Record a fake artifact so codex has something to review
-        ckpt.record_artifact(checkpoint_data, stage="propose",
-                             artifact_type="direction_proposal", artifact_id=42)
+        ckpt.record_artifact(
+            checkpoint_data,
+            stage="propose",
+            artifact_type="direction_proposal",
+            artifact_id=42,
+        )
 
         def fake_dispatch_ok(**kwargs):
             return {
                 "summary": "Stage propose: 2/2 tools succeeded",
                 "tool_results": [
                     {"tool": "paper_search", "success": True, "error": ""},
-                    {"tool": "orchestrator_record_artifact", "success": True, "error": ""},
+                    {
+                        "tool": "orchestrator_record_artifact",
+                        "success": True,
+                        "error": "",
+                    },
                 ],
                 "errors": [],
             }
@@ -506,35 +573,55 @@ class TestCodexReviseVerdictBlocks:
         fake_review = {
             "success": True,
             "verdict": "revise",
-            "issues": [{"severity": "major", "category": "novelty",
-                         "target": "method", "reasoning": "not novel enough"}],
+            "issues": [
+                {
+                    "severity": "major",
+                    "category": "novelty",
+                    "target": "method",
+                    "reasoning": "not novel enough",
+                }
+            ],
             "scores": {"novelty": 3.0},
             "notes": "needs more work",
         }
 
-        with patch(
-            "research_harness.auto_runner.stage_executor._execute_stage_tools",
-            side_effect=fake_dispatch_ok,
-        ), patch(
-            "research_harness.auto_runner.stage_executor.run_codex_review",
-            return_value=fake_review,
-        ), patch(
-            "research_harness.auto_runner.stage_executor.save_handoff_request",
-        ), patch(
-            "research_harness.auto_runner.stage_executor.save_handoff_response",
-        ), patch(
-            "research_harness.auto_runner.stage_executor.load_handoff_response",
-            return_value=None,
+        with (
+            patch(
+                "research_harness.auto_runner.stage_executor._execute_stage_tools",
+                side_effect=fake_dispatch_ok,
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.run_codex_review",
+                return_value=fake_review,
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.save_handoff_request",
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.save_handoff_response",
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.load_handoff_response",
+                return_value=None,
+            ),
         ):
             result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="propose", mode="standard",
-                checkpoint_data=checkpoint_data, base_dir=tmp_path,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="propose",
+                mode="standard",
+                checkpoint_data=checkpoint_data,
+                base_dir=tmp_path,
             )
 
         # Codex returned "revise" on required stage → must block
         assert result["status"] == "needs_human"
-        assert "revision" in result["summary"].lower() or "revise" in result["summary"].lower()
+        assert (
+            "revision" in result["summary"].lower()
+            or "revise" in result["summary"].lower()
+        )
         assert len(result.get("codex_issues", [])) == 1
 
     def test_approve_on_required_stage_continues(self, tmp_path):
@@ -550,7 +637,9 @@ class TestCodexReviseVerdictBlocks:
         conn = db.connect()
         try:
             conn.execute("INSERT INTO topics (name, description) VALUES ('t', 't')")
-            conn.execute("INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')")
+            conn.execute(
+                "INSERT INTO projects (topic_id, name, description) VALUES (1, 'p', 'p')"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -558,8 +647,12 @@ class TestCodexReviseVerdictBlocks:
         svc.resume_run(1, 1)
         checkpoint_data = ckpt.new_checkpoint(1, 1)
 
-        ckpt.record_artifact(checkpoint_data, stage="propose",
-                             artifact_type="direction_proposal", artifact_id=42)
+        ckpt.record_artifact(
+            checkpoint_data,
+            stage="propose",
+            artifact_type="direction_proposal",
+            artifact_id=42,
+        )
 
         def fake_dispatch_ok(**kwargs):
             return {
@@ -578,24 +671,35 @@ class TestCodexReviseVerdictBlocks:
             "notes": "looks good",
         }
 
-        with patch(
-            "research_harness.auto_runner.stage_executor._execute_stage_tools",
-            side_effect=fake_dispatch_ok,
-        ), patch(
-            "research_harness.auto_runner.stage_executor.run_codex_review",
-            return_value=fake_review,
-        ), patch(
-            "research_harness.auto_runner.stage_executor.save_handoff_request",
-        ), patch(
-            "research_harness.auto_runner.stage_executor.save_handoff_response",
-        ), patch(
-            "research_harness.auto_runner.stage_executor.load_handoff_response",
-            return_value=None,
+        with (
+            patch(
+                "research_harness.auto_runner.stage_executor._execute_stage_tools",
+                side_effect=fake_dispatch_ok,
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.run_codex_review",
+                return_value=fake_review,
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.save_handoff_request",
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.save_handoff_response",
+            ),
+            patch(
+                "research_harness.auto_runner.stage_executor.load_handoff_response",
+                return_value=None,
+            ),
         ):
             result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="propose", mode="standard",
-                checkpoint_data=checkpoint_data, base_dir=tmp_path,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="propose",
+                mode="standard",
+                checkpoint_data=checkpoint_data,
+                base_dir=tmp_path,
             )
 
         # Codex approved on required stage → propose has human_checkpoint=always → needs_human

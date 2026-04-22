@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-from research_harness.evolution.outer_loop import OuterLoop, DEFAULT_REFLECTION_INTERVAL
+from research_harness.evolution.outer_loop import OuterLoop
 
 
 def _create_topic(db, name="test-topic"):
     conn = db.connect()
     try:
-        conn.execute("INSERT INTO topics (name, description) VALUES (?, ?)", (name, "Test"))
+        conn.execute(
+            "INSERT INTO topics (name, description) VALUES (?, ?)", (name, "Test")
+        )
         conn.commit()
         return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
     finally:
@@ -59,8 +60,10 @@ class TestOuterLoop:
         pid = _create_project(db, tid)
         loop = OuterLoop(db)
 
-        eid = loop.log_experiment(
-            pid, tid, "H1: transformer beats RNN",
+        _eid = loop.log_experiment(
+            pid,
+            tid,
+            "H1: transformer beats RNN",
             primary_metric_name="accuracy",
             primary_metric_value=0.95,
             metrics={"accuracy": 0.95, "f1": 0.92},
@@ -90,7 +93,7 @@ class TestOuterLoop:
         loop = OuterLoop(db, reflection_interval=3)
 
         for i in range(3):
-            loop.log_experiment(pid, tid, f"H{i+1}")
+            loop.log_experiment(pid, tid, f"H{i + 1}")
 
         assert loop.should_reflect(pid) is True
 
@@ -100,14 +103,17 @@ class TestOuterLoop:
         loop = OuterLoop(db, reflection_interval=3)
 
         for i in range(3):
-            loop.log_experiment(pid, tid, f"H{i+1}")
+            loop.log_experiment(pid, tid, f"H{i + 1}")
 
         mock_response = '{"decision": "DEEPEN", "reasoning": "Good progress", "patterns": "Consistent improvement", "next_hypothesis": "H4", "confidence": 0.7}'
         mock_client = MagicMock()
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test-model"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             reflection = loop.reflect(pid, tid)
 
         assert reflection is not None
@@ -118,7 +124,7 @@ class TestOuterLoop:
 
         # Add more experiments → should become True again
         for i in range(3):
-            loop.log_experiment(pid, tid, f"H{i+4}")
+            loop.log_experiment(pid, tid, f"H{i + 4}")
         assert loop.should_reflect(pid) is True
 
     def test_reflect_deepen(self, db):
@@ -134,7 +140,10 @@ class TestOuterLoop:
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             r = loop.reflect(pid, tid)
 
         assert r.decision == "DEEPEN"
@@ -153,7 +162,10 @@ class TestOuterLoop:
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             r = loop.reflect(pid, tid)
 
         assert r.decision == "PIVOT"
@@ -163,15 +175,22 @@ class TestOuterLoop:
         pid = _create_project(db, tid)
         loop = OuterLoop(db, reflection_interval=2)
 
-        loop.log_experiment(pid, tid, "H1", outcome="success", primary_metric_value=0.95)
-        loop.log_experiment(pid, tid, "H2", outcome="success", primary_metric_value=0.96)
+        loop.log_experiment(
+            pid, tid, "H1", outcome="success", primary_metric_value=0.95
+        )
+        loop.log_experiment(
+            pid, tid, "H2", outcome="success", primary_metric_value=0.96
+        )
 
         mock_response = '{"decision": "CONCLUDE", "reasoning": "Strong results, ready to write", "patterns": "Consistent high performance", "next_hypothesis": "", "confidence": 0.9}'
         mock_client = MagicMock()
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             r = loop.reflect(pid, tid)
 
         assert r.decision == "CONCLUDE"
@@ -197,7 +216,10 @@ class TestOuterLoop:
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             r = loop.reflect(pid, tid, force=True)
 
         assert r is not None
@@ -209,14 +231,17 @@ class TestOuterLoop:
         loop = OuterLoop(db, reflection_interval=2)
 
         for i in range(4):
-            loop.log_experiment(pid, tid, f"H{i+1}")
+            loop.log_experiment(pid, tid, f"H{i + 1}")
 
         mock_response = '{"decision": "DEEPEN", "reasoning": "R", "patterns": "P", "next_hypothesis": "N", "confidence": 0.5}'
         mock_client = MagicMock()
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             loop.reflect(pid, tid)
             # Add 2 more to trigger second reflection
             loop.log_experiment(pid, tid, "H5")
@@ -249,7 +274,10 @@ class TestOuterLoop:
         mock_client.chat = MagicMock(return_value=mock_response)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             r = loop.reflect(pid, tid)
 
         assert r.decision == "DEEPEN"
@@ -261,8 +289,11 @@ class TestExperimentLogPrimitive:
         pid = _create_project(db, tid)
 
         from research_harness.primitives.evolution_impls import experiment_log
+
         result = experiment_log(
-            db=db, project_id=pid, topic_id=tid,
+            db=db,
+            project_id=pid,
+            topic_id=tid,
             hypothesis="Test hypothesis",
             outcome="success",
         )
@@ -276,6 +307,7 @@ class TestMetaReflectPrimitive:
         pid = _create_project(db, tid)
 
         from research_harness.primitives.evolution_impls import meta_reflect
+
         result = meta_reflect(db=db, project_id=pid, topic_id=tid)
         assert result.decision == ""
         assert "Not enough" in result.reasoning
@@ -285,6 +317,7 @@ class TestMetaReflectPrimitive:
         pid = _create_project(db, tid)
 
         from research_harness.evolution.outer_loop import OuterLoop
+
         loop = OuterLoop(db, reflection_interval=1)
         loop.log_experiment(pid, tid, "H1", outcome="success")
 
@@ -294,7 +327,11 @@ class TestMetaReflectPrimitive:
         mock_client.model = "test"
 
         from research_harness.primitives.evolution_impls import meta_reflect
-        with patch("research_harness.evolution.outer_loop._get_llm_client", return_value=mock_client):
+
+        with patch(
+            "research_harness.evolution.outer_loop._get_llm_client",
+            return_value=mock_client,
+        ):
             result = meta_reflect(db=db, project_id=pid, topic_id=tid, force=True)
 
         assert result.decision == "CONCLUDE"

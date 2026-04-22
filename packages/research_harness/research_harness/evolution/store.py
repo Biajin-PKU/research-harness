@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,10 +99,10 @@ class LessonStore:
         """Query lessons, optionally filtered by stage, ranked by decayed weight."""
         lessons = self._load_all()
         if stage:
-            lessons = [l for l in lessons if l.stage == stage]
+            lessons = [lesson for lesson in lessons if lesson.stage == stage]
 
         # Sort by decayed weight descending
-        lessons.sort(key=lambda l: _decay_weight(l, now), reverse=True)
+        lessons.sort(key=lambda lesson: _decay_weight(lesson, now), reverse=True)
         return lessons[:top_k]
 
     def build_overlay(
@@ -133,7 +132,7 @@ class LessonStore:
         """Count lessons, optionally filtered by stage."""
         lessons = self._load_all()
         if stage:
-            return sum(1 for l in lessons if l.stage == stage)
+            return sum(1 for lesson in lessons if lesson.stage == stage)
         return len(lessons)
 
     def clear(self) -> None:
@@ -230,7 +229,7 @@ class DBLessonStore:
             conn.close()
 
         lessons = [_row_to_lesson(r) for r in rows]
-        lessons.sort(key=lambda l: _decay_weight(l, now), reverse=True)
+        lessons.sort(key=lambda lesson: _decay_weight(lesson, now), reverse=True)
         return lessons[:top_k]
 
     def build_overlay(
@@ -277,7 +276,8 @@ class DBLessonStore:
         conn = self._db.connect()
         try:
             rows = conn.execute(
-                f"SELECT * FROM lessons WHERE id IN ({placeholders})", ids,
+                f"SELECT * FROM lessons WHERE id IN ({placeholders})",
+                ids,
             ).fetchall()
             return [_row_to_lesson(r) for r in rows]
         finally:

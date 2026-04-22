@@ -42,15 +42,31 @@ def test_list_with_filters(db) -> None:
     conn = db.connect()
     try:
         conn.execute("INSERT INTO topics (name) VALUES ('topic-a')")
-        topic_id = int(conn.execute("SELECT id FROM topics WHERE name = 'topic-a'").fetchone()["id"])
+        topic_id = int(
+            conn.execute("SELECT id FROM topics WHERE name = 'topic-a'").fetchone()[
+                "id"
+            ]
+        )
         conn.commit()
     finally:
         conn.close()
 
     recorder = ProvenanceRecorder(db)
-    recorder.record(_result(primitive="paper_search", backend="local"), {"query": "a"}, topic_id=topic_id)
-    recorder.record(_result(primitive="paper_ingest", backend="local"), {"source": "10.1/x"}, topic_id=None)
-    recorder.record(_result(primitive="paper_search", backend="claude_code"), {"query": "b"}, topic_id=topic_id)
+    recorder.record(
+        _result(primitive="paper_search", backend="local"),
+        {"query": "a"},
+        topic_id=topic_id,
+    )
+    recorder.record(
+        _result(primitive="paper_ingest", backend="local"),
+        {"source": "10.1/x"},
+        topic_id=None,
+    )
+    recorder.record(
+        _result(primitive="paper_search", backend="claude_code"),
+        {"query": "b"},
+        topic_id=topic_id,
+    )
 
     assert len(recorder.list_records(topic_id=topic_id)) == 2
     assert len(recorder.list_records(primitive="paper_ingest")) == 1
@@ -60,8 +76,13 @@ def test_list_with_filters(db) -> None:
 def test_summarize(db) -> None:
     recorder = ProvenanceRecorder(db)
     recorder.record(_result(backend="local", cost_usd=1.25), {"query": "a"})
-    recorder.record(_result(primitive="paper_ingest", backend="local", cost_usd=0.75), {"source": "10.1/x"})
-    recorder.record(_result(backend="claude_code", success=False, cost_usd=2.0), {"query": "b"})
+    recorder.record(
+        _result(primitive="paper_ingest", backend="local", cost_usd=0.75),
+        {"source": "10.1/x"},
+    )
+    recorder.record(
+        _result(backend="claude_code", success=False, cost_usd=2.0), {"query": "b"}
+    )
 
     summary = recorder.summarize()
     assert summary.total_operations == 3
@@ -77,7 +98,12 @@ def test_tracked_backend_auto_records(db) -> None:
     try:
         conn.execute(
             "INSERT INTO papers (title, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?)",
-            ("Attention Is All You Need", "10.1000/attention", "1706.03762", "s2-attention"),
+            (
+                "Attention Is All You Need",
+                "10.1000/attention",
+                "1706.03762",
+                "s2-attention",
+            ),
         )
         conn.commit()
     finally:
@@ -101,7 +127,12 @@ def test_tracked_backend_provenance_failure_does_not_block(db) -> None:
     try:
         conn.execute(
             "INSERT INTO papers (title, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?)",
-            ("Attention Is All You Need", "10.1000/attention", "1706.03762", "s2-attention"),
+            (
+                "Attention Is All You Need",
+                "10.1000/attention",
+                "1706.03762",
+                "s2-attention",
+            ),
         )
         conn.commit()
     finally:
@@ -130,7 +161,9 @@ def test_input_output_hashes_consistent(db) -> None:
 def test_parent_chain(db) -> None:
     recorder = ProvenanceRecorder(db)
     parent_id = recorder.record(_result(), {"query": "attention"})
-    child_id = recorder.record(_result(primitive="paper_ingest"), {"source": "10.1/x"}, parent_id=parent_id)
+    child_id = recorder.record(
+        _result(primitive="paper_ingest"), {"source": "10.1/x"}, parent_id=parent_id
+    )
 
     child = recorder.get(child_id)
     assert child is not None
@@ -167,7 +200,9 @@ def _result_with_tokens(
 def test_record_persists_tokens(db) -> None:
     recorder = ProvenanceRecorder(db)
     record_id = recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.02, 1500, 320),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.02, 1500, 320
+        ),
         {"paper_id": 1},
     )
     record = recorder.get(record_id)
@@ -180,7 +215,9 @@ def test_record_accepts_null_tokens(db) -> None:
     """Providers without usage (cursor_agent CLI) store NULL, not 0."""
     recorder = ProvenanceRecorder(db)
     record_id = recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "composer-2-fast", 0.01, None, None),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "composer-2-fast", 0.01, None, None
+        ),
         {"paper_id": 2},
     )
     record = recorder.get(record_id)
@@ -192,20 +229,28 @@ def test_record_accepts_null_tokens(db) -> None:
 def test_summarize_aggregates_tokens(db) -> None:
     recorder = ProvenanceRecorder(db)
     recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200
+        ),
         {"paper_id": 1},
     )
     recorder.record(
-        _result_with_tokens("claim_extract", "research_harness", "gpt-5", 0.03, 2000, 400),
+        _result_with_tokens(
+            "claim_extract", "research_harness", "gpt-5", 0.03, 2000, 400
+        ),
         {"paper_id": 2},
     )
     recorder.record(
-        _result_with_tokens("deep_read", "research_harness", "Kimi-K2.5", 0.05, 5000, 800),
+        _result_with_tokens(
+            "deep_read", "research_harness", "Kimi-K2.5", 0.05, 5000, 800
+        ),
         {"paper_id": 3},
     )
     # Mixed record without token usage must not break aggregation.
     recorder.record(
-        _result_with_tokens("paper_search", "research_harness", "composer-2-fast", 0.001, None, None),
+        _result_with_tokens(
+            "paper_search", "research_harness", "composer-2-fast", 0.001, None, None
+        ),
         {"query": "a"},
     )
 
@@ -215,23 +260,35 @@ def test_summarize_aggregates_tokens(db) -> None:
     # Grouped by backend (all four went through the same backend here).
     assert summary.tokens_by_backend["research_harness"]["prompt"] == 8000
     assert summary.tokens_by_backend["research_harness"]["completion"] == 1400
-    assert summary.tokens_by_primitive["paper_summarize"] == {"prompt": 1000, "completion": 200}
-    assert summary.tokens_by_primitive["deep_read"] == {"prompt": 5000, "completion": 800}
+    assert summary.tokens_by_primitive["paper_summarize"] == {
+        "prompt": 1000,
+        "completion": 200,
+    }
+    assert summary.tokens_by_primitive["deep_read"] == {
+        "prompt": 5000,
+        "completion": 800,
+    }
 
 
 def test_token_report_by_agent(db) -> None:
     recorder = ProvenanceRecorder(db)
     # Two agents, several calls, different costs
     recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200
+        ),
         {"paper_id": 1},
     )
     recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.03, 1500, 250),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.03, 1500, 250
+        ),
         {"paper_id": 2},
     )
     recorder.record(
-        _result_with_tokens("deep_read", "research_harness", "Kimi-K2.5", 0.10, 5000, 800),
+        _result_with_tokens(
+            "deep_read", "research_harness", "Kimi-K2.5", 0.10, 5000, 800
+        ),
         {"paper_id": 3},
     )
 
@@ -259,20 +316,28 @@ def test_token_report_by_topic_isolation(db) -> None:
     try:
         conn.execute("INSERT INTO topics (name) VALUES ('topic-a')")
         conn.execute("INSERT INTO topics (name) VALUES ('topic-b')")
-        topic_a = int(conn.execute("SELECT id FROM topics WHERE name='topic-a'").fetchone()["id"])
-        topic_b = int(conn.execute("SELECT id FROM topics WHERE name='topic-b'").fetchone()["id"])
+        topic_a = int(
+            conn.execute("SELECT id FROM topics WHERE name='topic-a'").fetchone()["id"]
+        )
+        topic_b = int(
+            conn.execute("SELECT id FROM topics WHERE name='topic-b'").fetchone()["id"]
+        )
         conn.commit()
     finally:
         conn.close()
 
     recorder = ProvenanceRecorder(db)
     recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.02, 1000, 200
+        ),
         {"paper_id": 1},
         topic_id=topic_a,
     )
     recorder.record(
-        _result_with_tokens("paper_summarize", "research_harness", "gpt-5", 0.04, 2000, 400),
+        _result_with_tokens(
+            "paper_summarize", "research_harness", "gpt-5", 0.04, 2000, 400
+        ),
         {"paper_id": 2},
         topic_id=topic_b,
     )
@@ -302,12 +367,12 @@ def test_llm_primitives_token_accumulator() -> None:
     pclient._record_usage(1200, 300)
     # Manually replay what _client_chat does after client.chat returns.
     usage = pclient.get_last_usage()
-    llm_primitives._token_acc_local.prompt = (
-        getattr(llm_primitives._token_acc_local, "prompt", 0) + (usage.prompt_tokens or 0)
-    )
-    llm_primitives._token_acc_local.completion = (
-        getattr(llm_primitives._token_acc_local, "completion", 0) + (usage.completion_tokens or 0)
-    )
+    llm_primitives._token_acc_local.prompt = getattr(
+        llm_primitives._token_acc_local, "prompt", 0
+    ) + (usage.prompt_tokens or 0)
+    llm_primitives._token_acc_local.completion = getattr(
+        llm_primitives._token_acc_local, "completion", 0
+    ) + (usage.completion_tokens or 0)
     llm_primitives._token_acc_local.observed = True
 
     pclient._record_usage(800, 150)

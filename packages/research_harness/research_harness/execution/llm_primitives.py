@@ -6,6 +6,7 @@ import collections
 import json
 import logging
 import re
+import threading as _threading
 from typing import Any
 
 from paperindex.llm.client import (
@@ -20,6 +21,9 @@ from paperindex.llm.client import (
 )
 
 from ..primitives.types import (
+    AlgorithmCandidateGenerateOutput,
+    AlgorithmDesignLoopOutput,
+    AlgorithmDesignRefineOutput,
     Baseline,
     BaselineIdentifyOutput,
     Claim,
@@ -28,25 +32,36 @@ from ..primitives.types import (
     CompetitiveLearningOutput,
     ConsistencyCheckOutput,
     ConsistencyIssue,
+    ContradictionDetectOutput,
     CoverageCheckOutput,
     CoverageItem,
     CrossPaperLink,
     DeepReadingNote,
     DeepReadingOutput,
+    DesignBriefOutput,
+    DesignGapProbeOutput,
     DeterministicCheck,
     DirectionRankingOutput,
     DraftText,
+    EvidenceMatrixOutput,
+    FigureGenerateOutput,
+    FigureInterpretOutput,
+    FigurePlanOutput,
     Gap,
     GapDetectOutput,
     IndustrialFeasibility,
     IterativeRetrievalLoopOutput,
+    LessonExtractOutput,
     MethodLayerExpansionOutput,
     MethodQuery,
+    MethodTaxonomyOutput,
+    OriginalityBoundaryCheckOutput,
     OutlineGenerateOutput,
     OutlineSectionItem,
     QueryCandidate,
     QueryRefineOutput,
     RankedDirection,
+    RebuttalFormatOutput,
     RetrievalRoundRecord,
     ReviewDimension,
     SectionDraftOutput,
@@ -54,9 +69,11 @@ from ..primitives.types import (
     SectionReviewOutput,
     SectionReviseOutput,
     SummaryOutput,
+    TableExtractOutput,
     TopicFramingOutput,
     WritingArchitectureOutput,
     WritingPattern,
+    WritingPatternExtractOutput,
 )
 from ..storage.db import Database
 from . import prompts
@@ -109,26 +126,29 @@ _PRIMITIVE_TIERS: dict[str, TaskTier] = {
 # These are bulk paper-reading tasks where basic models suffice.
 # The blocklist in client.py enforces at routing level; this set
 # is used for assertion-level defense in _get_client.
-_ANTHROPIC_BLOCKED_PRIMITIVES: frozenset[str] = frozenset({
-    "paper_summarize",
-    "claim_extract",
-    "gap_detect",
-    "paper_coverage_check",
-    "baseline_identify",
-    "deep_read_pass1",
-    "compiled_summary",
-    "method_taxonomy",
-    "evidence_matrix",
-    "table_extract",
-    "figure_interpret",
-    "lesson_extract",
-    "strategy_distill",
-    "writing_pattern_extract",
-})
+_ANTHROPIC_BLOCKED_PRIMITIVES: frozenset[str] = frozenset(
+    {
+        "paper_summarize",
+        "claim_extract",
+        "gap_detect",
+        "paper_coverage_check",
+        "baseline_identify",
+        "deep_read_pass1",
+        "compiled_summary",
+        "method_taxonomy",
+        "evidence_matrix",
+        "table_extract",
+        "figure_interpret",
+        "lesson_extract",
+        "strategy_distill",
+        "writing_pattern_extract",
+    }
+)
 
 
-def _get_client(model_override: str | None = None, tier: TaskTier | None = None,
-                task_name: str = "") -> LLMClient:
+def _get_client(
+    model_override: str | None = None, tier: TaskTier | None = None, task_name: str = ""
+) -> LLMClient:
     # joy_kimi override for single-paper reading tasks (light/medium tier)
     if task_name and not model_override and is_joy_kimi_task(task_name):
         prov, mdl = joy_kimi_route()
@@ -147,8 +167,6 @@ def _get_client(model_override: str | None = None, tier: TaskTier | None = None,
     client._default_tier = tier  # type: ignore[attr-defined]
     return client
 
-
-import threading as _threading
 
 # ---------------------------------------------------------------------------
 # Per-primitive token accumulator (thread-local).
@@ -274,7 +292,9 @@ def _parse_json(text: str, *, primitive: str = "", context: str = "") -> dict[st
             continue
     logger.warning(
         "JSON parse failed for %s [%s]: %.200s",
-        primitive or "unknown", context or "no context", candidate,
+        primitive or "unknown",
+        context or "no context",
+        candidate,
     )
     return {}
 
@@ -326,6 +346,7 @@ def _get_paper_text(db: Database, paper_id: int) -> tuple[str, str]:
         if compiled_raw:
             try:
                 from .compiled_summary import format_compiled_as_text
+
                 compiled = json.loads(compiled_raw)
                 text = format_compiled_as_text(compiled)
                 if text:
@@ -411,21 +432,24 @@ def _get_paperindex_context(db: Database, paper_id: int, task_type: str) -> str 
         conn.close()
 
     try:
-        from paperindex import PaperIndexer
-        indexer = PaperIndexer()
         query = TASK_QUERIES.get(task_type, "methodology, results, contributions")
 
         structure_path = artifact["path"]
         from pathlib import Path
+
         if not Path(structure_path).exists():
             return None
 
         import json as _json
+
         structure_data = _json.loads(Path(structure_path).read_text())
         from paperindex.types import SectionNode, StructureResult
+
         structure = StructureResult(
             doc_name=structure_data.get("doc_name", ""),
-            tree=[SectionNode.from_dict(n) for n in structure_data.get("structure", [])],
+            tree=[
+                SectionNode.from_dict(n) for n in structure_data.get("structure", [])
+            ],
             pdf_hash=structure_data.get("pdf_hash", ""),
             page_count=int(structure_data.get("page_count", 0) or 0),
             raw=structure_data.get("raw", {}),
@@ -433,6 +457,7 @@ def _get_paperindex_context(db: Database, paper_id: int, task_type: str) -> str 
 
         from paperindex.retrieval.search import find_structure_matches
         from paperindex.types import PaperRecord as PIRecord
+
         record = PIRecord(
             paper_id=f"paper_{paper_id}",
             title="",
@@ -462,7 +487,9 @@ def _get_paperindex_context(db: Database, paper_id: int, task_type: str) -> str 
 
 
 def _get_topic_literature_summary(
-    db: Database, topic_id: int, task_type: str = "",
+    db: Database,
+    topic_id: int,
+    task_type: str = "",
 ) -> tuple[str, list[int]]:
     """Build topic literature summary using compiled summary cache.
 
@@ -476,7 +503,8 @@ def _get_topic_literature_summary(
     except Exception:
         logger.warning(
             "Compiled topic summary failed for topic %d, falling back to legacy",
-            topic_id, exc_info=True,
+            topic_id,
+            exc_info=True,
         )
 
     # Legacy fallback: iterate all papers (original behavior)
@@ -545,6 +573,7 @@ def _parse_authors_for_display(raw: str) -> list[str]:
     four DB format variants ([], "", JSON array, double-escaped JSON).
     """
     from research_harness.execution.latex_compiler import parse_authors_field
+
     return parse_authors_field(raw)
 
 
@@ -600,7 +629,7 @@ def _build_numbered_evidence(
         authors = authors_list[0] if authors_list else "Unknown"
         citation_key = f"ref{i}"
 
-        header = f"[{i}] {authors} et al. \"{title}\" ({year})"
+        header = f'[{i}] {authors} et al. "{title}" ({year})'
         if venue and venue not in ("arXiv.org", "arXiv"):
             header += f" — {venue}"
         header += f"  [cite key: {citation_key}, paper_id={paper_id}]"
@@ -651,6 +680,7 @@ def _load_writing_lessons(
     """
     try:
         from ..evolution.store import DBLessonStore
+
         store = DBLessonStore(db)
         overlay = store.build_overlay(stage, top_k=5, topic_id=topic_id)
         return overlay
@@ -748,12 +778,54 @@ def _record_writing_lessons_from_draft(
 
 
 _STOPWORDS = {
-    "about", "above", "across", "after", "again", "against", "algorithm", "algorithms",
-    "among", "and", "approach", "approaches", "are", "based", "between", "beyond",
-    "budget", "bidding", "channel", "channels", "data", "deep", "for", "from", "into",
-    "learning", "method", "methods", "model", "models", "multi", "neural", "online",
-    "paper", "papers", "research", "results", "study", "system", "systems", "that",
-    "the", "their", "these", "this", "through", "using", "with",
+    "about",
+    "above",
+    "across",
+    "after",
+    "again",
+    "against",
+    "algorithm",
+    "algorithms",
+    "among",
+    "and",
+    "approach",
+    "approaches",
+    "are",
+    "based",
+    "between",
+    "beyond",
+    "budget",
+    "bidding",
+    "channel",
+    "channels",
+    "data",
+    "deep",
+    "for",
+    "from",
+    "into",
+    "learning",
+    "method",
+    "methods",
+    "model",
+    "models",
+    "multi",
+    "neural",
+    "online",
+    "paper",
+    "papers",
+    "research",
+    "results",
+    "study",
+    "system",
+    "systems",
+    "that",
+    "the",
+    "their",
+    "these",
+    "this",
+    "through",
+    "using",
+    "with",
 }
 
 
@@ -853,8 +925,11 @@ def paper_summarize(
             model_used="none",
         )
 
-    client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("paper_summarize"),
-                         task_name="paper_summarize")
+    client = _get_client(
+        _model,
+        tier=_PRIMITIVE_TIERS.get("paper_summarize"),
+        task_name="paper_summarize",
+    )
     raw = _client_chat(client, prompts.paper_summarize_prompt(title, text, focus))
     parsed = _parse_json(raw, primitive="paper_summarize")
     return SummaryOutput(
@@ -884,16 +959,24 @@ def claim_extract(
             # Try paperindex for richer context
             pi_context = _get_paperindex_context(db, paper_id, "claim_extract")
             if pi_context:
-                snippets.append(f"[Paper {paper_id}] {_paper_label(paper_id, title)}\n{pi_context}")
+                snippets.append(
+                    f"[Paper {paper_id}] {_paper_label(paper_id, title)}\n{pi_context}"
+                )
             else:
-                snippets.append(f"[Paper {paper_id}] {_paper_label(paper_id, title)}\n{text}")
+                snippets.append(
+                    f"[Paper {paper_id}] {_paper_label(paper_id, title)}\n{text}"
+                )
         except Exception:
-            logger.warning("Skipping paper %d in claim_extract: corrupted or unreadable", paper_id)
+            logger.warning(
+                "Skipping paper %d in claim_extract: corrupted or unreadable", paper_id
+            )
             skipped.append(paper_id)
             continue
 
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("claim_extract"))
-    raw = _client_chat(client, prompts.claim_extract_prompt("\n\n".join(snippets), focus))
+    raw = _client_chat(
+        client, prompts.claim_extract_prompt("\n\n".join(snippets), focus)
+    )
     parsed = _parse_json(raw, primitive="claim_extract")
 
     claims: list[Claim] = []
@@ -924,7 +1007,9 @@ def gap_detect(
     _model: str | None = None,
     **_: Any,
 ) -> GapDetectOutput:
-    summary, related_paper_ids = _get_topic_literature_summary(db, topic_id, task_type="gap_detect")
+    summary, related_paper_ids = _get_topic_literature_summary(
+        db, topic_id, task_type="gap_detect"
+    )
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("gap_detect"))
     raw = _client_chat(client, prompts.gap_detect_prompt(summary, focus))
     parsed = _parse_json(raw, primitive="gap_detect")
@@ -985,8 +1070,8 @@ def query_refine(
     **_: Any,
 ) -> QueryRefineOutput:
     summary, _ = _get_topic_literature_summary(db, topic_id, task_type="gap_detect")
-    top_keywords, frequent_authors, venues, known_queries, gaps = _collect_topic_query_context(
-        db, topic_id
+    top_keywords, frequent_authors, venues, known_queries, gaps = (
+        _collect_topic_query_context(db, topic_id)
     )
 
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("query_refine"))
@@ -1109,10 +1194,7 @@ def paper_coverage_check(
         conn.close()
 
     # Filter to papers without PDF (meta_only or no pdf_path)
-    meta_papers = [
-        r for r in rows
-        if not r["pdf_path"] or r["status"] == "meta_only"
-    ]
+    meta_papers = [r for r in rows if not r["pdf_path"] or r["status"] == "meta_only"]
 
     if not meta_papers:
         return CoverageCheckOutput(items=[], total_meta_only=0, high_necessity_count=0)
@@ -1128,7 +1210,12 @@ def paper_coverage_check(
     papers_text = "\n".join(lines)
 
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("paper_coverage_check"))
-    raw = _client_chat(client, prompts.paper_coverage_check_prompt(topic_context, papers_text, focus, dismissal_history))
+    raw = _client_chat(
+        client,
+        prompts.paper_coverage_check_prompt(
+            topic_context, papers_text, focus, dismissal_history
+        ),
+    )
     parsed = _parse_json(raw, primitive="paper_coverage_check")
 
     # Build necessity lookup from LLM response
@@ -1162,17 +1249,19 @@ def paper_coverage_check(
             hint = ""
 
         necessity_level, reason = necessity_map.get(pid, ("medium", ""))
-        items.append(CoverageItem(
-            paper_id=pid,
-            title=r["title"] or f"Paper #{pid}",
-            has_abstract=pid in abstract_by_paper,
-            has_pdf=bool(r["pdf_path"]),
-            necessity_level=necessity_level,
-            reason=reason,
-            download_hint=hint,
-            arxiv_id=arxiv_id,
-            doi=doi,
-        ))
+        items.append(
+            CoverageItem(
+                paper_id=pid,
+                title=r["title"] or f"Paper #{pid}",
+                has_abstract=pid in abstract_by_paper,
+                has_pdf=bool(r["pdf_path"]),
+                necessity_level=necessity_level,
+                reason=reason,
+                download_hint=hint,
+                arxiv_id=arxiv_id,
+                doi=doi,
+            )
+        )
 
     # Sort: high first, then medium, then low
     order = {"high": 0, "medium": 1, "low": 2}
@@ -1194,7 +1283,9 @@ def baseline_identify(
     _model: str | None = None,
     **_: Any,
 ) -> BaselineIdentifyOutput:
-    summary, related_paper_ids = _get_topic_literature_summary(db, topic_id, task_type="baseline_identify")
+    summary, related_paper_ids = _get_topic_literature_summary(
+        db, topic_id, task_type="baseline_identify"
+    )
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("baseline_identify"))
     raw = _client_chat(client, prompts.baseline_identify_prompt(summary, focus))
     parsed = _parse_json(raw, primitive="baseline_identify")
@@ -1226,7 +1317,9 @@ def baseline_identify(
 _VENUE_PROFILE_MAX_AGE_DAYS = 180
 
 
-def _load_cached_venue_profiles(db: Database, venue: str) -> CompetitiveLearningOutput | None:
+def _load_cached_venue_profiles(
+    db: Database, venue: str
+) -> CompetitiveLearningOutput | None:
     """Return cached CompetitiveLearningOutput if venue profiles are fresh enough."""
     conn = db.connect()
     try:
@@ -1245,20 +1338,25 @@ def _load_cached_venue_profiles(db: Database, venue: str) -> CompetitiveLearning
         return None
     # Check freshness: all rows share roughly the same updated_at
     from datetime import datetime, timedelta, timezone
+
     try:
         oldest = min(datetime.fromisoformat(r["updated_at"]) for r in rows)
     except (ValueError, TypeError):
         return None
-    if datetime.now(timezone.utc).replace(tzinfo=None) - oldest > timedelta(days=_VENUE_PROFILE_MAX_AGE_DAYS):
+    if datetime.now(timezone.utc).replace(tzinfo=None) - oldest > timedelta(
+        days=_VENUE_PROFILE_MAX_AGE_DAYS
+    ):
         return None
     patterns: list[WritingPattern] = []
     for r in rows:
-        patterns.append(WritingPattern(
-            dimension=r["dimension"],
-            pattern=r["top_pattern"],
-            example="",
-            source_paper="",
-        ))
+        patterns.append(
+            WritingPattern(
+                dimension=r["dimension"],
+                pattern=r["top_pattern"],
+                example="",
+                source_paper="",
+            )
+        )
     return CompetitiveLearningOutput(
         venue=venue,
         exemplar_count=rows[0]["paper_count"] if rows else 0,
@@ -1268,7 +1366,10 @@ def _load_cached_venue_profiles(db: Database, venue: str) -> CompetitiveLearning
 
 
 def _persist_venue_profiles(
-    db: Database, venue: str, patterns: list[WritingPattern], paper_count: int,
+    db: Database,
+    venue: str,
+    patterns: list[WritingPattern],
+    paper_count: int,
 ) -> None:
     """Upsert venue writing profiles from competitive_learning results."""
     if not patterns:
@@ -1349,6 +1450,7 @@ def competitive_learning(
             # Fallback 2: OpenAlex venue_papers for real venue exemplars
             try:
                 from ..paper_source_clients import OpenAlexProvider
+
                 oa = OpenAlexProvider()
                 oa_records = oa.venue_papers(venue, limit=8)
                 if oa_records:
@@ -1385,7 +1487,9 @@ def competitive_learning(
     # Build exemplar text block
     exemplar_parts: list[str] = []
     for r in rows:
-        parts = [f"### {r['title']} ({r['venue'] or 'unknown venue'}, {r['year'] or '?'})"]
+        parts = [
+            f"### {r['title']} ({r['venue'] or 'unknown venue'}, {r['year'] or '?'})"
+        ]
         if r["abstract"]:
             parts.append(f"Abstract: {r['abstract'][:800]}")
         exemplar_parts.append("\n".join(parts))
@@ -1420,7 +1524,9 @@ def competitive_learning(
     section_norms = parsed.get("section_length_norms", {})
     if not isinstance(section_norms, dict):
         section_norms = {}
-    section_norms = {str(k): int(v) for k, v in section_norms.items() if isinstance(v, (int, float))}
+    section_norms = {
+        str(k): int(v) for k, v in section_norms.items() if isinstance(v, (int, float))
+    }
 
     result = CompetitiveLearningOutput(
         venue=venue,
@@ -1456,6 +1562,7 @@ _DEFAULT_WORD_TARGETS: dict[str, int] = {
 
 def _default_citation_quota(section: str) -> int:
     from .writing_checks import SECTION_CITATION_QUOTA
+
     return SECTION_CITATION_QUOTA.get(section.lower().strip(), 0)
 
 
@@ -1476,11 +1583,16 @@ def section_draft(
 
     # Use richer numbered evidence list (citation-aware) instead of legacy summary
     evidence_text, _paper_ids = _build_numbered_evidence(
-        db, topic_id, max_papers=50, task_type="section_draft",
+        db,
+        topic_id,
+        max_papers=50,
+        task_type="section_draft",
     )
     if not evidence_text or evidence_text == "(no papers in topic)":
         # fallback to legacy
-        evidence_text, _ = _get_topic_literature_summary(db, topic_id, task_type="section_draft")
+        evidence_text, _ = _get_topic_literature_summary(
+            db, topic_id, task_type="section_draft"
+        )
 
     # Default word target if caller did not specify
     if max_words <= 0:
@@ -1496,6 +1608,7 @@ def section_draft(
     section_guidance = ""
     try:
         from ..evolution.writing_skill import WritingSkillAggregator
+
         aggregator = WritingSkillAggregator(db)
         section_guidance = aggregator.get_section_guidance(sec_lower.replace(" ", "_"))
     except Exception as exc:
@@ -1504,7 +1617,11 @@ def section_draft(
     # Wire 1: Auto-inject writing lessons from previous runs
     lesson_overlay = _load_writing_lessons(db, topic_id, stage="section_draft")
     if lesson_overlay:
-        section_guidance = f"{section_guidance}\n\n{lesson_overlay}" if section_guidance else lesson_overlay
+        section_guidance = (
+            f"{section_guidance}\n\n{lesson_overlay}"
+            if section_guidance
+            else lesson_overlay
+        )
 
     # Dispatch to section-specific prompt (intro/related_work/experiments use custom prompts)
     prompt_text = prompts.build_section_draft_prompt(
@@ -1533,7 +1650,9 @@ def section_draft(
         )
 
     # Wire 2: Run deterministic checks and record failures as writing lessons
-    _record_writing_lessons_from_draft(db, topic_id, section, content, audit_warnings, max_words)
+    _record_writing_lessons_from_draft(
+        db, topic_id, section, content, audit_warnings, max_words
+    )
 
     return SectionDraftOutput(
         draft=DraftText(
@@ -1600,9 +1719,7 @@ def draft_with_review_loop(
             break
 
         # Build feedback from failed checks
-        feedback_lines = [
-            f"- {c.check_name}: {c.details}" for c in failed
-        ]
+        feedback_lines = [f"- {c.check_name}: {c.details}" for c in failed]
         feedback = (
             f"Revision round {revision_round + 1}/{max_revisions}. "
             f"The following checks failed:\n" + "\n".join(feedback_lines)
@@ -1714,16 +1831,18 @@ def outline_generate(
                             continue
                         arg = str(sec.get("argument_strategy", "")).strip()
                         if arg:
-                            parts.append(
-                                f"- {sec.get('section', '?')}: {arg}"
-                            )
+                            parts.append(f"- {sec.get('section', '?')}: {arg}")
                     if parts:
                         contributions = "\n".join(parts)
                 except (json.JSONDecodeError, TypeError):
                     pass
     finally:
         conn.close()
-    claims_text = "\n".join(r["content"] for r in claims_rows if r["content"]) if claims_rows else "(no claims extracted yet)"
+    claims_text = (
+        "\n".join(r["content"] for r in claims_rows if r["content"])
+        if claims_rows
+        else "(no claims extracted yet)"
+    )
 
     if not contributions.strip():
         raise ValueError(
@@ -1763,13 +1882,25 @@ def outline_generate(
     # Fallback to default sections if LLM returned empty
     if not sections:
         sections = [
-            OutlineSectionItem(section="introduction", title="Introduction", target_words=1500),
-            OutlineSectionItem(section="related_work", title="Related Work", target_words=2500),
+            OutlineSectionItem(
+                section="introduction", title="Introduction", target_words=1500
+            ),
+            OutlineSectionItem(
+                section="related_work", title="Related Work", target_words=2500
+            ),
             OutlineSectionItem(section="method", title="Method", target_words=3000),
-            OutlineSectionItem(section="experiments", title="Experiments", target_words=3500),
-            OutlineSectionItem(section="discussion", title="Discussion", target_words=900),
-            OutlineSectionItem(section="conclusion", title="Conclusion", target_words=350),
-            OutlineSectionItem(section="limitations", title="Limitations", target_words=350),
+            OutlineSectionItem(
+                section="experiments", title="Experiments", target_words=3500
+            ),
+            OutlineSectionItem(
+                section="discussion", title="Discussion", target_words=900
+            ),
+            OutlineSectionItem(
+                section="conclusion", title="Conclusion", target_words=350
+            ),
+            OutlineSectionItem(
+                section="limitations", title="Limitations", target_words=350
+            ),
             OutlineSectionItem(section="appendix", title="Appendix", target_words=3000),
         ]
 
@@ -1810,7 +1941,9 @@ def section_review(
 
     # 2. LLM scoring
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("section_review"))
-    raw = _client_chat(client, prompts.section_review_prompt(section, content, target_words))
+    raw = _client_chat(
+        client, prompts.section_review_prompt(section, content, target_words)
+    )
     parsed = _parse_json(raw, primitive="section_review", context=section)
 
     # Parse dimensions from LLM response
@@ -1829,7 +1962,9 @@ def section_review(
     dimensions: list[ReviewDimension] = []
     for dim_name in DIM_NAMES:
         score, comment = dim_map.get(dim_name, (0.0, ""))
-        dimensions.append(ReviewDimension(dimension=dim_name, score=score, comment=comment))
+        dimensions.append(
+            ReviewDimension(dimension=dim_name, score=score, comment=comment)
+        )
 
     # Calculate overall score
     overall = _coerce_float(parsed.get("overall_score"), 0.0)
@@ -1874,7 +2009,7 @@ def section_revise(
     )
     parsed = _parse_json(raw, primitive="section_revise", context=section)
 
-    revised = str(parsed.get("revised_content") or raw[:len(content) * 2]).strip()
+    revised = str(parsed.get("revised_content") or raw[: len(content) * 2]).strip()
     changes = [str(c) for c in (parsed.get("changes_made") or []) if c]
     if not changes:
         changes = ["LLM revision applied"]
@@ -1898,9 +2033,13 @@ def consistency_check(
     _model: str | None = None,
     **_: Any,
 ) -> ConsistencyCheckOutput:
-    summary, _ = _get_topic_literature_summary(db, topic_id, task_type="consistency_check")
+    summary, _ = _get_topic_literature_summary(
+        db, topic_id, task_type="consistency_check"
+    )
     requested_sections = sections or []
-    sections_label = ", ".join(requested_sections) if requested_sections else f"topic {topic_id}"
+    sections_label = (
+        ", ".join(requested_sections) if requested_sections else f"topic {topic_id}"
+    )
     prompt_input = f"Sections under review: {sections_label}\n\n{summary}"
 
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("consistency_check"))
@@ -1950,11 +2089,12 @@ def deep_read(
         )
 
     # --- Pass 1: deep extraction (medium tier, or joy_kimi for single-paper reading) ---
-    client1 = _get_client(_model, tier=_PRIMITIVE_TIERS.get("deep_read_pass1"),
-                          task_name="deep_read_pass1")
-    raw1 = _client_chat(
-        client1, prompts.deep_read_pass1_prompt(title, text, focus)
+    client1 = _get_client(
+        _model,
+        tier=_PRIMITIVE_TIERS.get("deep_read_pass1"),
+        task_name="deep_read_pass1",
     )
+    raw1 = _client_chat(client1, prompts.deep_read_pass1_prompt(title, text, focus))
     p1 = _parse_json(raw1, primitive="deep_read", context="pass1")
     pass1_model = client1.model
 
@@ -1964,13 +2104,14 @@ def deep_read(
     )
     pass1_json = json.dumps(p1, ensure_ascii=False)
 
-    client2 = _get_client(_model, tier=_PRIMITIVE_TIERS.get("deep_read_pass2"),
-                          task_name="deep_read_pass2")
+    client2 = _get_client(
+        _model,
+        tier=_PRIMITIVE_TIERS.get("deep_read_pass2"),
+        task_name="deep_read_pass2",
+    )
     raw2 = _client_chat(
         client2,
-        prompts.deep_read_pass2_prompt(
-            title, pass1_json, text, topic_summary, focus
-        ),
+        prompts.deep_read_pass2_prompt(title, pass1_json, text, topic_summary, focus),
     )
     p2 = _parse_json(raw2, primitive="deep_read", context="pass2")
     pass2_model = client2.model
@@ -1984,14 +2125,10 @@ def deep_read(
         latency_constraints=str(feas_raw.get("latency_constraints", "")).strip(),
         data_requirements=str(feas_raw.get("data_requirements", "")).strip(),
         engineering_challenges=[
-            str(c)
-            for c in (feas_raw.get("engineering_challenges") or [])
-            if c
+            str(c) for c in (feas_raw.get("engineering_challenges") or []) if c
         ],
         deployment_prerequisites=[
-            str(p)
-            for p in (feas_raw.get("deployment_prerequisites") or [])
-            if p
+            str(p) for p in (feas_raw.get("deployment_prerequisites") or []) if p
         ],
     )
 
@@ -2104,8 +2241,13 @@ def code_generate(
 # Phase 2: Cross-paper analysis LLM primitives
 # ---------------------------------------------------------------------------
 
+
 def method_taxonomy(
-    *, db: Database, topic_id: int, focus: str = "", **_: Any,
+    *,
+    db: Database,
+    topic_id: int,
+    focus: str = "",
+    **_: Any,
 ) -> "MethodTaxonomyOutput":
     """Build method taxonomy from compiled summaries via LLM."""
     from ..primitives.types import MethodTaxonomyOutput, TaxonomyNode
@@ -2167,6 +2309,7 @@ def method_taxonomy(
             desc = n.get("description", "")
 
             import json as _json
+
             conn.execute(
                 """
                 INSERT OR REPLACE INTO taxonomy_nodes (topic_id, name, description, aliases)
@@ -2206,7 +2349,12 @@ def method_taxonomy(
                     )
                     assignments += 1
                 except Exception as exc:
-                    logger.debug("Taxonomy assignment failed for paper %s → node %s: %s", pid, nid, exc)
+                    logger.debug(
+                        "Taxonomy assignment failed for paper %s → node %s: %s",
+                        pid,
+                        nid,
+                        exc,
+                    )
 
         conn.commit()
 
@@ -2216,14 +2364,16 @@ def method_taxonomy(
             if name not in node_name_to_id:
                 continue
             parent_name = n.get("parent")
-            result_nodes.append(TaxonomyNode(
-                node_id=node_name_to_id[name],
-                name=name,
-                parent_id=node_name_to_id.get(parent_name) if parent_name else None,
-                description=n.get("description", ""),
-                aliases=n.get("aliases", []),
-                paper_count=len(n.get("paper_ids", [])),
-            ))
+            result_nodes.append(
+                TaxonomyNode(
+                    node_id=node_name_to_id[name],
+                    name=name,
+                    parent_id=node_name_to_id.get(parent_name) if parent_name else None,
+                    description=n.get("description", ""),
+                    aliases=n.get("aliases", []),
+                    paper_count=len(n.get("paper_ids", [])),
+                )
+            )
     finally:
         conn.close()
 
@@ -2235,11 +2385,14 @@ def method_taxonomy(
 
 
 def evidence_matrix(
-    *, db: Database, topic_id: int, focus: str = "", **_: Any,
+    *,
+    db: Database,
+    topic_id: int,
+    focus: str = "",
+    **_: Any,
 ) -> "EvidenceMatrixOutput":
     """Build evidence matrix: query existing claims, normalize via LLM, store."""
     from ..primitives.types import EvidenceMatrixOutput, NormalizedClaim
-    from .compiled_summary import ensure_compiled_summary
 
     conn = db.connect()
     try:
@@ -2273,7 +2426,6 @@ def evidence_matrix(
             continue
         claims = compiled.get("claims", [])
         metrics = compiled.get("metrics", [])
-        methods = compiled.get("methods", [])
 
         paper_claims: list[str] = []
         for c in claims:
@@ -2332,23 +2484,36 @@ def evidence_matrix(
                 (topic_id, paper_id, claim_text, method, dataset, metric, task, value, direction, confidence)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (topic_id, paper_id, claim_text, method, dataset, metric, task, value, direction, confidence),
+                (
+                    topic_id,
+                    paper_id,
+                    claim_text,
+                    method,
+                    dataset,
+                    metric,
+                    task,
+                    value,
+                    direction,
+                    confidence,
+                ),
             )
             cid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
             cid = cid_row["id"] if cid_row else 0
 
-            result_claims.append(NormalizedClaim(
-                claim_id=cid,
-                paper_id=paper_id,
-                claim_text=claim_text,
-                method=method,
-                dataset=dataset,
-                metric=metric,
-                task=task,
-                value=value,
-                direction=direction,
-                confidence=confidence,
-            ))
+            result_claims.append(
+                NormalizedClaim(
+                    claim_id=cid,
+                    paper_id=paper_id,
+                    claim_text=claim_text,
+                    method=method,
+                    dataset=dataset,
+                    metric=metric,
+                    task=task,
+                    value=value,
+                    direction=direction,
+                    confidence=confidence,
+                )
+            )
 
         conn.commit()
     finally:
@@ -2363,7 +2528,10 @@ def evidence_matrix(
 
 
 def contradiction_detect(
-    *, db: Database, topic_id: int, **_: Any,
+    *,
+    db: Database,
+    topic_id: int,
+    **_: Any,
 ) -> "ContradictionDetectOutput":
     """Detect contradictions between normalized claims."""
     from ..primitives.types import (
@@ -2386,8 +2554,6 @@ def contradiction_detect(
 
     if len(rows) < 2:
         return ContradictionDetectOutput(claims_analyzed=len(rows))
-
-    import json as _json
 
     # Build claims context
     claims_map: dict[int, NormalizedClaim] = {}
@@ -2436,7 +2602,9 @@ def contradiction_detect(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    topic_id, a_id, b_id,
+                    topic_id,
+                    a_id,
+                    b_id,
                     int(c.get("same_task", False)),
                     int(c.get("same_dataset", False)),
                     int(c.get("same_metric", False)),
@@ -2446,16 +2614,18 @@ def contradiction_detect(
             )
             cid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
 
-            results.append(ContradictionCandidate(
-                contradiction_id=cid_row["id"] if cid_row else 0,
-                claim_a=claims_map.get(a_id),
-                claim_b=claims_map.get(b_id),
-                same_task=bool(c.get("same_task", False)),
-                same_dataset=bool(c.get("same_dataset", False)),
-                same_metric=bool(c.get("same_metric", False)),
-                confidence=float(c.get("confidence", 0.5)),
-                conflict_reason=c.get("conflict_reason", ""),
-            ))
+            results.append(
+                ContradictionCandidate(
+                    contradiction_id=cid_row["id"] if cid_row else 0,
+                    claim_a=claims_map.get(a_id),
+                    claim_b=claims_map.get(b_id),
+                    same_task=bool(c.get("same_task", False)),
+                    same_dataset=bool(c.get("same_dataset", False)),
+                    same_metric=bool(c.get("same_metric", False)),
+                    confidence=float(c.get("confidence", 0.5)),
+                    conflict_reason=c.get("conflict_reason", ""),
+                )
+            )
 
         conn.commit()
     finally:
@@ -2471,8 +2641,12 @@ def contradiction_detect(
 # Phase 3: Quantitative extraction LLM primitives
 # ---------------------------------------------------------------------------
 
+
 def table_extract(
-    *, db: Database, paper_id: int, **_: Any,
+    *,
+    db: Database,
+    paper_id: int,
+    **_: Any,
 ) -> "TableExtractOutput":
     """Extract structured tables from a paper via LLM."""
     from ..primitives.types import ExtractedTable, TableExtractOutput
@@ -2505,24 +2679,30 @@ def table_extract(
                 (paper_id, table_number, caption, headers, rows, source_page, confidence)
                 VALUES (?, ?, ?, ?, ?, ?, 0.7)
                 """,
-                (paper_id, table_num, caption,
-                 _json.dumps(headers, ensure_ascii=False),
-                 _json.dumps(rows, ensure_ascii=False),
-                 source_page),
+                (
+                    paper_id,
+                    table_num,
+                    caption,
+                    _json.dumps(headers, ensure_ascii=False),
+                    _json.dumps(rows, ensure_ascii=False),
+                    source_page,
+                ),
             )
             tid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
             tid = tid_row["id"] if tid_row else 0
 
-            result_tables.append(ExtractedTable(
-                table_id=tid,
-                paper_id=paper_id,
-                table_number=table_num,
-                caption=caption,
-                headers=headers,
-                rows=rows,
-                source_page=source_page,
-                confidence=0.7,
-            ))
+            result_tables.append(
+                ExtractedTable(
+                    table_id=tid,
+                    paper_id=paper_id,
+                    table_number=table_num,
+                    caption=caption,
+                    headers=headers,
+                    rows=rows,
+                    source_page=source_page,
+                    confidence=0.7,
+                )
+            )
         conn.commit()
     finally:
         conn.close()
@@ -2531,7 +2711,10 @@ def table_extract(
 
 
 def figure_interpret(
-    *, db: Database, paper_id: int, **_: Any,
+    *,
+    db: Database,
+    paper_id: int,
+    **_: Any,
 ) -> "FigureInterpretOutput":
     """Interpret figures from a paper via LLM."""
     from ..primitives.types import ExtractedFigure, FigureInterpretOutput
@@ -2565,23 +2748,31 @@ def figure_interpret(
                 (paper_id, figure_number, caption, interpretation, key_data_points, figure_type, source_page)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (paper_id, fig_num, caption, interp,
-                 _json.dumps(key_pts, ensure_ascii=False),
-                 fig_type, source_page),
+                (
+                    paper_id,
+                    fig_num,
+                    caption,
+                    interp,
+                    _json.dumps(key_pts, ensure_ascii=False),
+                    fig_type,
+                    source_page,
+                ),
             )
             fid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
             fid = fid_row["id"] if fid_row else 0
 
-            result_figures.append(ExtractedFigure(
-                figure_id=fid,
-                paper_id=paper_id,
-                figure_number=fig_num,
-                caption=caption,
-                interpretation=interp,
-                key_data_points=key_pts,
-                figure_type=fig_type,
-                source_page=source_page,
-            ))
+            result_figures.append(
+                ExtractedFigure(
+                    figure_id=fid,
+                    paper_id=paper_id,
+                    figure_number=fig_num,
+                    caption=caption,
+                    interpretation=interp,
+                    key_data_points=key_pts,
+                    figure_type=fig_type,
+                    source_page=source_page,
+                )
+            )
         conn.commit()
     finally:
         conn.close()
@@ -2593,8 +2784,12 @@ def figure_interpret(
 # Phase 4: Workflow primitives
 # ---------------------------------------------------------------------------
 
+
 def rebuttal_format(
-    *, db: Database, project_id: int, **_: Any,
+    *,
+    db: Database,
+    project_id: int,
+    **_: Any,
 ) -> "RebuttalFormatOutput":
     """Format a rebuttal letter from review issues and author responses."""
     from ..primitives.types import RebuttalFormatOutput
@@ -2648,10 +2843,14 @@ def rebuttal_format(
     # Build response text
     resp_lines: list[str] = []
     for r in responses:
-        resp_lines.append(f"Re: {r['issue_summary']}\n  [{r['response_type']}] {r['response_text']}")
+        resp_lines.append(
+            f"Re: {r['issue_summary']}\n  [{r['response_type']}] {r['response_text']}"
+        )
 
     issues_text = "\n\n".join(issue_lines)
-    responses_text = "\n\n".join(resp_lines) if resp_lines else "(no responses recorded)"
+    responses_text = (
+        "\n\n".join(resp_lines) if resp_lines else "(no responses recorded)"
+    )
 
     client = _get_client(tier="medium", task_name="rebuttal_format")
     prompt = prompts.rebuttal_draft_prompt(issues_text, responses_text)
@@ -2694,7 +2893,9 @@ def lesson_extract(
             from ..evolution.trajectory import TrajectoryRecorder
 
             events = TrajectoryRecorder.get_stage_trajectories(
-                db, stage, limit=30,
+                db,
+                stage,
+                limit=30,
             )
             trajectory_text = TrajectoryRecorder.format_trajectory_text(events)
         except Exception:
@@ -2708,7 +2909,9 @@ def lesson_extract(
         f"## Summary\n{stage_summary}\n",
     ]
     if issues:
-        prompt_parts.append(f"## Issues Encountered\n" + "\n".join(f"- {i}" for i in issues) + "\n")
+        prompt_parts.append(
+            "## Issues Encountered\n" + "\n".join(f"- {i}" for i in issues) + "\n"
+        )
     if trajectory_text:
         prompt_parts.append(f"## Tool Execution Trajectory\n{trajectory_text}\n")
 
@@ -2728,7 +2931,9 @@ def lesson_extract(
     )
 
     prompt = "\n".join(prompt_parts)
-    client = _get_client(tier=_PRIMITIVE_TIERS.get("lesson_extract"), task_name="lesson_extract")
+    client = _get_client(
+        tier=_PRIMITIVE_TIERS.get("lesson_extract"), task_name="lesson_extract"
+    )
     raw = _client_chat(client, prompt)
     parsed = _parse_json(raw, primitive="lesson_extract", context=stage)
 
@@ -2743,7 +2948,8 @@ def lesson_extract(
             LessonItem(
                 stage=stage,
                 content=content,
-                lesson_type=str(item.get("lesson_type", "observation")).strip() or "observation",
+                lesson_type=str(item.get("lesson_type", "observation")).strip()
+                or "observation",
                 tags=[str(t) for t in (item.get("tags") or []) if t],
             )
         )
@@ -2751,9 +2957,20 @@ def lesson_extract(
     # Fallback: if LLM returned nothing useful, use the old stub logic
     if not lessons:
         for issue in issues:
-            lessons.append(LessonItem(stage=stage, content=issue, lesson_type="failure", tags=[stage]))
+            lessons.append(
+                LessonItem(
+                    stage=stage, content=issue, lesson_type="failure", tags=[stage]
+                )
+            )
         if stage_summary:
-            lessons.append(LessonItem(stage=stage, content=stage_summary, lesson_type="observation", tags=[stage]))
+            lessons.append(
+                LessonItem(
+                    stage=stage,
+                    content=stage_summary,
+                    lesson_type="observation",
+                    tags=[stage],
+                )
+            )
 
     return LessonExtractOutput(
         lessons=lessons,
@@ -2973,7 +3190,9 @@ def iterative_retrieval_loop(
     model_used = ""
 
     for round_idx in range(1, max_rounds + 1):
-        refine = query_refine(db=db, topic_id=topic_id, max_candidates=queries_per_round * 3)
+        refine = query_refine(
+            db=db, topic_id=topic_id, max_candidates=queries_per_round * 3
+        )
         model_used = refine.model_used or model_used
 
         fresh_candidates: list[QueryCandidate] = []
@@ -3112,10 +3331,9 @@ def iterative_retrieval_loop(
                 # into estimate_cost. Use accumulated token count as proxy:
                 # assume $0.5 per million tokens in + $1.5 per million out
                 # (matches joy_gpt rough pricing tier).
-                est_cost = (
-                    ((prompt_so_far or 0) / 1_000_000) * 0.5
-                    + ((completion_so_far or 0) / 1_000_000) * 1.5
-                )
+                est_cost = ((prompt_so_far or 0) / 1_000_000) * 0.5 + (
+                    (completion_so_far or 0) / 1_000_000
+                ) * 1.5
                 if total_new_papers > 0:
                     cost_per_paper = est_cost / max(total_new_papers, 1)
                     if cost_per_paper > budget_per_new_paper_usd:
@@ -3123,10 +3341,7 @@ def iterative_retrieval_loop(
                         break
 
         # Dual-condition convergence check
-        if (
-            mean_overlap >= convergence_threshold
-            and round_new_papers < new_paper_floor
-        ):
+        if mean_overlap >= convergence_threshold and round_new_papers < new_paper_floor:
             converged_run += 1
             if converged_run >= window:
                 convergence_reached = True
@@ -3141,10 +3356,9 @@ def iterative_retrieval_loop(
     # Crude cost reflection (ties into per-primitive estimate_cost baseline)
     total_cost_usd = 0.0
     if prompt_tokens_total is not None or completion_tokens_total is not None:
-        total_cost_usd = (
-            ((prompt_tokens_total or 0) / 1_000_000) * 0.5
-            + ((completion_tokens_total or 0) / 1_000_000) * 1.5
-        )
+        total_cost_usd = ((prompt_tokens_total or 0) / 1_000_000) * 0.5 + (
+            (completion_tokens_total or 0) / 1_000_000
+        ) * 1.5
     cost_per_new_paper: float | None = None
     if total_new_papers > 0 and total_cost_usd > 0:
         cost_per_new_paper = total_cost_usd / total_new_papers
@@ -3227,19 +3441,23 @@ def direction_ranking(
                WHERE topic_id = ? ORDER BY rowid""",
             (topic_id,),
         ).fetchall()
-        gaps_text = "\n".join(
-            f"- [{r['severity']}] {r['description']}" for r in gap_rows
-        ) or "No gaps detected yet."
+        gaps_text = (
+            "\n".join(f"- [{r['severity']}] {r['description']}" for r in gap_rows)
+            or "No gaps detected yet."
+        )
 
         claim_rows = conn.execute(
             """SELECT claim_text, method, dataset, metric FROM normalized_claims
                WHERE topic_id = ? ORDER BY rowid LIMIT 30""",
             (topic_id,),
         ).fetchall()
-        claims_text = "\n".join(
-            f"- {r['claim_text']}" + (f" [{r['method']}]" if r['method'] else "")
-            for r in claim_rows
-        ) or "No claims extracted yet."
+        claims_text = (
+            "\n".join(
+                f"- {r['claim_text']}" + (f" [{r['method']}]" if r["method"] else "")
+                for r in claim_rows
+            )
+            or "No claims extracted yet."
+        )
     finally:
         conn.close()
 
@@ -3265,7 +3483,9 @@ def direction_ranking(
                 feasibility=_coerce_float(item.get("feasibility"), 0.0),
                 impact=_coerce_float(item.get("impact"), 0.0),
                 composite_score=_coerce_float(item.get("composite_score"), 0.0),
-                supporting_gaps=[str(g) for g in (item.get("supporting_gaps") or []) if g],
+                supporting_gaps=[
+                    str(g) for g in (item.get("supporting_gaps") or []) if g
+                ],
                 risks=[str(r) for r in (item.get("risks") or []) if r],
             )
         )
@@ -3322,7 +3542,9 @@ def method_layer_expansion(
     return MethodLayerExpansionOutput(
         method_keywords=[str(k) for k in (parsed.get("method_keywords") or []) if k],
         queries=queries,
-        cross_domain_venues=[str(v) for v in (parsed.get("cross_domain_venues") or []) if v],
+        cross_domain_venues=[
+            str(v) for v in (parsed.get("cross_domain_venues") or []) if v
+        ],
         model_used=client.model,
     )
 
@@ -3373,7 +3595,9 @@ def writing_architecture(
                     title=str(item.get("title", section_id)).strip(),
                     target_words=_coerce_int(item.get("target_words"), 500),
                     argument_strategy=str(item.get("argument_strategy", "")).strip(),
-                    key_evidence=[str(e) for e in (item.get("key_evidence") or []) if e],
+                    key_evidence=[
+                        str(e) for e in (item.get("key_evidence") or []) if e
+                    ],
                 )
             )
 
@@ -3381,7 +3605,9 @@ def writing_architecture(
         paper_title=str(parsed.get("paper_title", "")).strip(),
         narrative_strategy=str(parsed.get("narrative_strategy", "")).strip(),
         sections=sections,
-        total_words=_coerce_int(parsed.get("total_words"), sum(s.target_words for s in sections)),
+        total_words=_coerce_int(
+            parsed.get("total_words"), sum(s.target_words for s in sections)
+        ),
         strengths=[str(s) for s in (parsed.get("strengths") or []) if s],
         model_used=client.model,
     )
@@ -3417,8 +3643,9 @@ def figure_plan(
             "or set on the project via project_set_contributions."
         )
 
-    evidence_text, _ = _build_numbered_evidence(db, topic_id, max_papers=15,
-                                                  task_type="figure_plan")
+    evidence_text, _ = _build_numbered_evidence(
+        db, topic_id, max_papers=15, task_type="figure_plan"
+    )
     client = _get_client(_model, tier=_PRIMITIVE_TIERS.get("writing_architecture"))
     raw = _client_chat(
         client,
@@ -3484,7 +3711,8 @@ def figure_generate(
     )
 
     figure_items = [
-        it for it in items
+        it
+        for it in items
         if isinstance(it, dict) and it.get("kind", "figure") == "figure"
     ]
 
@@ -3499,8 +3727,11 @@ def figure_generate(
         section = str(item.get("section", "")).strip()
 
         prompt = build_image_prompt(
-            title=title, purpose=purpose, caption=caption,
-            data_source=data_source, suggested_layout=suggested_layout,
+            title=title,
+            purpose=purpose,
+            caption=caption,
+            data_source=data_source,
+            suggested_layout=suggested_layout,
             section=section,
         )
         style = classify_figure_style(purpose, suggested_layout, title)
@@ -3509,32 +3740,51 @@ def figure_generate(
 
         try:
             gen_result = generate_image(
-                prompt=prompt, model=model, style=style,
-                dimensions=dimensions, output_dir=output_dir, filename=filename,
+                prompt=prompt,
+                model=model,
+                style=style,
+                dimensions=dimensions,
+                output_dir=output_dir,
+                filename=filename,
             )
         except Exception as exc:
-            results.append(FigureGenerateItem(
-                figure_id=figure_id, filename=filename, success=False,
-                error=str(exc), prompt_used=prompt, model_used=model,
-            ))
+            results.append(
+                FigureGenerateItem(
+                    figure_id=figure_id,
+                    filename=filename,
+                    success=False,
+                    error=str(exc),
+                    prompt_used=prompt,
+                    model_used=model,
+                )
+            )
             continue
 
-        results.append(FigureGenerateItem(
-            figure_id=figure_id, filename=filename,
-            path=gen_result.local_path if gen_result.success else "",
-            success=gen_result.success, error=gen_result.error,
-            prompt_used=prompt, model_used=gen_result.model_id,
-            width=gen_result.width, height=gen_result.height,
-        ))
+        results.append(
+            FigureGenerateItem(
+                figure_id=figure_id,
+                filename=filename,
+                path=gen_result.local_path if gen_result.success else "",
+                success=gen_result.success,
+                error=gen_result.error,
+                prompt_used=prompt,
+                model_used=gen_result.model_id,
+                width=gen_result.width,
+                height=gen_result.height,
+            )
+        )
 
     generated = sum(1 for r in results if r.success)
     failed = sum(1 for r in results if not r.success)
     primary_model = results[0].model_used if results else model
 
     return FigureGenerateOutput(
-        items=results, total_requested=len(figure_items),
-        total_generated=generated, total_failed=failed,
-        output_dir=output_dir, model_used=primary_model,
+        items=results,
+        total_requested=len(figure_items),
+        total_generated=generated,
+        total_failed=failed,
+        output_dir=output_dir,
+        model_used=primary_model,
     )
 
 
@@ -3576,8 +3826,19 @@ def writing_pattern_extract(
     # Determine venue tier (rough heuristic)
     venue_tier = ""
     top_venues = {
-        "neurips", "nips", "icml", "iclr", "kdd", "aaai", "ijcai",
-        "acl", "emnlp", "naacl", "cvpr", "iccv", "eccv",
+        "neurips",
+        "nips",
+        "icml",
+        "iclr",
+        "kdd",
+        "aaai",
+        "ijcai",
+        "acl",
+        "emnlp",
+        "naacl",
+        "cvpr",
+        "iccv",
+        "eccv",
     }
     if venue:
         venue_lower = venue.lower()
@@ -3628,9 +3889,14 @@ def writing_pattern_extract(
                     paper_venue, paper_venue_tier, paper_year, extractor_model)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    obs.paper_id, obs.dimension, obs.section,
-                    obs.observation, obs.example_text,
-                    obs.paper_venue, obs.paper_venue_tier, obs.paper_year,
+                    obs.paper_id,
+                    obs.dimension,
+                    obs.section,
+                    obs.observation,
+                    obs.example_text,
+                    obs.paper_venue,
+                    obs.paper_venue_tier,
+                    obs.paper_year,
                     client.model,
                 ),
             )
@@ -3673,19 +3939,22 @@ def design_brief_expand(
             "SELECT description, gap_type, severity FROM gaps WHERE topic_id = ? ORDER BY rowid",
             (topic_id,),
         ).fetchall()
-        gap_context = "\n".join(
-            f"- [{r['severity']}] {r['description']}" for r in gap_rows
-        ) or ""
+        gap_context = (
+            "\n".join(f"- [{r['severity']}] {r['description']}" for r in gap_rows) or ""
+        )
 
         tax_rows = conn.execute(
             """SELECT method_name, category, aliases, paper_count
                FROM method_taxonomy WHERE topic_id = ? ORDER BY paper_count DESC LIMIT 30""",
             (topic_id,),
         ).fetchall()
-        method_taxonomy = "\n".join(
-            f"- {r['method_name']} ({r['category'] or 'uncategorized'}, {r['paper_count'] or 0} papers)"
-            for r in tax_rows
-        ) or ""
+        method_taxonomy = (
+            "\n".join(
+                f"- {r['method_name']} ({r['category'] or 'uncategorized'}, {r['paper_count'] or 0} papers)"
+                for r in tax_rows
+            )
+            or ""
+        )
     except Exception:
         gap_context = ""
         method_taxonomy = ""
@@ -3736,10 +4005,13 @@ def design_gap_probe(
                FROM method_taxonomy WHERE topic_id = ? ORDER BY paper_count DESC LIMIT 30""",
             (topic_id,),
         ).fetchall()
-        inv_text = "\n".join(
-            f"- {r['method_name']} ({r['category'] or 'uncategorized'})"
-            for r in tax_rows
-        ) or ""
+        inv_text = (
+            "\n".join(
+                f"- {r['method_name']} ({r['category'] or 'uncategorized'})"
+                for r in tax_rows
+            )
+            or ""
+        )
 
         paper_rows = conn.execute(
             """SELECT p.id, p.title, p.year, p.venue
@@ -3748,10 +4020,14 @@ def design_gap_probe(
                ORDER BY p.year DESC LIMIT 20""",
             (topic_id,),
         ).fetchall()
-        papers_summary = "\n".join(
-            f"- [Paper {r['id']}] {r['title']}" + (f" ({r['year']})" if r['year'] else "")
-            for r in paper_rows
-        ) or ""
+        papers_summary = (
+            "\n".join(
+                f"- [Paper {r['id']}] {r['title']}"
+                + (f" ({r['year']})" if r["year"] else "")
+                for r in paper_rows
+            )
+            or ""
+        )
     except Exception:
         inv_text = ""
         papers_summary = ""
@@ -3783,7 +4059,8 @@ def design_gap_probe(
         ],
         recommended_actions=[str(a) for a in (parsed.get("recommended_actions") or [])],
         deep_read_targets=[
-            int(t) for t in (parsed.get("deep_read_targets") or [])
+            int(t)
+            for t in (parsed.get("deep_read_targets") or [])
             if isinstance(t, (int, float))
         ],
         model_used=client.model,
@@ -3810,10 +4087,13 @@ def algorithm_candidate_generate(
                FROM method_taxonomy WHERE topic_id = ? ORDER BY paper_count DESC LIMIT 30""",
             (topic_id,),
         ).fetchall()
-        method_inventory = "\n".join(
-            f"- {r['method_name']} ({r['category'] or 'uncategorized'}, {r['paper_count'] or 0} papers)"
-            for r in tax_rows
-        ) or ""
+        method_inventory = (
+            "\n".join(
+                f"- {r['method_name']} ({r['category'] or 'uncategorized'}, {r['paper_count'] or 0} papers)"
+                for r in tax_rows
+            )
+            or ""
+        )
     except Exception:
         method_inventory = ""
     finally:
@@ -3847,13 +4127,13 @@ def algorithm_candidate_generate(
         if not isinstance(item, dict):
             continue
         components = [c for c in (item.get("components") or []) if isinstance(c, dict)]
-        provenance_tags = [
-            str(c.get("provenance_tag", "unknown")) for c in components
-        ]
+        provenance_tags = [str(c.get("provenance_tag", "unknown")) for c in components]
         candidates.append(
             AlgorithmCandidate(
                 name=str(item.get("name", "")).strip(),
-                architecture_description=str(item.get("architecture_description", "")).strip(),
+                architecture_description=str(
+                    item.get("architecture_description", "")
+                ).strip(),
                 components=components,
                 novelty_statement=str(item.get("novelty_statement", "")).strip(),
                 feasibility_notes=str(item.get("feasibility_notes", "")).strip(),
@@ -3880,7 +4160,6 @@ def originality_boundary_check(
     from ..primitives.types import OriginalityBoundaryCheckOutput
 
     candidate_name = str(candidate.get("name", "")).strip()
-    candidate_desc = str(candidate.get("architecture_description", "")).strip()
 
     # Gather papers that might be near-matches
     conn = db.connect()
@@ -3944,7 +4223,11 @@ def algorithm_design_refine(
     from ..primitives.types import AlgorithmDesignRefineOutput
 
     candidate_text = json.dumps(candidate, indent=2, default=str)
-    originality_text = json.dumps(originality_result, indent=2, default=str) if originality_result else ""
+    originality_text = (
+        json.dumps(originality_result, indent=2, default=str)
+        if originality_result
+        else ""
+    )
     constraints_text = "\n".join(f"- {c}" for c in (constraints or []))
 
     client = _get_client(_model, tier="heavy")
@@ -3960,7 +4243,9 @@ def algorithm_design_refine(
     parsed = _parse_json(raw, primitive="algorithm_design_refine")
 
     components = [c for c in (parsed.get("components") or []) if isinstance(c, dict)]
-    provenance_summary = [p for p in (parsed.get("provenance_summary") or []) if isinstance(p, dict)]
+    provenance_summary = [
+        p for p in (parsed.get("provenance_summary") or []) if isinstance(p, dict)
+    ]
 
     return AlgorithmDesignRefineOutput(
         proposal_title=str(parsed.get("proposal_title", "")).strip(),
@@ -4003,8 +4288,11 @@ def algorithm_design_loop(
 
     for round_idx in range(1, max_rounds + 1):
         brief_out = design_brief_expand(
-            db=db, topic_id=topic_id, direction=direction,
-            constraints=constraints, _model=_model,
+            db=db,
+            topic_id=topic_id,
+            direction=direction,
+            constraints=constraints,
+            _model=_model,
         )
         briefs.append(brief_out)
         brief_dict: dict[str, Any] = {
@@ -4015,7 +4303,10 @@ def algorithm_design_loop(
         }
 
         gap_out = design_gap_probe(
-            db=db, topic_id=topic_id, brief=brief_dict, _model=_model,
+            db=db,
+            topic_id=topic_id,
+            brief=brief_dict,
+            _model=_model,
         )
         gap_probes.append(gap_out)
 
@@ -4033,11 +4324,13 @@ def algorithm_design_loop(
                         (pid,),
                     ).fetchone()
                     if row:
-                        deep_read_notes.append({
-                            "paper_id": row["paper_id"],
-                            "pass1": row["pass1_summary"] or "",
-                            "pass2": row["pass2_critical"] or "",
-                        })
+                        deep_read_notes.append(
+                            {
+                                "paper_id": row["paper_id"],
+                                "pass1": row["pass1_summary"] or "",
+                                "pass2": row["pass2_critical"] or "",
+                            }
+                        )
             except Exception as exc:
                 logger.debug("Deep reading notes unavailable: %s", exc)
             finally:
@@ -4050,8 +4343,12 @@ def algorithm_design_loop(
         }
 
         cand_out = algorithm_candidate_generate(
-            db=db, topic_id=topic_id, brief=brief_dict,
-            gap_probe=gap_dict, deep_read_notes=deep_read_notes, _model=_model,
+            db=db,
+            topic_id=topic_id,
+            brief=brief_dict,
+            gap_probe=gap_dict,
+            deep_read_notes=deep_read_notes,
+            _model=_model,
         )
         candidates_history.append(cand_out)
 
@@ -4070,7 +4367,10 @@ def algorithm_design_loop(
         }
 
         orig_out = originality_boundary_check(
-            db=db, topic_id=topic_id, candidate=best_dict, _model=_model,
+            db=db,
+            topic_id=topic_id,
+            candidate=best_dict,
+            _model=_model,
         )
         originality_checks.append(orig_out)
 
@@ -4089,8 +4389,12 @@ def algorithm_design_loop(
                 "recommended_modifications": list(orig_out.recommended_modifications),
             }
             refine_out = algorithm_design_refine(
-                db=db, topic_id=topic_id, candidate=best_dict,
-                originality_result=orig_dict, constraints=constraints, _model=_model,
+                db=db,
+                topic_id=topic_id,
+                candidate=best_dict,
+                originality_result=orig_dict,
+                constraints=constraints,
+                _model=_model,
             )
             return AlgorithmDesignLoopOutput(
                 final_proposal=refine_out,
@@ -4113,7 +4417,8 @@ def algorithm_design_loop(
             )
         if has_critical_gaps:
             critical = [
-                g for g in gap_out.knowledge_gaps
+                g
+                for g in gap_out.knowledge_gaps
                 if isinstance(g, dict) and g.get("severity") in ("critical", "high")
             ]
             feedback_parts.append(
@@ -4127,10 +4432,13 @@ def algorithm_design_loop(
             "recommended_modifications": list(orig_out.recommended_modifications),
         }
         refine_out = algorithm_design_refine(
-            db=db, topic_id=topic_id, candidate=best_dict,
+            db=db,
+            topic_id=topic_id,
+            candidate=best_dict,
             originality_result=orig_dict,
             feedback="\n".join(feedback_parts),
-            constraints=constraints, _model=_model,
+            constraints=constraints,
+            _model=_model,
         )
         final_proposal = refine_out
 
@@ -4141,7 +4449,9 @@ def algorithm_design_loop(
 
     return AlgorithmDesignLoopOutput(
         final_proposal=final_proposal,
-        rounds_completed=max_rounds if convergence_reason == "max_rounds_reached" else len(briefs),
+        rounds_completed=max_rounds
+        if convergence_reason == "max_rounds_reached"
+        else len(briefs),
         convergence_reason=convergence_reason,
         briefs=briefs,
         gap_probes=gap_probes,

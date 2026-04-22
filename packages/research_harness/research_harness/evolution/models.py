@@ -11,7 +11,9 @@ class TrajectoryEvent:
 
     id: int = 0
     session_id: str = ""
-    event_type: str = ""  # tool_call | decision | gate_outcome | error_recovery | user_override
+    event_type: str = (
+        ""  # tool_call | decision | gate_outcome | error_recovery | user_override
+    )
     tool_name: str = ""
     stage: str = ""
     topic_id: int | None = None
@@ -104,7 +106,9 @@ class MetaReflection:
 class NudgeDecision:
     """A nudge to inject into the agent's context."""
 
-    nudge_type: str = ""  # strategy_extraction | pattern_alert | cost_awareness | reflection_prompt
+    nudge_type: str = (
+        ""  # strategy_extraction | pattern_alert | cost_awareness | reflection_prompt
+    )
     message: str = ""
     stage: str = ""
     priority: str = "low"  # low | medium | high

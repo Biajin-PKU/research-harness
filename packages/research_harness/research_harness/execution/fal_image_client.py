@@ -59,7 +59,10 @@ def classify_figure_style(purpose: str, suggested_layout: str, title: str) -> st
     combined = f"{purpose} {suggested_layout} {title}".lower()
     if any(w in combined for w in ("pipeline", "flow", "process", "step", "sequence")):
         return RECRAFT_STYLES["pipeline"]
-    if any(w in combined for w in ("architecture", "system", "framework", "overview", "module")):
+    if any(
+        w in combined
+        for w in ("architecture", "system", "framework", "overview", "module")
+    ):
         return RECRAFT_STYLES["architecture"]
     if any(w in combined for w in ("comparison", "ablation", "matrix", "grid")):
         return RECRAFT_STYLES["comparison"]
@@ -68,7 +71,10 @@ def classify_figure_style(purpose: str, suggested_layout: str, title: str) -> st
 
 def choose_dimensions(suggested_layout: str, purpose: str) -> dict[str, int]:
     combined = f"{suggested_layout} {purpose}".lower()
-    if any(w in combined for w in ("wide", "horizontal", "architecture", "pipeline", "overview")):
+    if any(
+        w in combined
+        for w in ("wide", "horizontal", "architecture", "pipeline", "overview")
+    ):
         return DIMENSION_PRESETS["wide"]
     if any(w in combined for w in ("vertical", "tall", "stack")):
         return DIMENSION_PRESETS["tall"]
@@ -154,13 +160,16 @@ def generate_image(
 
     try:
         import fal_client
+
         result = fal_client.subscribe(model_id, arguments=payload)
         image_url: str = result["images"][0]["url"]
     except ImportError:
         logger.info("fal_client not installed, using httpx fallback")
         image_url = _fal_http_generate(model_id, payload, fal_key, timeout)
     except Exception as exc:
-        return GenerationResult(success=False, error=f"fal.ai generation failed: {exc}", model_id=model_id)
+        return GenerationResult(
+            success=False, error=f"fal.ai generation failed: {exc}", model_id=model_id
+        )
 
     try:
         out_path = Path(output_dir)
@@ -173,20 +182,28 @@ def generate_image(
             local_path.write_bytes(resp.content)
 
         return GenerationResult(
-            success=True, image_url=image_url, local_path=str(local_path),
-            model_id=model_id, width=dims["width"], height=dims["height"],
+            success=True,
+            image_url=image_url,
+            local_path=str(local_path),
+            model_id=model_id,
+            width=dims["width"],
+            height=dims["height"],
         )
     except Exception as exc:
         return GenerationResult(
-            success=False, error=f"Image download failed: {exc}",
-            image_url=image_url, model_id=model_id,
+            success=False,
+            error=f"Image download failed: {exc}",
+            image_url=image_url,
+            model_id=model_id,
         )
 
 
 def _fal_http_generate(
-    model_id: str, payload: dict[str, Any], fal_key: str, timeout: float,
+    model_id: str,
+    payload: dict[str, Any],
+    fal_key: str,
+    timeout: float,
 ) -> str:
-    import json
 
     headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
     base_url = f"https://queue.fal.run/{model_id}"

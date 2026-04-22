@@ -256,7 +256,9 @@ class PaperCard:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PaperCard:
         math_raw = data.get("mathematical_formulation")
-        math_obj = MathFormulation.from_dict(math_raw) if isinstance(math_raw, dict) else None
+        math_obj = (
+            MathFormulation.from_dict(math_raw) if isinstance(math_raw, dict) else None
+        )
 
         structured = [
             StructuredResult.from_dict(item)
@@ -282,7 +284,8 @@ class PaperCard:
             domain_tags=list(data.get("domain_tags") or []),
             technical_tags=list(data.get("technical_tags") or []),
             motivation=data.get("motivation") or data.get("research_background"),
-            problem_definition=data.get("problem_definition") or data.get("target_problem"),
+            problem_definition=data.get("problem_definition")
+            or data.get("target_problem"),
             application_scenarios=list(data.get("application_scenarios") or []),
             core_idea=data.get("core_idea"),
             method_summary=data.get("method_summary"),
@@ -291,9 +294,16 @@ class PaperCard:
             method_tags=list(data.get("method_tags") or []),
             algorithmic_view=data.get("algorithmic_view"),
             mathematical_formulation=math_obj,
-            contributions=list(data.get("contributions") or data.get("main_contributions") or data.get("claimed_novelties") or []),
+            contributions=list(
+                data.get("contributions")
+                or data.get("main_contributions")
+                or data.get("claimed_novelties")
+                or []
+            ),
             related_work_positioning=data.get("related_work_positioning"),
-            key_references=list(data.get("key_references") or data.get("citation_anchors") or []),
+            key_references=list(
+                data.get("key_references") or data.get("citation_anchors") or []
+            ),
             assumptions=list(data.get("assumptions") or []),
             limitations=list(data.get("limitations") or []),
             future_directions=data.get("future_directions"),

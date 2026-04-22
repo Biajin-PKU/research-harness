@@ -9,6 +9,7 @@ Uses mocked LLM responses so tests are deterministic and fast.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 from unittest.mock import patch
 
@@ -76,7 +77,10 @@ def pipeline_db(tmp_path):
             conn.execute(
                 """INSERT INTO paper_annotations (paper_id, section, content, source, confidence)
                    VALUES (?, 'summary', ?, 'test', 0.9)""",
-                (i, f"This paper studies {title.lower()} in the context of automated advertising."),
+                (
+                    i,
+                    f"This paper studies {title.lower()} in the context of automated advertising.",
+                ),
             )
         conn.commit()
     finally:
@@ -96,78 +100,152 @@ def backend(pipeline_db):
 # Mock LLM responses
 # ---------------------------------------------------------------------------
 
-_CLAIM_EXTRACT_RESPONSE = json.dumps({
-    "claims": [
-        {"content": "RL-based bidding outperforms rule-based by 15%", "evidence_type": "empirical", "confidence": 0.8},
-        {"content": "Budget pacing reduces overspend by 30%", "evidence_type": "empirical", "confidence": 0.7},
-        {"content": "Auction design affects bidder welfare", "evidence_type": "theoretical", "confidence": 0.9},
-    ]
-})
+_CLAIM_EXTRACT_RESPONSE = json.dumps(
+    {
+        "claims": [
+            {
+                "content": "RL-based bidding outperforms rule-based by 15%",
+                "evidence_type": "empirical",
+                "confidence": 0.8,
+            },
+            {
+                "content": "Budget pacing reduces overspend by 30%",
+                "evidence_type": "empirical",
+                "confidence": 0.7,
+            },
+            {
+                "content": "Auction design affects bidder welfare",
+                "evidence_type": "theoretical",
+                "confidence": 0.9,
+            },
+        ]
+    }
+)
 
-_GAP_DETECT_RESPONSE = json.dumps({
-    "gaps": [
-        {"description": "No work on multi-objective bidding with fairness constraints", "gap_type": "methodological", "severity": "high"},
-        {"description": "Limited empirical evaluation on real-world ad exchanges", "gap_type": "empirical", "severity": "medium"},
-    ]
-})
+_GAP_DETECT_RESPONSE = json.dumps(
+    {
+        "gaps": [
+            {
+                "description": "No work on multi-objective bidding with fairness constraints",
+                "gap_type": "methodological",
+                "severity": "high",
+            },
+            {
+                "description": "Limited empirical evaluation on real-world ad exchanges",
+                "gap_type": "empirical",
+                "severity": "medium",
+            },
+        ]
+    }
+)
 
-_QUERY_REFINE_RESPONSE = json.dumps({
-    "candidates": [
-        {
-            "query": "fairness constrained auto bidding",
-            "rationale": "Targets the uncovered fairness direction from gap detection",
-            "coverage_direction": "methodological gap",
-            "priority": "high",
-        },
-        {
-            "query": "real world ad exchange bidding evaluation",
-            "rationale": "Expands empirical coverage beyond simulated settings",
-            "coverage_direction": "empirical gap",
-            "priority": "medium",
-        },
-    ]
-})
+_QUERY_REFINE_RESPONSE = json.dumps(
+    {
+        "candidates": [
+            {
+                "query": "fairness constrained auto bidding",
+                "rationale": "Targets the uncovered fairness direction from gap detection",
+                "coverage_direction": "methodological gap",
+                "priority": "high",
+            },
+            {
+                "query": "real world ad exchange bidding evaluation",
+                "rationale": "Expands empirical coverage beyond simulated settings",
+                "coverage_direction": "empirical gap",
+                "priority": "medium",
+            },
+        ]
+    }
+)
 
-_OUTLINE_RESPONSE = json.dumps({
-    "title": "Multi-Objective Auto-Bidding with Fairness Constraints",
-    "abstract_draft": "We propose a multi-objective framework for automated bidding that balances efficiency with fairness.",
-    "sections": [
-        {"section": "introduction", "title": "Introduction", "target_words": 900, "key_points": ["Motivation", "Contribution"]},
-        {"section": "related_work", "title": "Related Work", "target_words": 800, "key_points": ["RL bidding", "Auction design"]},
-        {"section": "method", "title": "Method", "target_words": 1500, "key_points": ["Framework", "Optimization"]},
-        {"section": "experiments", "title": "Experiments", "target_words": 1200, "key_points": ["Setup", "Results"]},
-        {"section": "conclusion", "title": "Conclusion", "target_words": 300, "key_points": ["Summary"]},
-    ],
-})
+_OUTLINE_RESPONSE = json.dumps(
+    {
+        "title": "Multi-Objective Auto-Bidding with Fairness Constraints",
+        "abstract_draft": "We propose a multi-objective framework for automated bidding that balances efficiency with fairness.",
+        "sections": [
+            {
+                "section": "introduction",
+                "title": "Introduction",
+                "target_words": 900,
+                "key_points": ["Motivation", "Contribution"],
+            },
+            {
+                "section": "related_work",
+                "title": "Related Work",
+                "target_words": 800,
+                "key_points": ["RL bidding", "Auction design"],
+            },
+            {
+                "section": "method",
+                "title": "Method",
+                "target_words": 1500,
+                "key_points": ["Framework", "Optimization"],
+            },
+            {
+                "section": "experiments",
+                "title": "Experiments",
+                "target_words": 1200,
+                "key_points": ["Setup", "Results"],
+            },
+            {
+                "section": "conclusion",
+                "title": "Conclusion",
+                "target_words": 300,
+                "key_points": ["Summary"],
+            },
+        ],
+    }
+)
 
-_SECTION_DRAFT_RESPONSE = json.dumps({
-    "content": "Automated bidding has emerged as a critical component of online advertising [1]. Recent work demonstrates significant improvements through reinforcement learning approaches [2].",
-    "citations_used": [1, 2],
-    "word_count": 25,
-})
+_SECTION_DRAFT_RESPONSE = json.dumps(
+    {
+        "content": "Automated bidding has emerged as a critical component of online advertising [1]. Recent work demonstrates significant improvements through reinforcement learning approaches [2].",
+        "citations_used": [1, 2],
+        "word_count": 25,
+    }
+)
 
-_SECTION_REVIEW_RESPONSE = json.dumps({
-    "dimensions": [
-        {"dimension": "clarity", "score": 0.8, "comment": "Clear writing"},
-        {"dimension": "novelty", "score": 0.6, "comment": "Standard framing"},
-        {"dimension": "correctness", "score": 0.9, "comment": "Accurate claims"},
-        {"dimension": "significance", "score": 0.7, "comment": "Relevant contribution"},
-        {"dimension": "reproducibility", "score": 0.5, "comment": "Missing some details"},
-        {"dimension": "writing_quality", "score": 0.8, "comment": "Good style"},
-        {"dimension": "evidence_support", "score": 0.7, "comment": "Has citations"},
-        {"dimension": "logical_flow", "score": 0.8, "comment": "Logical progression"},
-        {"dimension": "completeness", "score": 0.6, "comment": "Could cover more"},
-        {"dimension": "conciseness", "score": 0.9, "comment": "No filler"},
-    ],
-    "suggestions": ["Add more recent references", "Expand motivation section"],
-    "overall_score": 0.73,
-})
+_SECTION_REVIEW_RESPONSE = json.dumps(
+    {
+        "dimensions": [
+            {"dimension": "clarity", "score": 0.8, "comment": "Clear writing"},
+            {"dimension": "novelty", "score": 0.6, "comment": "Standard framing"},
+            {"dimension": "correctness", "score": 0.9, "comment": "Accurate claims"},
+            {
+                "dimension": "significance",
+                "score": 0.7,
+                "comment": "Relevant contribution",
+            },
+            {
+                "dimension": "reproducibility",
+                "score": 0.5,
+                "comment": "Missing some details",
+            },
+            {"dimension": "writing_quality", "score": 0.8, "comment": "Good style"},
+            {"dimension": "evidence_support", "score": 0.7, "comment": "Has citations"},
+            {
+                "dimension": "logical_flow",
+                "score": 0.8,
+                "comment": "Logical progression",
+            },
+            {"dimension": "completeness", "score": 0.6, "comment": "Could cover more"},
+            {"dimension": "conciseness", "score": 0.9, "comment": "No filler"},
+        ],
+        "suggestions": ["Add more recent references", "Expand motivation section"],
+        "overall_score": 0.73,
+    }
+)
 
-_SECTION_REVISE_RESPONSE = json.dumps({
-    "revised_content": "Automated bidding has emerged as a critical component in modern online advertising [1]. Recent advances in reinforcement learning have demonstrated significant improvements over traditional rule-based approaches [2], achieving up to 15% better ROI.",
-    "changes_made": ["Added more recent framing", "Expanded motivation with concrete metrics"],
-    "word_count": 38,
-})
+_SECTION_REVISE_RESPONSE = json.dumps(
+    {
+        "revised_content": "Automated bidding has emerged as a critical component in modern online advertising [1]. Recent advances in reinforcement learning have demonstrated significant improvements over traditional rule-based approaches [2], achieving up to 15% better ROI.",
+        "changes_made": [
+            "Added more recent framing",
+            "Expanded motivation with concrete metrics",
+        ],
+        "word_count": 38,
+    }
+)
 
 # Map prompt patterns to responses for mock routing
 _MOCK_RESPONSES: dict[str, str] = {
@@ -194,13 +272,25 @@ def _mock_chat(client: Any, prompt: str, **_: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("CURSOR_AGENT_ENABLED")
+        or os.getenv("CODEX_ENABLED")
+    ),
+    reason="Requires an LLM provider (OPENAI_API_KEY / ANTHROPIC_API_KEY / CURSOR_AGENT_ENABLED / CODEX_ENABLED)",
+)
 class TestE2ELiteratureReview:
     """End-to-end pipeline test with mocked LLM."""
 
     @pytest.fixture(autouse=True)
     def _mock_llm(self):
         """Mock LLM client to return deterministic responses."""
-        with patch("research_harness.execution.llm_primitives._client_chat", side_effect=_mock_chat):
+        with patch(
+            "research_harness.execution.llm_primitives._client_chat",
+            side_effect=_mock_chat,
+        ):
             yield
 
     def test_claim_extract(self, backend):
@@ -256,7 +346,9 @@ class TestE2ELiteratureReview:
             "Recent work demonstrates significant improvements through reinforcement learning approaches [2]. "
             * 50  # Make it long enough for word count
         )
-        result = backend.execute("section_review", section="introduction", content=content)
+        result = backend.execute(
+            "section_review", section="introduction", content=content
+        )
         assert result.success, f"section_review failed: {result.error}"
         output = result.output
         # LLM dimensions should have real scores (not all 0.0)
@@ -356,10 +448,12 @@ class TestUnifiedDimensions:
 
     def test_writing_checks_uses_unified_source(self):
         from research_harness.execution.writing_checks import REVIEW_DIMENSIONS
+
         assert REVIEW_DIMENSIONS is SECTION_REVIEW_DIMENSIONS
 
     def test_review_module_uses_unified_source(self):
         from research_harness.orchestrator.review import REVIEW_DIMENSIONS
+
         assert REVIEW_DIMENSIONS is SCHOLARLY_REVIEW_DIMENSIONS
 
 

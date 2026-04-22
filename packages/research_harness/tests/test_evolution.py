@@ -90,17 +90,21 @@ class TestLessonStore:
         now = datetime.now(timezone.utc)
 
         # Old lesson
-        store.append(Lesson(
-            stage="build",
-            content="old lesson",
-            created_at=(now - timedelta(days=60)).isoformat(),
-        ))
+        store.append(
+            Lesson(
+                stage="build",
+                content="old lesson",
+                created_at=(now - timedelta(days=60)).isoformat(),
+            )
+        )
         # Fresh lesson
-        store.append(Lesson(
-            stage="build",
-            content="fresh lesson",
-            created_at=now.isoformat(),
-        ))
+        store.append(
+            Lesson(
+                stage="build",
+                content="fresh lesson",
+                created_at=now.isoformat(),
+            )
+        )
 
         lessons = store.query("build", now=now)
         assert lessons[0].content == "fresh lesson"
@@ -108,8 +112,14 @@ class TestLessonStore:
 
     def test_build_overlay(self, tmp_path):
         store = LessonStore(tmp_path / "lessons.jsonl")
-        store.append(Lesson(stage="build", content="S2 rate limit at 50/min", lesson_type="failure"))
-        store.append(Lesson(stage="build", content="CrossRef works well", lesson_type="success"))
+        store.append(
+            Lesson(
+                stage="build", content="S2 rate limit at 50/min", lesson_type="failure"
+            )
+        )
+        store.append(
+            Lesson(stage="build", content="CrossRef works well", lesson_type="success")
+        )
 
         overlay = store.build_overlay("build")
         assert "Lessons from previous runs" in overlay
@@ -168,7 +178,9 @@ class TestSmartPause:
         assert decision.action == PauseAction.PAUSE
 
     def test_failure_warn(self):
-        sp = SmartPause(PauseThresholds(max_consecutive_failures=2, hard_consecutive_failures=5))
+        sp = SmartPause(
+            PauseThresholds(max_consecutive_failures=2, hard_consecutive_failures=5)
+        )
         sp.record_failure()
         sp.record_failure()
         decision = sp.evaluate()

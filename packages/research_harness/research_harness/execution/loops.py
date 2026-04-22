@@ -75,25 +75,35 @@ def run_section_loop(
         # Step 1: Draft (first round) or Revise (subsequent rounds)
         if round_num == 1:
             draft_result = llm_primitives.section_draft(
-                db=db, section=section, topic_id=topic_id,
-                outline=outline, max_words=max_words, evidence_ids=evidence_ids,
+                db=db,
+                section=section,
+                topic_id=topic_id,
+                outline=outline,
+                max_words=max_words,
+                evidence_ids=evidence_ids,
             )
             content = draft_result.draft.content
         else:
             # Build feedback from previous review
             feedback = "\n".join(
-                f"- {s}" for s in review_result.suggestions  # noqa: F821
+                f"- {s}"
+                for s in review_result.suggestions  # noqa: F821
             )
             revise_result = llm_primitives.section_revise(
-                db=db, section=section, content=content,
-                review_feedback=feedback, target_words=max_words,
+                db=db,
+                section=section,
+                content=content,
+                review_feedback=feedback,
+                target_words=max_words,
             )
             content = revise_result.revised_content
             iteration.changes = revise_result.changes_made  # noqa: F821
 
         # Step 2: Review
         review_result = llm_primitives.section_review(
-            db=db, section=section, content=content,
+            db=db,
+            section=section,
+            content=content,
             target_words=max_words,
         )
 
@@ -111,7 +121,10 @@ def run_section_loop(
 
         logger.info(
             "Round %d: score=%.3f, passed=%s, suggestions=%d",
-            round_num, score, passed, len(review_result.suggestions),
+            round_num,
+            score,
+            passed,
+            len(review_result.suggestions),
         )
 
         if passed:
@@ -181,37 +194,55 @@ def run_experiment_loop(
         )
         code = gen_result.files.get(gen_result.entry_point, "")
         if not code:
-            iterations.append(LoopIteration(
-                round=iter_num + 1, score=0.0, passed=False,
-                feedback="Code generation produced empty output",
-            ))
+            iterations.append(
+                LoopIteration(
+                    round=iter_num + 1,
+                    score=0.0,
+                    passed=False,
+                    feedback="Code generation produced empty output",
+                )
+            )
             continue
 
         # Step 2: Validate
         val_result = code_validate(code=code, auto_fix=True)
         if not val_result.ok:
             issues_str = "; ".join(i.message for i in val_result.issues[:3])
-            iterations.append(LoopIteration(
-                round=iter_num + 1, score=0.0, passed=False,
-                feedback=f"Validation failed: {issues_str}",
-            ))
+            iterations.append(
+                LoopIteration(
+                    round=iter_num + 1,
+                    score=0.0,
+                    passed=False,
+                    feedback=f"Validation failed: {issues_str}",
+                )
+            )
             continue
 
         # Step 3: Run experiment
         try:
-            run_result = experiment_run(code=code, timeout_sec=120.0, primary_metric=target_metric)
+            run_result = experiment_run(
+                code=code, timeout_sec=120.0, primary_metric=target_metric
+            )
         except Exception as exc:
-            iterations.append(LoopIteration(
-                round=iter_num + 1, score=0.0, passed=False,
-                feedback=f"Experiment execution failed: {exc}",
-            ))
+            iterations.append(
+                LoopIteration(
+                    round=iter_num + 1,
+                    score=0.0,
+                    passed=False,
+                    feedback=f"Experiment execution failed: {exc}",
+                )
+            )
             continue
 
         if run_result.timed_out:
-            iterations.append(LoopIteration(
-                round=iter_num + 1, score=0.0, passed=False,
-                feedback="Experiment timed out",
-            ))
+            iterations.append(
+                LoopIteration(
+                    round=iter_num + 1,
+                    score=0.0,
+                    passed=False,
+                    feedback="Experiment timed out",
+                )
+            )
             continue
 
         metrics = run_result.metrics
@@ -223,7 +254,9 @@ def run_experiment_loop(
         if primary_value is not None:
             if target_value is not None:
                 # Score relative to target
-                score = min(1.0, primary_value / target_value) if target_value > 0 else 0.0
+                score = (
+                    min(1.0, primary_value / target_value) if target_value > 0 else 0.0
+                )
                 passed = primary_value >= target_value
             else:
                 score = 0.5  # Has metrics but no target
@@ -268,7 +301,9 @@ def run_experiment_loop(
     )
 
 
-def _build_experiment_feedback(last_iteration: LoopIteration, metrics: dict[str, Any]) -> str:
+def _build_experiment_feedback(
+    last_iteration: LoopIteration, metrics: dict[str, Any]
+) -> str:
     """Build feedback string from last iteration for code_generate."""
     parts = []
     if last_iteration.feedback:

@@ -35,7 +35,9 @@ def _find_project_root() -> Path:
     """Walk up from cwd or known paths to find the project root (has .research-harness/)."""
     candidates = [
         Path.cwd(),
-        Path(__file__).resolve().parents[4],  # packages/research_harness/research_harness/acquisition -> root
+        Path(__file__)
+        .resolve()
+        .parents[4],  # packages/research_harness/research_harness/acquisition -> root
         Path.home() / "code" / "research-harness",
     ]
     for p in candidates:
@@ -89,12 +91,16 @@ def _build_search_index(project_root: Path) -> dict[str, dict[str, list[Path]]]:
 
             # Index by arxiv_id: "2602.08261" (exact filename)
             dot_parts = base.split(".")
-            if len(dot_parts) == 2 and dot_parts[0].isdigit() and dot_parts[1].isdigit():
+            if (
+                len(dot_parts) == 2
+                and dot_parts[0].isdigit()
+                and dot_parts[1].isdigit()
+            ):
                 by_arxiv_id.setdefault(base, []).append(full_path)
 
             # Index manual_ prefix: "manual_57_..." -> paper_id "57"
             if base.startswith("manual_"):
-                rest = base[len("manual_"):]
+                rest = base[len("manual_") :]
                 m_parts = rest.split("_", 1)
                 if m_parts[0].isdigit():
                     by_paper_id.setdefault(m_parts[0], []).append(full_path)
@@ -246,12 +252,14 @@ def backfill_pdf_paths(
                     )
             else:
                 stats.unmatched += 1
-                stats.unmatched_papers.append({
-                    "paper_id": pid,
-                    "title": (row["title"] or "")[:80],
-                    "arxiv_id": row["arxiv_id"] or "",
-                    "doi": row["doi"] or "",
-                })
+                stats.unmatched_papers.append(
+                    {
+                        "paper_id": pid,
+                        "title": (row["title"] or "")[:80],
+                        "arxiv_id": row["arxiv_id"] or "",
+                        "doi": row["doi"] or "",
+                    }
+                )
 
         if not dry_run:
             conn.commit()

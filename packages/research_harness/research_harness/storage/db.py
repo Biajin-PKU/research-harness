@@ -1,4 +1,5 @@
 """SQLite database management for research hub."""
+
 from __future__ import annotations
 
 import logging
@@ -119,7 +120,9 @@ class Database:
             )
             applied = {
                 row[0]
-                for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
+                for row in conn.execute(
+                    "SELECT version FROM schema_migrations"
+                ).fetchall()
             }
             for sql_file in sorted(MIGRATIONS_DIR.glob("*.sql")):
                 version = int(sql_file.name.split("_")[0])

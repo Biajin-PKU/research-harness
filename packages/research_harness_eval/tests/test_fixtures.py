@@ -10,7 +10,12 @@ from research_harness_eval.models import EvalCase
 
 _VALID_GRADERS = {"deterministic", "llm", "human"}
 _VALID_STAGES = {
-    "init", "build", "analyze", "propose", "experiment", "write",
+    "init",
+    "build",
+    "analyze",
+    "propose",
+    "experiment",
+    "write",
 }
 
 
@@ -25,7 +30,9 @@ def test_all_cases_are_EvalCase():
 
 def test_case_ids_unique():
     ids = [c.id for c in ALL_CASES]
-    assert len(ids) == len(set(ids)), f"Duplicate case IDs: {[i for i in ids if ids.count(i) > 1]}"
+    assert len(ids) == len(set(ids)), (
+        f"Duplicate case IDs: {[i for i in ids if ids.count(i) > 1]}"
+    )
 
 
 @pytest.mark.parametrize("case", ALL_CASES, ids=[c.id for c in ALL_CASES])
@@ -46,9 +53,13 @@ def test_case_schema(case: EvalCase):
 def test_deterministic_cases_have_expected_contract():
     """Deterministic cases must encode at least one check (required_fields / min_count / ...)."""
     known_keys = {
-        "required_fields", "min_count", "count_key",
-        "contains", "max_cost_usd",
-        "min_score", "score_key",
+        "required_fields",
+        "min_count",
+        "count_key",
+        "contains",
+        "max_cost_usd",
+        "min_score",
+        "score_key",
     }
     for case in ALL_CASES:
         if case.grader_type != "deterministic":

@@ -235,7 +235,9 @@ class ArtifactManager:
         for row in rows:
             downstream_id = row["to_artifact_id"]
             cascade_reason = f"upstream artifact #{artifact_id} stale: {reason}"
-            self._propagate_stale(downstream_id, cascade_reason, stale_ids, propagate=True)
+            self._propagate_stale(
+                downstream_id, cascade_reason, stale_ids, propagate=True
+            )
 
     def clear_stale(self, artifact_id: int) -> None:
         """Acknowledge and clear stale flag on an artifact."""

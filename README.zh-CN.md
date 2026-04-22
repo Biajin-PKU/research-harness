@@ -329,6 +329,17 @@ extension_points:
 | [`docs/plugin-guide.md`](docs/plugin-guide.md) | 自定义原语 / 门禁 / 后端开发 |
 | [`docs/PAPER_MANAGEMENT.md`](docs/PAPER_MANAGEMENT.md) | 论文存储的规范协议 |
 
+## 迭代记录
+
+公共仓库每轮迭代的核心工作，最新在上。
+
+### 2026-04-22 — 公共仓库 CI 修复
+
+- CI matrix 移除 Python 3.10：`research_harness_mcp` 已声明 `>=3.11`，不再假装兼容。
+- 修复 212 个 ruff 报错（`F401` / `F541` / `E402` / `F821` / `F841` / `E741`），覆盖 `llm_primitives.py`、`orchestrator/service.py`、`auto_runner/*`、`paper_source_clients.py` 以及多处测试文件；全量 `ruff format` 通过。
+- 补齐缺失的 re-export：`writing_checks.REVIEW_DIMENSIONS`、`orchestrator.review.REVIEW_DIMENSIONS` 现都指向统一的 dimension 源。
+- 让测试在无 LLM key 时也能跑：给 paperindex LLM 测试、`TestE2ELiteratureReview` 打上模块级 `skipif`；在 conftest 加了一个自动生效的 fixture，在无 provider 时 stub 掉 `PaperIndexer.build_card`。CI 从原先 22 个用例报 `401` / `No LLM provider`，恢复到 987+ 全绿。
+
 ## 项目状态
 
 **0.1.0** —— 首个公开版本。三个 package 合计 987+ 单元测试、69 个原语、112 个 MCP 工具、6 个阶段。版本说明见 [`CHANGELOG.md`](CHANGELOG.md)。

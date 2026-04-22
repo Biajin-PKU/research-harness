@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..evolution.store import Lesson, LessonStore
+from ..evolution.store import LessonStore
 from .registry import (
     EXPERIMENT_LOG_SPEC,
     LESSON_EXTRACT_SPEC,
@@ -114,11 +114,18 @@ def strategy_distill(
     from ..evolution.distiller import StrategyDistiller
 
     # Default strategies dir
-    strategies_dir = Path(db._path).parent / "strategies" if hasattr(db, "_path") else Path(".research-harness/strategies")
+    strategies_dir = (
+        Path(db._path).parent / "strategies"
+        if hasattr(db, "_path")
+        else Path(".research-harness/strategies")
+    )
 
     distiller = StrategyDistiller(db, strategies_dir)
     result = distiller.distill_stage(
-        stage, min_lessons=min_lessons, topic_id=topic_id, force=force,
+        stage,
+        min_lessons=min_lessons,
+        topic_id=topic_id,
+        force=force,
     )
 
     return StrategyDistillOutput(
@@ -148,10 +155,14 @@ def strategy_inject(
 
     injector = StrategyInjector(db)
     overlay = injector.build_strategy_overlay(
-        stage, topic_id=topic_id, max_strategies=max_strategies,
+        stage,
+        topic_id=topic_id,
+        max_strategies=max_strategies,
     )
     strategies = injector.get_active_strategies(
-        stage, topic_id=topic_id, max_strategies=max_strategies,
+        stage,
+        topic_id=topic_id,
+        max_strategies=max_strategies,
     )
 
     return StrategyInjectOutput(
@@ -185,7 +196,9 @@ def experiment_log(
 
     loop = OuterLoop(db)
     eid = loop.log_experiment(
-        project_id, topic_id, hypothesis,
+        project_id,
+        topic_id,
+        hypothesis,
         primary_metric_name=primary_metric_name,
         primary_metric_value=primary_metric_value,
         metrics=metrics,

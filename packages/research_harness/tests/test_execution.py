@@ -18,7 +18,12 @@ def test_local_backend_execute_paper_search(db) -> None:
     try:
         conn.execute(
             "INSERT INTO papers (title, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?)",
-            ("Attention Is All You Need", "10.1000/attention", "1706.03762", "s2-attention"),
+            (
+                "Attention Is All You Need",
+                "10.1000/attention",
+                "1706.03762",
+                "s2-attention",
+            ),
         )
         conn.commit()
     finally:

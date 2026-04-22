@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import time
 from typing import Any, Callable
@@ -69,7 +67,9 @@ class EvalRunner:
                 )
             results.append(result)
             status = "PASS" if result.passed else "FAIL"
-            logger.info("[%s] %s: %s (%.3f)", status, case.id, result.details[:80], result.score)
+            logger.info(
+                "[%s] %s: %s (%.3f)", status, case.id, result.details[:80], result.score
+            )
 
         passed = sum(1 for r in results if r.passed)
         total = len(results)

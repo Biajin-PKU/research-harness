@@ -13,7 +13,9 @@ PRIMITIVE_REGISTRY: dict[str, PrimitiveSpec] = {}
 _IMPLEMENTATIONS: dict[str, PrimitiveImplementation] = {}
 
 
-def register_primitive(spec: PrimitiveSpec) -> Callable[[PrimitiveImplementation], PrimitiveImplementation]:
+def register_primitive(
+    spec: PrimitiveSpec,
+) -> Callable[[PrimitiveImplementation], PrimitiveImplementation]:
     """Register a primitive spec and the decorated implementation."""
 
     PRIMITIVE_REGISTRY[spec.name] = spec
@@ -50,7 +52,11 @@ PAPER_SEARCH_SPEC = PrimitiveSpec(
         "properties": {
             "query": {"type": "string"},
             "topic_id": {"type": "integer"},
-            "max_results": {"type": "integer", "default": 50, "description": "Max results. Use ≥50 for Build stage coverage."},
+            "max_results": {
+                "type": "integer",
+                "default": 50,
+                "description": "Max results. Use ≥50 for Build stage coverage.",
+            },
             "year_from": {"type": "integer"},
             "year_to": {"type": "integer"},
             "venue_filter": {"type": "string"},
@@ -97,7 +103,10 @@ PAPER_ACQUIRE_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "topic_id": {"type": "integer", "description": "Topic ID to acquire papers for"},
+            "topic_id": {
+                "type": "integer",
+                "description": "Topic ID to acquire papers for",
+            },
         },
         "required": ["topic_id"],
     },
@@ -206,7 +215,11 @@ ITERATIVE_RETRIEVAL_LOOP_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "max_rounds": {"type": "integer", "default": 5, "description": "Hard cap on retrieval rounds."},
+            "max_rounds": {
+                "type": "integer",
+                "default": 5,
+                "description": "Hard cap on retrieval rounds.",
+            },
             "convergence_threshold": {
                 "type": "number",
                 "default": 0.8,
@@ -261,7 +274,10 @@ PAPER_COVERAGE_CHECK_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "focus": {"type": "string", "description": "Optional research focus to guide necessity scoring"},
+            "focus": {
+                "type": "string",
+                "description": "Optional research focus to guide necessity scoring",
+            },
         },
         "required": ["topic_id"],
     },
@@ -294,8 +310,14 @@ COMPETITIVE_LEARNING_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "topic_id": {"type": "integer", "description": "Topic to source exemplar papers from"},
-            "venue": {"type": "string", "description": "Target venue name (e.g. 'KDD', 'NeurIPS', 'WWW')"},
+            "topic_id": {
+                "type": "integer",
+                "description": "Topic to source exemplar papers from",
+            },
+            "venue": {
+                "type": "string",
+                "description": "Target venue name (e.g. 'KDD', 'NeurIPS', 'WWW')",
+            },
             "paper_ids": {
                 "type": "array",
                 "items": {"type": "integer"},
@@ -417,7 +439,7 @@ EXPAND_CITATIONS_SPEC = PrimitiveSpec(
                 "type": "array",
                 "items": {"type": "integer"},
                 "description": "Local DB paper IDs to use as seeds (from select_seeds output). "
-                               "If omitted, select_seeds is called automatically with top_n=5.",
+                "If omitted, select_seeds is called automatically with top_n=5.",
             },
             "forward_limit": {
                 "type": "integer",
@@ -450,7 +472,10 @@ CODE_GENERATE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "study_spec": {"type": "string", "description": "Study design specification."},
+            "study_spec": {
+                "type": "string",
+                "description": "Study design specification.",
+            },
             "iteration": {"type": "integer", "default": 0},
             "previous_code": {"type": "string", "default": ""},
             "previous_metrics": {"type": "object", "default": {}},
@@ -543,7 +568,11 @@ PAPER_VERIFY_NUMBERS_SPEC = PrimitiveSpec(
         "properties": {
             "project_id": {"type": "integer"},
             "text": {"type": "string", "description": "Paper text (LaTeX or plain)."},
-            "section": {"type": "string", "default": "", "description": "Section name for strict/lenient classification."},
+            "section": {
+                "type": "string",
+                "default": "",
+                "description": "Section name for strict/lenient classification.",
+            },
             "tolerance": {"type": "number", "default": 0.01},
         },
         "required": ["project_id", "text"],
@@ -612,7 +641,11 @@ OUTLINE_GENERATE_SPEC = PrimitiveSpec(
         "properties": {
             "topic_id": {"type": "integer"},
             "project_id": {"type": "integer"},
-            "template": {"type": "string", "default": "neurips", "description": "Conference template."},
+            "template": {
+                "type": "string",
+                "default": "neurips",
+                "description": "Conference template.",
+            },
             "contributions": {
                 "type": "string",
                 "default": "",
@@ -653,7 +686,10 @@ SECTION_REVISE_SPEC = PrimitiveSpec(
         "properties": {
             "section": {"type": "string"},
             "content": {"type": "string", "description": "Current section text."},
-            "review_feedback": {"type": "string", "description": "Review issues to address."},
+            "review_feedback": {
+                "type": "string",
+                "description": "Review issues to address.",
+            },
             "target_words": {"type": "integer", "default": 0},
         },
         "required": ["section", "content", "review_feedback"],
@@ -670,7 +706,10 @@ LATEX_COMPILE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "project_id": {"type": "integer"},
-            "output_dir": {"type": "string", "description": "Directory for output files."},
+            "output_dir": {
+                "type": "string",
+                "description": "Directory for output files.",
+            },
             "template": {"type": "string", "default": "neurips"},
             "sections": {
                 "type": "object",
@@ -709,7 +748,12 @@ EXPERIENCE_INGEST_SPEC = PrimitiveSpec(
         "properties": {
             "source_kind": {
                 "type": "string",
-                "enum": ["human_edit", "self_review", "gold_comparison", "auto_extracted"],
+                "enum": [
+                    "human_edit",
+                    "self_review",
+                    "gold_comparison",
+                    "auto_extracted",
+                ],
             },
             "stage": {"type": "string"},
             "section": {"type": "string"},
@@ -735,7 +779,10 @@ LESSON_EXTRACT_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "stage": {"type": "string", "description": "Stage that just completed."},
-            "stage_summary": {"type": "string", "description": "Summary of what happened."},
+            "stage_summary": {
+                "type": "string",
+                "description": "Summary of what happened.",
+            },
             "issues_encountered": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -756,7 +803,10 @@ LESSON_OVERLAY_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "stage": {"type": "string"},
-            "store_path": {"type": "string", "description": "Path to lessons JSONL file."},
+            "store_path": {
+                "type": "string",
+                "description": "Path to lessons JSONL file.",
+            },
             "top_k": {"type": "integer", "default": 5},
         },
         "required": ["stage", "store_path"],
@@ -775,7 +825,10 @@ STRATEGY_DISTILL_SPEC = PrimitiveSpec(
     input_schema={
         "type": "object",
         "properties": {
-            "stage": {"type": "string", "description": "Stage to distill (e.g. build, analyze)"},
+            "stage": {
+                "type": "string",
+                "description": "Stage to distill (e.g. build, analyze)",
+            },
             "min_lessons": {"type": "integer", "default": 3},
             "topic_id": {"type": "integer"},
             "force": {"type": "boolean", "default": False},
@@ -815,7 +868,10 @@ EXPERIMENT_LOG_SPEC = PrimitiveSpec(
             "hypothesis": {"type": "string"},
             "primary_metric_name": {"type": "string"},
             "primary_metric_value": {"type": "number"},
-            "outcome": {"type": "string", "enum": ["pending", "success", "partial", "failure"]},
+            "outcome": {
+                "type": "string",
+                "enum": ["pending", "success", "partial", "failure"],
+            },
             "notes": {"type": "string"},
         },
         "required": ["project_id", "topic_id", "hypothesis"],
@@ -926,8 +982,14 @@ READING_PRIORITIZE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "focus": {"type": "string", "description": "Research focus for gap relevance scoring"},
-            "limit": {"type": "integer", "description": "Max papers to return (default 20)"},
+            "focus": {
+                "type": "string",
+                "description": "Research focus for gap relevance scoring",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max papers to return (default 20)",
+            },
             "weights": {
                 "type": "object",
                 "description": "Score weights: gap, citation, recency (default 0.4/0.3/0.3)",
@@ -1136,7 +1198,10 @@ AUTHOR_COVERAGE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "author_name": {"type": "string", "description": "Filter by specific author"},
+            "author_name": {
+                "type": "string",
+                "description": "Filter by specific author",
+            },
         },
         "required": ["topic_id"],
     },
@@ -1438,7 +1503,10 @@ DESIGN_BRIEF_EXPAND_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "direction": {"type": "string", "description": "Research direction from direction_ranking"},
+            "direction": {
+                "type": "string",
+                "description": "Research direction from direction_ranking",
+            },
             "constraints": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -1459,7 +1527,10 @@ DESIGN_GAP_PROBE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "brief": {"type": "object", "description": "Design brief from design_brief_expand"},
+            "brief": {
+                "type": "object",
+                "description": "Design brief from design_brief_expand",
+            },
             "method_inventory": {
                 "type": "array",
                 "items": {"type": "object"},
@@ -1480,7 +1551,10 @@ ALGORITHM_CANDIDATE_GENERATE_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "brief": {"type": "object", "description": "Design brief from design_brief_expand"},
+            "brief": {
+                "type": "object",
+                "description": "Design brief from design_brief_expand",
+            },
             "gap_probe": {"type": "object", "description": "Gap probe results"},
             "deep_read_notes": {
                 "type": "array",
@@ -1502,7 +1576,10 @@ ORIGINALITY_BOUNDARY_CHECK_SPEC = PrimitiveSpec(
         "type": "object",
         "properties": {
             "topic_id": {"type": "integer"},
-            "candidate": {"type": "object", "description": "Algorithm candidate to check"},
+            "candidate": {
+                "type": "object",
+                "description": "Algorithm candidate to check",
+            },
         },
         "required": ["topic_id", "candidate"],
     },
@@ -1519,8 +1596,14 @@ ALGORITHM_DESIGN_REFINE_SPEC = PrimitiveSpec(
         "properties": {
             "topic_id": {"type": "integer"},
             "candidate": {"type": "object", "description": "Best algorithm candidate"},
-            "originality_result": {"type": "object", "description": "Originality check result"},
-            "feedback": {"type": "string", "description": "Additional refinement feedback"},
+            "originality_result": {
+                "type": "object",
+                "description": "Originality check result",
+            },
+            "feedback": {
+                "type": "string",
+                "description": "Additional refinement feedback",
+            },
             "constraints": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -1542,7 +1625,10 @@ ALGORITHM_DESIGN_LOOP_SPEC = PrimitiveSpec(
         "properties": {
             "topic_id": {"type": "integer"},
             "project_id": {"type": "integer"},
-            "direction": {"type": "string", "description": "Research direction from direction_ranking"},
+            "direction": {
+                "type": "string",
+                "description": "Research direction from direction_ranking",
+            },
             "max_rounds": {"type": "integer", "default": 3},
             "constraints": {
                 "type": "array",

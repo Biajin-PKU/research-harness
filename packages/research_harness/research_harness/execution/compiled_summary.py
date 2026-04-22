@@ -20,12 +20,26 @@ from . import prompts
 logger = logging.getLogger(__name__)
 
 # JSON schema fields expected in compiled_summary
-COMPILED_FIELDS = ("overview", "methods", "claims", "limitations", "metrics", "relations")
+COMPILED_FIELDS = (
+    "overview",
+    "methods",
+    "claims",
+    "limitations",
+    "metrics",
+    "relations",
+)
 
 # Contradiction signal keywords for topic sampling
 _CONTRADICTION_KEYWORDS = (
-    "revisit", "fail", "contrary", "challenge", "contradict",
-    "rethink", "pitfall", "does not", "limitation of",
+    "revisit",
+    "fail",
+    "contrary",
+    "challenge",
+    "contradict",
+    "rethink",
+    "pitfall",
+    "does not",
+    "limitation of",
 )
 
 _TOP_K = 20
@@ -61,7 +75,8 @@ def _compute_source_hash(conn: Any, paper_id: int) -> str:
 
     # 3. Abstract
     row = conn.execute(
-        "SELECT abstract FROM papers WHERE id = ?", (paper_id,),
+        "SELECT abstract FROM papers WHERE id = ?",
+        (paper_id,),
     ).fetchone()
     abstract = (row["abstract"] or "") if row else ""
 
@@ -79,8 +94,15 @@ def _build_source_text(conn: Any, paper_id: int) -> str:
     parts: list[str] = []
 
     # Annotations (priority order)
-    for section in ("summary", "methodology", "experiments", "limitations",
-                    "deep_reading", "equations", "reproduction_notes"):
+    for section in (
+        "summary",
+        "methodology",
+        "experiments",
+        "limitations",
+        "deep_reading",
+        "equations",
+        "reproduction_notes",
+    ):
         row = conn.execute(
             "SELECT content FROM paper_annotations "
             "WHERE paper_id = ? AND section = ? AND COALESCE(content, '') != ''",
@@ -101,22 +123,29 @@ def _build_source_text(conn: Any, paper_id: int) -> str:
             try:
                 card = json.loads(card_path.read_text())
                 card_parts = []
-                for key in ("core_idea", "method_summary", "contributions",
-                            "key_results", "limitations", "assumptions"):
+                for key in (
+                    "core_idea",
+                    "method_summary",
+                    "contributions",
+                    "key_results",
+                    "limitations",
+                    "assumptions",
+                ):
                     val = card.get(key)
                     if val:
                         if isinstance(val, list):
                             val = "; ".join(str(v) for v in val)
                         card_parts.append(f"{key}: {val}")
                 if card_parts:
-                    parts.append(f"[paper_card]\n" + "\n".join(card_parts))
+                    parts.append("[paper_card]\n" + "\n".join(card_parts))
             except Exception:
                 pass
 
     # Abstract fallback
     if not parts:
         row = conn.execute(
-            "SELECT abstract FROM papers WHERE id = ?", (paper_id,),
+            "SELECT abstract FROM papers WHERE id = ?",
+            (paper_id,),
         ).fetchone()
         if row and row["abstract"]:
             parts.append(f"[abstract]\n{row['abstract']}")
@@ -165,7 +194,9 @@ def ensure_compiled_summary(db: Database, paper_id: int) -> dict:
         result = _llm._parse_json(raw, primitive="compiled_summary", context=title)
 
         if not result or "overview" not in result:
-            logger.warning("Compiled summary LLM returned invalid output for paper %d", paper_id)
+            logger.warning(
+                "Compiled summary LLM returned invalid output for paper %d", paper_id
+            )
             return {}
 
         # Normalize: ensure all expected fields exist
@@ -181,7 +212,9 @@ def ensure_compiled_summary(db: Database, paper_id: int) -> dict:
         conn.commit()
         return normalized
     except Exception:
-        logger.debug("ensure_compiled_summary failed for paper %d", paper_id, exc_info=True)
+        logger.debug(
+            "ensure_compiled_summary failed for paper %d", paper_id, exc_info=True
+        )
         return {}
     finally:
         conn.close()
@@ -217,7 +250,7 @@ def format_compiled_as_text(compiled: dict) -> str:
 
     limitations = compiled.get("limitations", [])
     if limitations:
-        parts.append("[Limitations]\n" + "\n".join(f"- {l}" for l in limitations))
+        parts.append("[Limitations]\n" + "\n".join(f"- {item}" for item in limitations))
 
     metrics = compiled.get("metrics", [])
     if metrics:

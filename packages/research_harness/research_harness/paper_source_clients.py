@@ -11,7 +11,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .core.circuit_breaker import CircuitBreakerConfig, CircuitOpenError, get_breaker
+from .core.circuit_breaker import CircuitBreakerConfig, get_breaker
+from .paper_sources import PDFCandidate, PaperRecord, SearchProvider, SearchQuery
 
 # S2 gets a lenient breaker: 429 is rate-limiting (expected), not an outage.
 # 8 failures before trip (vs default 3), shorter recovery (30s vs 60s).
@@ -21,7 +22,6 @@ _S2_BREAKER_CONFIG = CircuitBreakerConfig(
     max_recovery_sec=300.0,
     backoff_multiplier=2.0,
 )
-from .paper_sources import PDFCandidate, PaperRecord, SearchProvider, SearchQuery
 
 logger = logging.getLogger(__name__)
 
@@ -63,24 +63,38 @@ def _fetch_with_retry(
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            request = urllib.request.Request(url, headers=headers, data=data, method=method)
+            request = urllib.request.Request(
+                url, headers=headers, data=data, method=method
+            )
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return parse(response.read())
         except urllib.error.HTTPError as exc:
             last_exc = exc
             if exc.code not in _RETRYABLE_HTTP_CODES or attempt == max_retries:
                 raise
-            wait = _parse_retry_after(exc, base_backoff * (2 ** attempt))
-            logger.warning("HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
-                           exc.code, url, wait, attempt + 1, max_retries)
+            wait = _parse_retry_after(exc, base_backoff * (2**attempt))
+            logger.warning(
+                "HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
+                exc.code,
+                url,
+                wait,
+                attempt + 1,
+                max_retries,
+            )
             time.sleep(wait)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_exc = exc
             if attempt == max_retries:
                 raise
-            wait = base_backoff * (2 ** attempt)
-            logger.warning("Network error from %s: %s, retrying in %.1fs (attempt %d/%d)",
-                           url, exc, wait, attempt + 1, max_retries)
+            wait = base_backoff * (2**attempt)
+            logger.warning(
+                "Network error from %s: %s, retrying in %.1fs (attempt %d/%d)",
+                url,
+                exc,
+                wait,
+                attempt + 1,
+                max_retries,
+            )
             time.sleep(wait)
     raise last_exc  # type: ignore[misc]
 
@@ -97,7 +111,9 @@ def _parse_retry_after(exc: urllib.error.HTTPError, default: float) -> float:
 
 
 def default_json_fetcher(url: str, headers: dict[str, str]) -> Any:
-    return _fetch_with_retry(url, headers, lambda data: json.loads(data.decode("utf-8")))
+    return _fetch_with_retry(
+        url, headers, lambda data: json.loads(data.decode("utf-8"))
+    )
 
 
 def default_text_fetcher(url: str, headers: dict[str, str]) -> str:
@@ -118,7 +134,9 @@ class HTTPProvider(SearchProvider):
 class GoogleScholarProvider(HTTPProvider):
     name = "google_scholar"
 
-    def __init__(self, api_url: str, api_key: str = "", fetcher: JsonFetcher | None = None):
+    def __init__(
+        self, api_url: str, api_key: str = "", fetcher: JsonFetcher | None = None
+    ):
         super().__init__(fetcher=fetcher)
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key
@@ -134,7 +152,12 @@ class GoogleScholarProvider(HTTPProvider):
         if self.api_key:
             headers["X-API-Key"] = self.api_key
         payload = self._fetch_json(url, headers)
-        items = payload.get("organic_results") or payload.get("results") or payload.get("papers") or []
+        items = (
+            payload.get("organic_results")
+            or payload.get("results")
+            or payload.get("papers")
+            or []
+        )
         records: list[PaperRecord] = []
         for item in items:
             if not isinstance(item, dict):
@@ -164,14 +187,19 @@ class GoogleScholarProvider(HTTPProvider):
             records.append(
                 PaperRecord(
                     title=str(item.get("title") or ""),
-                    authors=_coerce_authors(item.get("publication_info") or item.get("authors")),
+                    authors=_coerce_authors(
+                        item.get("publication_info") or item.get("authors")
+                    ),
                     year=_coerce_year(item.get("year") or item.get("publication_year")),
                     venue=str(item.get("publication") or item.get("venue") or ""),
                     abstract=str(item.get("snippet") or item.get("abstract") or ""),
                     doi=str(item.get("doi") or ""),
                     url=str(item.get("link") or item.get("url") or ""),
                     provider=self.name,
-                    citation_count=_coerce_int(item.get("cited_by_count") or item.get("inline_links", {}).get("cited_by", {}).get("total")),
+                    citation_count=_coerce_int(
+                        item.get("cited_by_count")
+                        or item.get("inline_links", {}).get("cited_by", {}).get("total")
+                    ),
                     pdf_candidates=pdf_candidates,
                 )
             )
@@ -181,7 +209,12 @@ class GoogleScholarProvider(HTTPProvider):
 class OpenAlexProvider(HTTPProvider):
     name = "openalex"
 
-    def __init__(self, api_key: str = "", email: str | None = None, fetcher: JsonFetcher | None = None):
+    def __init__(
+        self,
+        api_key: str = "",
+        email: str | None = None,
+        fetcher: JsonFetcher | None = None,
+    ):
         super().__init__(fetcher=fetcher)
         self.api_key = api_key
         self.email = email or ""
@@ -212,10 +245,17 @@ class OpenAlexProvider(HTTPProvider):
             records.append(
                 PaperRecord(
                     title=str(item.get("title") or ""),
-                    authors=[author.get("author", {}).get("display_name", "") for author in item.get("authorships") or [] if isinstance(author, dict) and author.get("author", {}).get("display_name")],
+                    authors=[
+                        author.get("author", {}).get("display_name", "")
+                        for author in item.get("authorships") or []
+                        if isinstance(author, dict)
+                        and author.get("author", {}).get("display_name")
+                    ],
                     affiliations=_openalex_affiliations(item),
                     year=_coerce_year(item.get("publication_year")),
-                    venue=str((primary_location.get("source") or {}).get("display_name") or ""),
+                    venue=str(
+                        (primary_location.get("source") or {}).get("display_name") or ""
+                    ),
                     abstract=_openalex_abstract(item),
                     doi=_normalize_doi(str(item.get("doi") or "")),
                     openalex_id=str(item.get("id") or "").rsplit("/", 1)[-1],
@@ -244,13 +284,15 @@ class OpenAlexProvider(HTTPProvider):
         if params:
             url += f"?{urllib.parse.urlencode(params)}"
         try:
-            item = self._fetch_json(url, {"Accept": "application/json"})
+            _item = self._fetch_json(url, {"Accept": "application/json"})
         except Exception:
             return None
 
     def resolve_doi(self, doi: str) -> str | None:
         """Resolve a DOI to an OpenAlex Work ID (W...)."""
-        clean = doi.strip().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
+        clean = (
+            doi.strip().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
+        )
         if not clean:
             return None
         params = self._common_params()
@@ -272,7 +314,11 @@ class OpenAlexProvider(HTTPProvider):
         landing = primary_location.get("landing_page_url") or item.get("doi") or ""
         return PaperRecord(
             title=str(item.get("title") or ""),
-            authors=[a.get("author", {}).get("display_name", "") for a in item.get("authorships") or [] if isinstance(a, dict) and a.get("author", {}).get("display_name")],
+            authors=[
+                a.get("author", {}).get("display_name", "")
+                for a in item.get("authorships") or []
+                if isinstance(a, dict) and a.get("author", {}).get("display_name")
+            ],
             affiliations=_openalex_affiliations(item),
             year=_coerce_year(item.get("publication_year")),
             venue=str((primary_location.get("source") or {}).get("display_name") or ""),
@@ -311,7 +357,10 @@ class OpenAlexProvider(HTTPProvider):
         return results[:limit]
 
     def venue_papers(
-        self, venue_name: str, year_from: int | None = None, limit: int = 25,
+        self,
+        venue_name: str,
+        year_from: int | None = None,
+        limit: int = 25,
     ) -> list[PaperRecord]:
         """Fetch recent papers from a specific venue."""
         # First resolve venue name to source ID
@@ -355,10 +404,17 @@ class OpenAlexProvider(HTTPProvider):
             records.append(
                 PaperRecord(
                     title=str(item.get("title") or ""),
-                    authors=[a.get("author", {}).get("display_name", "") for a in item.get("authorships") or [] if isinstance(a, dict) and a.get("author", {}).get("display_name")],
+                    authors=[
+                        a.get("author", {}).get("display_name", "")
+                        for a in item.get("authorships") or []
+                        if isinstance(a, dict)
+                        and a.get("author", {}).get("display_name")
+                    ],
                     affiliations=_openalex_affiliations(item),
                     year=_coerce_year(item.get("publication_year")),
-                    venue=str((primary_location.get("source") or {}).get("display_name") or ""),
+                    venue=str(
+                        (primary_location.get("source") or {}).get("display_name") or ""
+                    ),
                     abstract=_openalex_abstract(item),
                     doi=_normalize_doi(str(item.get("doi") or "")),
                     openalex_id=str(item.get("id") or "").rsplit("/", 1)[-1],
@@ -382,9 +438,21 @@ class SemanticScholarProvider(HTTPProvider):
 
     name = "semantic_scholar"
 
-    FIELDS = ",".join([
-        "paperId", "title", "authors", "authors.affiliations", "year", "venue", "abstract", "externalIds", "url", "citationCount", "openAccessPdf"
-    ])
+    FIELDS = ",".join(
+        [
+            "paperId",
+            "title",
+            "authors",
+            "authors.affiliations",
+            "year",
+            "venue",
+            "abstract",
+            "externalIds",
+            "url",
+            "citationCount",
+            "openAccessPdf",
+        ]
+    )
 
     # Monotonic timestamp of the last S2 request (shared across instances)
     _last_request_time: float = 0.0
@@ -395,7 +463,9 @@ class SemanticScholarProvider(HTTPProvider):
         # Free tier: 1 req/s; keyed tier: relax to 0.15s
         self._min_interval = 0.15 if api_key else 1.05
 
-    def _rate_limited_fetch(self, url: str, headers: dict[str, str] | None = None) -> Any:
+    def _rate_limited_fetch(
+        self, url: str, headers: dict[str, str] | None = None
+    ) -> Any:
         """Fetch with pre-request rate limiting to prevent 429s."""
         now = time.monotonic()
         elapsed = now - SemanticScholarProvider._last_request_time
@@ -407,7 +477,11 @@ class SemanticScholarProvider(HTTPProvider):
         return breaker.call(self._fetcher, url, headers or {})
 
     def search(self, query: SearchQuery) -> list[PaperRecord]:
-        params = {"query": query.query, "limit": str(query.limit), "fields": self.FIELDS}
+        params = {
+            "query": query.query,
+            "limit": str(query.limit),
+            "fields": self.FIELDS,
+        }
         if query.year_from is not None or query.year_to is not None:
             start = query.year_from or 1900
             end = query.year_to or 2100
@@ -437,7 +511,11 @@ class SemanticScholarProvider(HTTPProvider):
             records.append(
                 PaperRecord(
                     title=str(item.get("title") or ""),
-                    authors=[author.get("name", "") for author in item.get("authors") or [] if isinstance(author, dict) and author.get("name")],
+                    authors=[
+                        author.get("name", "")
+                        for author in item.get("authors") or []
+                        if isinstance(author, dict) and author.get("name")
+                    ],
                     affiliations=_s2_affiliations(item.get("authors") or []),
                     year=_coerce_year(item.get("year")),
                     venue=str(item.get("venue") or ""),
@@ -453,7 +531,6 @@ class SemanticScholarProvider(HTTPProvider):
             )
         return records
 
-
     def get_references(self, paper_id: str, limit: int = 50) -> list[PaperRecord]:
         """Fetch papers referenced by this paper (backward expansion)."""
         fields = "paperId,title,authors,year,venue,abstract,externalIds,citationCount,openAccessPdf"
@@ -466,7 +543,11 @@ class SemanticScholarProvider(HTTPProvider):
             payload = self._rate_limited_fetch(url, headers)
         except Exception:
             return []
-        return [self._cited_paper_to_record(item.get("citedPaper") or {}) for item in payload.get("data") or [] if item.get("citedPaper")]
+        return [
+            self._cited_paper_to_record(item.get("citedPaper") or {})
+            for item in payload.get("data") or []
+            if item.get("citedPaper")
+        ]
 
     def get_citations(self, paper_id: str, limit: int = 50) -> list[PaperRecord]:
         """Fetch papers that cite this paper (forward expansion)."""
@@ -480,7 +561,11 @@ class SemanticScholarProvider(HTTPProvider):
             payload = self._rate_limited_fetch(url, headers)
         except Exception:
             return []
-        return [self._cited_paper_to_record(item.get("citingPaper") or {}) for item in payload.get("data") or [] if item.get("citingPaper")]
+        return [
+            self._cited_paper_to_record(item.get("citingPaper") or {})
+            for item in payload.get("data") or []
+            if item.get("citingPaper")
+        ]
 
     def _cited_paper_to_record(self, item: dict) -> PaperRecord:
         if not isinstance(item, dict):
@@ -489,10 +574,21 @@ class SemanticScholarProvider(HTTPProvider):
         open_access = item.get("openAccessPdf") or {}
         pdf_candidates: list[PDFCandidate] = []
         if isinstance(open_access, dict) and open_access.get("url"):
-            pdf_candidates.append(PDFCandidate(url=str(open_access["url"]), source_type="open_access_pdf", provider=self.name, confidence=0.9))
+            pdf_candidates.append(
+                PDFCandidate(
+                    url=str(open_access["url"]),
+                    source_type="open_access_pdf",
+                    provider=self.name,
+                    confidence=0.9,
+                )
+            )
         return PaperRecord(
             title=str(item.get("title") or ""),
-            authors=[a.get("name", "") for a in item.get("authors") or [] if isinstance(a, dict) and a.get("name")],
+            authors=[
+                a.get("name", "")
+                for a in item.get("authors") or []
+                if isinstance(a, dict) and a.get("name")
+            ],
             affiliations=_s2_affiliations(item.get("authors") or []),
             year=_coerce_year(item.get("year")),
             venue=str(item.get("venue") or ""),
@@ -509,13 +605,23 @@ class SemanticScholarProvider(HTTPProvider):
 class OpenReviewProvider(HTTPProvider):
     name = "openreview"
 
-    def __init__(self, base_url: str = "https://api2.openreview.net", access_token: str = "", fetcher: JsonFetcher | None = None):
+    def __init__(
+        self,
+        base_url: str = "https://api2.openreview.net",
+        access_token: str = "",
+        fetcher: JsonFetcher | None = None,
+    ):
         super().__init__(fetcher=fetcher)
         self.base_url = base_url.rstrip("/")
         self.access_token = access_token
 
     def search(self, query: SearchQuery) -> list[PaperRecord]:
-        params = {"query": query.query, "content": "title", "limit": str(query.limit), "source": "forum"}
+        params = {
+            "query": query.query,
+            "content": "title",
+            "limit": str(query.limit),
+            "source": "forum",
+        }
         url = f"{self.base_url}/notes/search?{urllib.parse.urlencode(params)}"
         headers = {"Accept": "application/json"}
         if self.access_token:
@@ -548,9 +654,13 @@ class OpenReviewProvider(HTTPProvider):
                     authors=authors,
                     abstract=abstract,
                     venue=venue,
-                    year=_coerce_year(item.get("pdate") or item.get("cdate") or item.get("odate")),
+                    year=_coerce_year(
+                        item.get("pdate") or item.get("cdate") or item.get("odate")
+                    ),
                     openreview_id=openreview_id,
-                    url=f"https://openreview.net/forum?id={openreview_id}" if openreview_id else "",
+                    url=f"https://openreview.net/forum?id={openreview_id}"
+                    if openreview_id
+                    else "",
                     provider=self.name,
                     pdf_candidates=pdf_candidates,
                 )
@@ -576,7 +686,10 @@ class ArxivProvider:
         breaker = get_breaker(self.name)
         payload = breaker.call(self._fetcher, url, {"Accept": "application/atom+xml"})
         root = ET.fromstring(payload)
-        ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+        ns = {
+            "atom": "http://www.w3.org/2005/Atom",
+            "arxiv": "http://arxiv.org/schemas/atom",
+        }
         records: list[PaperRecord] = []
         for entry in root.findall("atom:entry", ns):
             title = _xml_text(entry.find("atom:title", ns))
@@ -587,7 +700,10 @@ class ArxivProvider:
                 continue
             if query.year_to is not None and (year is None or year > query.year_to):
                 continue
-            authors = [_xml_text(item.find("atom:name", ns)) for item in entry.findall("atom:author", ns)]
+            authors = [
+                _xml_text(item.find("atom:name", ns))
+                for item in entry.findall("atom:author", ns)
+            ]
             authors = [item for item in authors if item]
             entry_id = _xml_text(entry.find("atom:id", ns))
             arxiv_id = entry_id.rsplit("/abs/", 1)[-1] if "/abs/" in entry_id else ""
@@ -596,7 +712,7 @@ class ArxivProvider:
             for link in entry.findall("atom:link", ns):
                 href = link.attrib.get("href", "")
                 title_attr = link.attrib.get("title", "")
-                if href and (title_attr == "pdf" or href.endswith('.pdf')):
+                if href and (title_attr == "pdf" or href.endswith(".pdf")):
                     pdf_candidates.append(
                         PDFCandidate(
                             url=href,
@@ -639,8 +755,7 @@ class PASAProvider:
         max_polls: int = 30,
     ) -> None:
         self.base_url = (
-            base_url
-            or os.environ.get("PASA_BASE_URL", "https://pasa-agent.ai")
+            base_url or os.environ.get("PASA_BASE_URL", "https://pasa-agent.ai")
         ).rstrip("/")
         self.timeout = timeout
         self.poll_interval = poll_interval
@@ -670,7 +785,9 @@ class PASAProvider:
 
         for _ in range(self.max_polls):
             try:
-                response = self._post_json(self._result_path, {"session_id": session_id})
+                response = self._post_json(
+                    self._result_path, {"session_id": session_id}
+                )
             except Exception:
                 break
 
@@ -695,7 +812,7 @@ class PASAProvider:
                 if query.year_to and record.year and record.year > query.year_to:
                     continue
                 records.append(record)
-        return records[:query.limit]
+        return records[: query.limit]
 
     def _post_json(self, path: str, payload: dict) -> dict:
         url = f"{self.base_url}{path}"
@@ -739,7 +856,9 @@ class PASAProvider:
     @staticmethod
     def _item_key(item: dict) -> str:
         title = str(item.get("title") or item.get("paper_title") or "").strip().lower()
-        link = str(item.get("link") or item.get("url") or item.get("paper_url") or "").strip()
+        link = str(
+            item.get("link") or item.get("url") or item.get("paper_url") or ""
+        ).strip()
         return f"{title}||{link}"
 
     def _to_paper_record(self, item: dict) -> PaperRecord:
@@ -756,9 +875,13 @@ class PASAProvider:
         title = str(
             item.get("title") or item.get("paper_title") or item.get("name") or ""
         ).strip()
-        authors_raw = item.get("authors") or item.get("author_list") or item.get("creator")
+        authors_raw = (
+            item.get("authors") or item.get("author_list") or item.get("creator")
+        )
         abstract = str(item.get("abstract") or item.get("summary") or "").strip()
-        venue = str(item.get("venue") or item.get("journal") or item.get("conference") or "").strip()
+        venue = str(
+            item.get("venue") or item.get("journal") or item.get("conference") or ""
+        ).strip()
         year = _coerce_year(
             item.get("year") or item.get("published_year") or item.get("publish_time")
         )
@@ -781,7 +904,12 @@ class PASAProvider:
         pdf_url = str(item.get("pdf_url") or item.get("pdf") or "").strip()
         if pdf_url:
             pdf_candidates.append(
-                PDFCandidate(url=pdf_url, source_type="open_access_pdf", provider=self.name, confidence=0.7)
+                PDFCandidate(
+                    url=pdf_url,
+                    source_type="open_access_pdf",
+                    provider=self.name,
+                    confidence=0.7,
+                )
             )
         if arxiv_id:
             clean_id = arxiv_id.removesuffix(".pdf").strip("/")
@@ -815,16 +943,37 @@ def build_provider_suite(fetcher: JsonFetcher | None = None) -> list[SearchProvi
     semantic_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
 
     if google_url:
-        providers.append(GoogleScholarProvider(api_url=google_url, api_key=os.environ.get("GOOGLE_SCHOLAR_API_KEY", ""), fetcher=fetcher))
+        providers.append(
+            GoogleScholarProvider(
+                api_url=google_url,
+                api_key=os.environ.get("GOOGLE_SCHOLAR_API_KEY", ""),
+                fetcher=fetcher,
+            )
+        )
     if openalex_key:
-        providers.append(OpenAlexProvider(api_key=openalex_key, email=os.environ.get("OPENALEX_MAILTO", ""), fetcher=fetcher))
+        providers.append(
+            OpenAlexProvider(
+                api_key=openalex_key,
+                email=os.environ.get("OPENALEX_MAILTO", ""),
+                fetcher=fetcher,
+            )
+        )
     # S2 is always enabled (free tier works without key, just rate-limited to ~1 req/s)
     providers.append(SemanticScholarProvider(api_key=semantic_key, fetcher=fetcher))
     if os.environ.get("OPENREVIEW_ENABLE", "").strip().lower() in {"1", "true", "yes"}:
-        providers.append(OpenReviewProvider(access_token=os.environ.get("OPENREVIEW_ACCESS_TOKEN", ""), fetcher=fetcher))
+        providers.append(
+            OpenReviewProvider(
+                access_token=os.environ.get("OPENREVIEW_ACCESS_TOKEN", ""),
+                fetcher=fetcher,
+            )
+        )
 
     # PASA as last-resort fallback (preprints, lower priority)
-    pasa_enabled = os.environ.get("PASA_ENABLE", "").strip().lower() not in {"0", "false", "no"}
+    pasa_enabled = os.environ.get("PASA_ENABLE", "").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
     if pasa_enabled:
         providers.append(PASAProvider())
 
@@ -835,15 +984,45 @@ def available_provider_specs() -> list[ProviderSpec]:
     google_url = os.environ.get("GOOGLE_SCHOLAR_API_URL", "").strip()
     openalex_key = os.environ.get("OPENALEX_API_KEY", "").strip()
     semantic_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
-    openreview_enabled = os.environ.get("OPENREVIEW_ENABLE", "").strip().lower() in {"1", "true", "yes"}
-    pasa_disabled = os.environ.get("PASA_ENABLE", "").strip().lower() in {"0", "false", "no"}
+    openreview_enabled = os.environ.get("OPENREVIEW_ENABLE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    pasa_disabled = os.environ.get("PASA_ENABLE", "").strip().lower() in {
+        "0",
+        "false",
+        "no",
+    }
     return [
         ProviderSpec("arxiv", True, "built-in"),
-        ProviderSpec("google_scholar", bool(google_url), "configured" if google_url else "set GOOGLE_SCHOLAR_API_URL"),
-        ProviderSpec("openalex", bool(openalex_key), "configured" if openalex_key else "set OPENALEX_API_KEY"),
-        ProviderSpec("semantic_scholar", True, "configured (keyed)" if semantic_key else "enabled (free tier, rate-limited)"),
-        ProviderSpec("openreview", openreview_enabled, "configured" if openreview_enabled else "set OPENREVIEW_ENABLE=1"),
-        ProviderSpec("pasa", not pasa_disabled, "enabled (fallback)" if not pasa_disabled else "disabled via PASA_ENABLE=0"),
+        ProviderSpec(
+            "google_scholar",
+            bool(google_url),
+            "configured" if google_url else "set GOOGLE_SCHOLAR_API_URL",
+        ),
+        ProviderSpec(
+            "openalex",
+            bool(openalex_key),
+            "configured" if openalex_key else "set OPENALEX_API_KEY",
+        ),
+        ProviderSpec(
+            "semantic_scholar",
+            True,
+            "configured (keyed)"
+            if semantic_key
+            else "enabled (free tier, rate-limited)",
+        ),
+        ProviderSpec(
+            "openreview",
+            openreview_enabled,
+            "configured" if openreview_enabled else "set OPENREVIEW_ENABLE=1",
+        ),
+        ProviderSpec(
+            "pasa",
+            not pasa_disabled,
+            "enabled (fallback)" if not pasa_disabled else "disabled via PASA_ENABLE=0",
+        ),
     ]
 
 
@@ -860,15 +1039,33 @@ def _openalex_pdf_candidates(item: dict[str, Any]) -> list[PDFCandidate]:
             )
         )
     best_oa = item.get("best_oa_location") or {}
-    for location in [best_oa, item.get("primary_location") or {}, *(item.get("locations") or [])]:
+    for location in [
+        best_oa,
+        item.get("primary_location") or {},
+        *(item.get("locations") or []),
+    ]:
         if not isinstance(location, dict):
             continue
         pdf_url = location.get("pdf_url") or ""
         landing_url = location.get("landing_page_url") or ""
         if pdf_url:
-            candidates.append(PDFCandidate(url=str(pdf_url), source_type="open_access_pdf", provider="openalex", confidence=0.95))
+            candidates.append(
+                PDFCandidate(
+                    url=str(pdf_url),
+                    source_type="open_access_pdf",
+                    provider="openalex",
+                    confidence=0.95,
+                )
+            )
         elif landing_url and location.get("is_oa"):
-            candidates.append(PDFCandidate(url=str(landing_url), source_type="publisher_pdf", provider="openalex", confidence=0.7))
+            candidates.append(
+                PDFCandidate(
+                    url=str(landing_url),
+                    source_type="publisher_pdf",
+                    provider="openalex",
+                    confidence=0.7,
+                )
+            )
     return _dedupe_pdf_candidates(candidates)
 
 
@@ -918,11 +1115,13 @@ def _openalex_concepts(item: dict[str, Any]) -> list[dict]:
         name = c.get("display_name") or ""
         if not name:
             continue
-        concepts.append({
-            "display_name": name,
-            "level": c.get("level", 0),
-            "score": round(c.get("score", 0.0), 3),
-        })
+        concepts.append(
+            {
+                "display_name": name,
+                "level": c.get("level", 0),
+                "score": round(c.get("score", 0.0), 3),
+            }
+        )
     return concepts
 
 
@@ -930,7 +1129,12 @@ def _openalex_abstract(item: dict[str, Any]) -> str:
     inverted = item.get("abstract_inverted_index") or {}
     if not inverted:
         return ""
-    size = max((max(positions) for positions in inverted.values() if positions), default=-1) + 1
+    size = (
+        max(
+            (max(positions) for positions in inverted.values() if positions), default=-1
+        )
+        + 1
+    )
     if size <= 0:
         return ""
     tokens = [""] * size

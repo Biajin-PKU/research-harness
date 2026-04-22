@@ -29,7 +29,9 @@ class SectionNode:
         if include_text:
             data["section_text"] = self.section_text
         if self.children:
-            data["nodes"] = [child.to_dict(include_text=include_text) for child in self.children]
+            data["nodes"] = [
+                child.to_dict(include_text=include_text) for child in self.children
+            ]
         return data
 
     @classmethod
@@ -56,7 +58,9 @@ class StructureResult:
     def to_dict(self, include_text: bool = True) -> dict[str, Any]:
         return {
             "doc_name": self.doc_name,
-            "structure": [node.to_dict(include_text=include_text) for node in self.tree],
+            "structure": [
+                node.to_dict(include_text=include_text) for node in self.tree
+            ],
             "pdf_hash": self.pdf_hash,
             "page_count": self.page_count,
             "raw": self.raw,
@@ -115,7 +119,13 @@ class PaperRecord:
     sections: dict[str, SectionResult] = field(default_factory=dict)
     card: PaperCard = field(default_factory=PaperCard)
     source_path: str = ""
-    indexed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
+    indexed_at: str = field(
+        default_factory=lambda: (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,7 +135,9 @@ class PaperRecord:
             "pdf_hash": self.pdf_hash,
             "page_count": self.page_count,
             "structure": self.structure.to_dict(),
-            "sections": {name: result.to_dict() for name, result in self.sections.items()},
+            "sections": {
+                name: result.to_dict() for name, result in self.sections.items()
+            },
             "card": self.card.to_dict(),
             "source_path": self.source_path,
             "indexed_at": self.indexed_at,
@@ -134,7 +146,11 @@ class PaperRecord:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PaperRecord":
         card_data = data.get("card", {})
-        card = card_data if isinstance(card_data, PaperCard) else PaperCard.from_dict(card_data)
+        card = (
+            card_data
+            if isinstance(card_data, PaperCard)
+            else PaperCard.from_dict(card_data)
+        )
         return cls(
             paper_id=data.get("paper_id", ""),
             title=data.get("title", ""),
@@ -142,7 +158,10 @@ class PaperRecord:
             pdf_hash=data.get("pdf_hash", ""),
             page_count=int(data.get("page_count", 0) or 0),
             structure=StructureResult.from_dict(data.get("structure", {})),
-            sections={name: SectionResult.from_dict(result) for name, result in data.get("sections", {}).items()},
+            sections={
+                name: SectionResult.from_dict(result)
+                for name, result in data.get("sections", {}).items()
+            },
             card=card,
             source_path=data.get("source_path", ""),
             indexed_at=data.get("indexed_at", ""),

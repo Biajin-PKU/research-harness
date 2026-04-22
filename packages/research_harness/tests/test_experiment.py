@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from research_harness.experiment.metric_parser import detect_nan_divergence, parse_metrics
+from research_harness.experiment.metric_parser import (
+    detect_nan_divergence,
+    parse_metrics,
+)
 from research_harness.experiment.sandbox import is_improvement, run_experiment
 from research_harness.experiment.validator import (
-    CodeValidation,
     auto_fix_unbound_locals,
     validate_code,
     validate_imports,
@@ -31,7 +33,9 @@ class TestMetricParser:
         assert metrics["loss"] == pytest.approx(0.23)
 
     def test_condition_prefixed(self):
-        metrics = parse_metrics("condition=baseline accuracy: 0.85\ncondition=ours accuracy: 0.92\n")
+        metrics = parse_metrics(
+            "condition=baseline accuracy: 0.85\ncondition=ours accuracy: 0.92\n"
+        )
         assert metrics["baseline/accuracy"] == pytest.approx(0.85)
         assert metrics["ours/accuracy"] == pytest.approx(0.92)
 
@@ -57,7 +61,9 @@ class TestMetricParser:
 
     def test_inf_detection(self):
         assert detect_nan_divergence("loss: inf", "") != ""
-        assert detect_nan_divergence("information about training", "") == ""  # "info" not "inf"
+        assert (
+            detect_nan_divergence("information about training", "") == ""
+        )  # "info" not "inf"
 
 
 # -- Validator ----------------------------------------------------------------
@@ -89,7 +95,10 @@ class TestValidator:
 
     def test_unknown_import_is_warning(self):
         issues = validate_imports("import some_obscure_package\n")
-        assert any(i.severity == "warning" and "some_obscure_package" in i.message for i in issues)
+        assert any(
+            i.severity == "warning" and "some_obscure_package" in i.message
+            for i in issues
+        )
 
     def test_safe_imports_pass(self):
         code = "import numpy\nimport torch\nimport json\nimport math\n"
@@ -154,7 +163,7 @@ class TestVerifiedRegistry:
     def test_rounding_variants(self):
         registry = VerifiedRegistry()
         registry.add_value(0.9534, "accuracy")
-        assert registry.is_verified(0.95)   # rounded to 2dp
+        assert registry.is_verified(0.95)  # rounded to 2dp
         assert registry.is_verified(0.953)  # rounded to 3dp
 
     def test_percentage_variant(self):

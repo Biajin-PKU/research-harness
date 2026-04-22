@@ -1,4 +1,5 @@
 """Lifecycle tests for topic, project, and search CLI commands."""
+
 from __future__ import annotations
 
 import json
@@ -57,7 +58,16 @@ def test_project_show_and_update_json(runner):
     )
     runner.invoke(
         main,
-        ["task", "add", "--topic", "t1", "--project", "paper1", "--title", "Read paper"],
+        [
+            "task",
+            "add",
+            "--topic",
+            "t1",
+            "--project",
+            "paper1",
+            "--title",
+            "Read paper",
+        ],
     )
     runner.invoke(
         main,
@@ -77,7 +87,9 @@ def test_project_show_and_update_json(runner):
         ],
     )
 
-    show_before = runner.invoke(main, ["--json", "project", "show", "--topic", "t1", "paper1"])
+    show_before = runner.invoke(
+        main, ["--json", "project", "show", "--topic", "t1", "paper1"]
+    )
     assert show_before.exit_code == 0, show_before.output
     before = json.loads(show_before.output)
     assert before["task_count"] == 1
@@ -107,7 +119,9 @@ def test_project_show_and_update_json(runner):
     )
     assert update.exit_code == 0, update.output
 
-    show_after = runner.invoke(main, ["--json", "project", "show", "--topic", "t1", "paper1-v2"])
+    show_after = runner.invoke(
+        main, ["--json", "project", "show", "--topic", "t1", "paper1-v2"]
+    )
     after = json.loads(show_after.output)
     assert after["name"] == "paper1-v2"
     assert after["description"] == "tightened scope"
@@ -121,11 +135,70 @@ def test_project_show_and_update_json(runner):
 def test_search_list_filters_and_limit(runner):
     runner.invoke(main, ["topic", "init", "topic-a"])
     runner.invoke(main, ["topic", "init", "topic-b"])
-    runner.invoke(main, ["search", "log", "--topic", "topic-a", "--query", "alpha", "--provider", "semantic-scholar", "--result-count", "10", "--ingested-count", "2"])
-    runner.invoke(main, ["search", "log", "--topic", "topic-b", "--query", "beta", "--provider", "arxiv", "--result-count", "8", "--ingested-count", "1"])
-    runner.invoke(main, ["search", "log", "--query", "gamma", "--provider", "semantic-scholar", "--result-count", "5", "--ingested-count", "0"])
+    runner.invoke(
+        main,
+        [
+            "search",
+            "log",
+            "--topic",
+            "topic-a",
+            "--query",
+            "alpha",
+            "--provider",
+            "semantic-scholar",
+            "--result-count",
+            "10",
+            "--ingested-count",
+            "2",
+        ],
+    )
+    runner.invoke(
+        main,
+        [
+            "search",
+            "log",
+            "--topic",
+            "topic-b",
+            "--query",
+            "beta",
+            "--provider",
+            "arxiv",
+            "--result-count",
+            "8",
+            "--ingested-count",
+            "1",
+        ],
+    )
+    runner.invoke(
+        main,
+        [
+            "search",
+            "log",
+            "--query",
+            "gamma",
+            "--provider",
+            "semantic-scholar",
+            "--result-count",
+            "5",
+            "--ingested-count",
+            "0",
+        ],
+    )
 
-    filtered = runner.invoke(main, ["--json", "search", "list", "--topic", "topic-a", "--provider", "semantic-scholar", "--limit", "5"])
+    filtered = runner.invoke(
+        main,
+        [
+            "--json",
+            "search",
+            "list",
+            "--topic",
+            "topic-a",
+            "--provider",
+            "semantic-scholar",
+            "--limit",
+            "5",
+        ],
+    )
     assert filtered.exit_code == 0, filtered.output
     filtered_payload = json.loads(filtered.output)
     assert len(filtered_payload) == 1

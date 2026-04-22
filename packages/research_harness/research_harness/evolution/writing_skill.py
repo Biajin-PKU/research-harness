@@ -8,7 +8,6 @@ into section_draft prompts.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -48,7 +47,8 @@ class WritingSkillAggregator:
         if total_papers < min_papers:
             logger.info(
                 "Not enough papers for writing skill (%d < %d)",
-                total_papers, min_papers,
+                total_papers,
+                min_papers,
             )
             return WritingSkillAggregateOutput(total_papers_analyzed=total_papers)
 
@@ -60,7 +60,9 @@ class WritingSkillAggregator:
         for dim in ALL_WRITING_DIMENSIONS:
             observations = obs_by_dim.get(dim, [])
             if len(observations) < MIN_OBSERVATIONS:
-                logger.debug("Skipping %s: only %d observations", dim, len(observations))
+                logger.debug(
+                    "Skipping %s: only %d observations", dim, len(observations)
+                )
                 continue
 
             section = _dim_to_section(dim)
@@ -93,11 +95,13 @@ class WritingSkillAggregator:
 
         injector = StrategyInjector(self._db)
         strategies = injector.get_active_strategies(
-            STAGE_KEY, max_strategies=20,
+            STAGE_KEY,
+            max_strategies=20,
         )
 
         relevant = [
-            s for s in strategies
+            s
+            for s in strategies
             if s.strategy_key.startswith(f"{STRATEGY_PREFIX}.")
             and any(d in s.strategy_key for d in dims)
         ]
@@ -106,8 +110,8 @@ class WritingSkillAggregator:
             return ""
 
         lines = [
-            f"## Section-Specific Writing Requirements (Universal Writing Skill)\n",
-            f"_Based on structural analysis of papers from top venues._\n",
+            "## Section-Specific Writing Requirements (Universal Writing Skill)\n",
+            "_Based on structural analysis of papers from top venues._\n",
         ]
         for s in relevant:
             lines.append(s.content)
@@ -197,7 +201,9 @@ class WritingSkillAggregator:
             obs_lower = obs_text.lower()
             for pattern_type in _get_pattern_types(dim):
                 if pattern_type.lower() in obs_lower:
-                    pattern_counts[pattern_type] = pattern_counts.get(pattern_type, 0) + 1
+                    pattern_counts[pattern_type] = (
+                        pattern_counts.get(pattern_type, 0) + 1
+                    )
                     break
             else:
                 pattern_counts["other"] = pattern_counts.get("other", 0) + 1
@@ -221,12 +227,15 @@ class WritingSkillAggregator:
 
         # Compute distribution
         total = sum(pattern_counts.values()) or 1
-        distribution = {k: round(v / total, 2) for k, v in sorted(
-            pattern_counts.items(), key=lambda x: -x[1]
-        )}
+        distribution = {
+            k: round(v / total, 2)
+            for k, v in sorted(pattern_counts.items(), key=lambda x: -x[1])
+        }
 
         # Build recommended approach
-        top_pattern = max(pattern_counts, key=pattern_counts.get) if pattern_counts else "unknown"
+        top_pattern = (
+            max(pattern_counts, key=pattern_counts.get) if pattern_counts else "unknown"
+        )
         n_papers = len(observations)
         confidence = min(1.0, n_papers / 30)  # saturates at 30 papers
 
@@ -308,42 +317,76 @@ def _get_pattern_types(dim: str) -> list[str]:
     """Known pattern types for each dimension."""
     return {
         "abstract_hook_type": [
-            "statistic", "contradiction", "question", "failure_case", "trend", "definition",
+            "statistic",
+            "contradiction",
+            "question",
+            "failure_case",
+            "trend",
+            "definition",
         ],
         "abstract_structure": [
-            "hook-gap-method-result", "background-gap-method-result",
+            "hook-gap-method-result",
+            "background-gap-method-result",
             "hook-background-gap-method-result-implication",
         ],
         "intro_tension_building": [
-            "concrete_failure", "running_example", "gap_accumulation", "question_driven",
+            "concrete_failure",
+            "running_example",
+            "gap_accumulation",
+            "question_driven",
         ],
         "intro_contribution_style": [
-            "numbered_list", "inline", "insight_driven",
+            "numbered_list",
+            "inline",
+            "insight_driven",
         ],
         "rw_taxonomy_type": [
-            "by_method", "by_problem", "by_timeline", "hybrid", "table_comparison",
+            "by_method",
+            "by_problem",
+            "by_timeline",
+            "hybrid",
+            "table_comparison",
         ],
         "rw_positioning": [
-            "subsection_end", "paragraph_end", "dedicated_paragraph", "none",
+            "subsection_end",
+            "paragraph_end",
+            "dedicated_paragraph",
+            "none",
         ],
         "method_motivation_ratio": [
-            "high_motivation", "balanced", "formula_heavy", "minimal_motivation",
+            "high_motivation",
+            "balanced",
+            "formula_heavy",
+            "minimal_motivation",
         ],
         "method_design_justification": [
-            "explicit_alternatives", "implicit_justification", "no_justification",
+            "explicit_alternatives",
+            "implicit_justification",
+            "no_justification",
         ],
         "exp_post_table_analysis": [
-            "detailed_multi_paragraph", "single_paragraph", "minimal", "none",
+            "detailed_multi_paragraph",
+            "single_paragraph",
+            "minimal",
+            "none",
         ],
         "exp_result_narrative": [
-            "hypothesis_first", "table_first", "domain_by_domain", "metric_by_metric",
+            "hypothesis_first",
+            "table_first",
+            "domain_by_domain",
+            "metric_by_metric",
         ],
         "conclusion_structure": [
-            "summary_only", "summary_limitations", "summary_limitations_future",
+            "summary_only",
+            "summary_limitations",
+            "summary_limitations_future",
             "summary_limitations_future_impact",
         ],
         "claim_calibration": [
-            "well_hedged", "moderate_claims", "overclaiming", "appropriately_bold",
+            "well_hedged",
+            "moderate_claims",
+            "overclaiming",
+            "appropriately_bold",
         ],
     }.get(dim, ["type_a", "type_b", "other"])
 
@@ -403,7 +446,10 @@ def _get_anti_patterns(dim: str) -> list[str]:
 
 
 def _build_recommendation(
-    dim: str, top_pattern: str, distribution: dict[str, float], n_papers: int,
+    dim: str,
+    top_pattern: str,
+    distribution: dict[str, float],
+    n_papers: int,
 ) -> str:
     """Build a concise recommendation for a dimension."""
     top_pct = int(distribution.get(top_pattern, 0) * 100)
@@ -452,5 +498,7 @@ def _format_guidance_as_markdown(g: DimensionGuidance) -> str:
             lines.append(f"- {ap}")
         lines.append("")
 
-    lines.append(f"_Confidence: {g.confidence} (based on {g.source_paper_count} papers)_")
+    lines.append(
+        f"_Confidence: {g.confidence} (based on {g.source_paper_count} papers)_"
+    )
     return "\n".join(lines)

@@ -1,4 +1,5 @@
 """Triage papers that need manual download: filter by venue tier + LLM necessity."""
+
 from __future__ import annotations
 
 import logging
@@ -10,15 +11,50 @@ CCF_TOP_TIERS = frozenset({"CCF-A*", "CCF-A", "CCF-B"})
 CAS_TOP_TIERS = frozenset({"CAS-Q1", "CAS-Q2"})
 
 TIER_KEYWORDS_A = (
-    "neurips", "nips", "icml", "iclr", "aaai", "ijcai", "cvpr", "iccv", "eccv",
-    "acl", "emnlp", "naacl", "sigir", "kdd", "www", "icde", "vldb", "sigmod",
-    "osdi", "sosp", "eurosys", "nsdi", "usenix",
-    "nature", "science", "cell", "pnas", "lancet",
+    "neurips",
+    "nips",
+    "icml",
+    "iclr",
+    "aaai",
+    "ijcai",
+    "cvpr",
+    "iccv",
+    "eccv",
+    "acl",
+    "emnlp",
+    "naacl",
+    "sigir",
+    "kdd",
+    "www",
+    "icde",
+    "vldb",
+    "sigmod",
+    "osdi",
+    "sosp",
+    "eurosys",
+    "nsdi",
+    "usenix",
+    "nature",
+    "science",
+    "cell",
+    "pnas",
+    "lancet",
 )
 TIER_KEYWORDS_B = (
-    "cikm", "wsdm", "coling", "aistats", "uai", "ecai",
-    "infocom", "mobicom", "sigcomm",
-    "jmlr", "tpami", "tkde", "tois", "ai journal",
+    "cikm",
+    "wsdm",
+    "coling",
+    "aistats",
+    "uai",
+    "ecai",
+    "infocom",
+    "mobicom",
+    "sigcomm",
+    "jmlr",
+    "tpami",
+    "tkde",
+    "tois",
+    "ai journal",
 )
 
 
@@ -64,12 +100,19 @@ def triage_manual_papers(
                 reasons.append(f"venue_tier={tier}")
             if is_high_necessity:
                 reasons.append("llm_necessity=high")
-            item_out = {**item, "triage_reason": " + ".join(reasons), "venue_tier": tier}
+            item_out = {
+                **item,
+                "triage_reason": " + ".join(reasons),
+                "venue_tier": tier,
+            }
             result.append(item_out)
         else:
             logger.debug(
                 "Skipping paper %d (%s) — venue=%s, necessity=%s",
-                paper_id, item.get("title", ""), venue, necessity,
+                paper_id,
+                item.get("title", ""),
+                venue,
+                necessity,
             )
 
     return result

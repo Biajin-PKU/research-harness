@@ -18,7 +18,9 @@ class PaperLibrary:
 
     def save(self, record: PaperRecord) -> Path:
         path = self.papers_dir / f"{record.paper_id}.json"
-        path.write_text(json.dumps(record.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(record.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         self._save_catalog_entry(self.build_catalog_entry(record))
         return path
 
@@ -33,7 +35,9 @@ class PaperLibrary:
         for path in sorted(self.papers_dir.glob("*.json")):
             if path.name == CATALOG_FILENAME:
                 continue
-            records.append(PaperRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+            records.append(
+                PaperRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            )
         return records
 
     def find_by_hash(self, pdf_hash: str) -> PaperRecord | None:
@@ -70,5 +74,10 @@ class PaperLibrary:
         catalog_path = self.root / CATALOG_FILENAME
         existing = {item.paper_id: item for item in self.list_catalog()}
         existing[entry.paper_id] = entry
-        payload = [item.to_dict() for item in sorted(existing.values(), key=lambda item: item.title.lower())]
-        catalog_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = [
+            item.to_dict()
+            for item in sorted(existing.values(), key=lambda item: item.title.lower())
+        ]
+        catalog_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )

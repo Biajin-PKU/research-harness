@@ -6,7 +6,6 @@ with reasoning context, enabling downstream strategy distillation.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -175,10 +174,20 @@ class TrajectoryRecorder:
                     cost_usd, latency_ms, parent_event_id, sequence_number)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    self._session_id, event_type, tool_name, stage,
-                    topic_id, project_id, input_summary, output_summary,
-                    reasoning, int(success), cost_usd, latency_ms,
-                    parent_event_id, self._sequence,
+                    self._session_id,
+                    event_type,
+                    tool_name,
+                    stage,
+                    topic_id,
+                    project_id,
+                    input_summary,
+                    output_summary,
+                    reasoning,
+                    int(success),
+                    cost_usd,
+                    latency_ms,
+                    parent_event_id,
+                    self._sequence,
                 ),
             )
             conn.commit()
@@ -192,7 +201,8 @@ class TrajectoryRecorder:
     # ---- Query methods ----
 
     def get_session_trajectory(
-        self, session_id: str | None = None,
+        self,
+        session_id: str | None = None,
     ) -> list[TrajectoryEvent]:
         """Get all events for a session, ordered by sequence."""
         sid = session_id or self._session_id

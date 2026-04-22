@@ -14,7 +14,6 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from .metric_parser import detect_nan_divergence, parse_metrics
 

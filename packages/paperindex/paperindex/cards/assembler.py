@@ -32,8 +32,22 @@ _METRIC_HINTS = (
     "throughput",
 )
 _METHOD_KEYWORDS = {
-    "learning_based": ("learn", "training", "neural", "transformer", "reinforcement learning", "gradient"),
-    "optimization_based": ("optimiz", "objective", "constraint", "programming", "lagrangian", "sinkhorn"),
+    "learning_based": (
+        "learn",
+        "training",
+        "neural",
+        "transformer",
+        "reinforcement learning",
+        "gradient",
+    ),
+    "optimization_based": (
+        "optimiz",
+        "objective",
+        "constraint",
+        "programming",
+        "lagrangian",
+        "sinkhorn",
+    ),
     "probabilistic": ("probabil", "bayes", "posterior", "likelihood", "stochastic"),
     "game_theoretic": ("auction", "equilibrium", "nash", "game theoretic", "mechanism"),
     "heuristic": ("heuristic", "greedy", "rule-based", "search strategy"),
@@ -112,7 +126,9 @@ def _truncate(text: str, limit: int = _MAX_TEXT_FIELD_CHARS) -> str:
 
 
 def _first_sentences(text: str, *, limit: int = 2, min_chars: int = 30) -> str | None:
-    sentences = [sentence for sentence in _split_sentences(text) if len(sentence) >= min_chars]
+    sentences = [
+        sentence for sentence in _split_sentences(text) if len(sentence) >= min_chars
+    ]
     if not sentences:
         return None
     return _truncate(" ".join(sentences[:limit]))
@@ -136,7 +152,17 @@ def _best_sentences(
             score += 3
         if re.search(r"[-+]?\d+(?:\.\d+)?\s*(?:%|x|ms|s|sec|seconds?)", lowered):
             score += 2
-        if any(token in lowered for token in ("improv", "outperform", "better", "worse", "baseline", "result")):
+        if any(
+            token in lowered
+            for token in (
+                "improv",
+                "outperform",
+                "better",
+                "worse",
+                "baseline",
+                "result",
+            )
+        ):
             score += 2
         ranked.append((score, -index, sentence))
     ranked.sort(reverse=True)
@@ -159,9 +185,16 @@ def _list_from_text(
         if len(line) >= min_chars:
             bullets.append(_truncate(line))
     if bullets:
-        preferred = _best_sentences("\n".join(bullets), limit=limit, min_chars=min_chars, preferred_terms=preferred_terms)
+        preferred = _best_sentences(
+            "\n".join(bullets),
+            limit=limit,
+            min_chars=min_chars,
+            preferred_terms=preferred_terms,
+        )
         return preferred or _dedupe(bullets, limit=limit)
-    return _best_sentences(text, limit=limit, min_chars=min_chars, preferred_terms=preferred_terms)
+    return _best_sentences(
+        text, limit=limit, min_chars=min_chars, preferred_terms=preferred_terms
+    )
 
 
 def _extract_title(structure: StructureResult) -> str:
@@ -177,7 +210,9 @@ def _infer_method_family(*texts: str) -> str | None:
     return None
 
 
-def _extract_tagged_terms(text: str, candidates: tuple[str, ...], *, limit: int = 6) -> list[str]:
+def _extract_tagged_terms(
+    text: str, candidates: tuple[str, ...], *, limit: int = 6
+) -> list[str]:
     lowered = text.lower()
     matches = [candidate for candidate in candidates if candidate in lowered]
     return _dedupe(matches, limit=limit)
@@ -218,7 +253,9 @@ def _extract_year(text: str) -> str | None:
     return match.group(0) if match else None
 
 
-def build_card_snapshot(structure: StructureResult, sections: list[SectionResult]) -> PaperCard:
+def build_card_snapshot(
+    structure: StructureResult, sections: list[SectionResult]
+) -> PaperCard:
     title = _extract_title(structure)
     section_map = {item.section: item for item in sections}
 
@@ -229,12 +266,30 @@ def build_card_snapshot(structure: StructureResult, sections: list[SectionResult
     limitations = _content_for(section_map, "limitations")
     reproduction_notes = _content_for(section_map, "reproduction_notes")
     first_page = str((structure.raw.get("pages_text") or [""])[0])
-    combined_text = "\n".join([title, first_page, summary, methodology, experiments, equations, limitations, reproduction_notes])
+    combined_text = "\n".join(
+        [
+            title,
+            first_page,
+            summary,
+            methodology,
+            experiments,
+            equations,
+            limitations,
+            reproduction_notes,
+        ]
+    )
 
     motivation = _best_sentences(
         summary,
         limit=2,
-        preferred_terms=("however", "motivat", "challenge", "problem", "existing", "prior"),
+        preferred_terms=(
+            "however",
+            "motivat",
+            "challenge",
+            "problem",
+            "existing",
+            "prior",
+        ),
     )
     problem_definition = _best_sentences(
         summary + "\n" + methodology,
@@ -258,11 +313,19 @@ def build_card_snapshot(structure: StructureResult, sections: list[SectionResult
         ),
         method_family=_infer_method_family(methodology, equations, summary),
         method_tags=_extract_tagged_terms(combined_text, _TECHNICAL_TAGS),
-        algorithmic_view=_first_sentences(equations or methodology, limit=3, min_chars=20),
+        algorithmic_view=_first_sentences(
+            equations or methodology, limit=3, min_chars=20
+        ),
         contributions=_list_from_text(
             summary + "\n" + methodology,
             limit=4,
-            preferred_terms=("we propose", "we present", "our contribution", "first", "introduce"),
+            preferred_terms=(
+                "we propose",
+                "we present",
+                "our contribution",
+                "first",
+                "introduce",
+            ),
         ),
         assumptions=_list_from_text(
             summary + "\n" + methodology,
@@ -276,7 +339,14 @@ def build_card_snapshot(structure: StructureResult, sections: list[SectionResult
         ),
         tasks=_extract_tagged_terms(
             combined_text,
-            ("budget allocation", "bidding", "forecasting", "classification", "retrieval", "ranking"),
+            (
+                "budget allocation",
+                "bidding",
+                "forecasting",
+                "classification",
+                "retrieval",
+                "ranking",
+            ),
         ),
         datasets=_list_from_text(
             experiments,
@@ -297,7 +367,9 @@ def build_card_snapshot(structure: StructureResult, sections: list[SectionResult
         ),
         domain_tags=_extract_domain_tags(combined_text),
         technical_tags=_extract_tagged_terms(combined_text, _TECHNICAL_TAGS),
-        reproduction_notes=_first_sentences(reproduction_notes or experiments, limit=3, min_chars=20),
+        reproduction_notes=_first_sentences(
+            reproduction_notes or experiments, limit=3, min_chars=20
+        ),
         evidence=[
             EvidenceEntry(
                 section=item.section,

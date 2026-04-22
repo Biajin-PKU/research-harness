@@ -13,10 +13,27 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 VENUE_TIERS: dict[str, int] = {
-    "neurips": 3, "nips": 3, "icml": 3, "iclr": 3, "kdd": 3,
-    "aaai": 3, "ijcai": 3, "acl": 3, "emnlp": 3, "naacl": 3,
-    "cvpr": 3, "iccv": 3, "eccv": 3, "sigir": 3, "www": 3, "wsdm": 3,
-    "cikm": 2, "ecir": 2, "recsys": 2, "uai": 2, "aistats": 2,
+    "neurips": 3,
+    "nips": 3,
+    "icml": 3,
+    "iclr": 3,
+    "kdd": 3,
+    "aaai": 3,
+    "ijcai": 3,
+    "acl": 3,
+    "emnlp": 3,
+    "naacl": 3,
+    "cvpr": 3,
+    "iccv": 3,
+    "eccv": 3,
+    "sigir": 3,
+    "www": 3,
+    "wsdm": 3,
+    "cikm": 2,
+    "ecir": 2,
+    "recsys": 2,
+    "uai": 2,
+    "aistats": 2,
 }
 
 
@@ -61,14 +78,19 @@ class GoldSelector:
 
             composite = venue_score * 0.4 + cite_score * 0.3 + recency_score * 0.3
 
-            scored.append((composite, {
-                "paper_id": row["id"],
-                "title": row["title"],
-                "venue": row["venue"] or "",
-                "year": row["year"],
-                "citation_count": cite_count,
-                "score": round(composite, 3),
-            }))
+            scored.append(
+                (
+                    composite,
+                    {
+                        "paper_id": row["id"],
+                        "title": row["title"],
+                        "venue": row["venue"] or "",
+                        "year": row["year"],
+                        "citation_count": cite_count,
+                        "score": round(composite, 3),
+                    },
+                )
+            )
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item for _, item in scored[:max_papers]]

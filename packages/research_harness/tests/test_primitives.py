@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 
-import pytest
 
 from research_harness.paper_sources import PaperRecord, SearchQuery
 from research_harness.primitives import (
@@ -99,7 +98,9 @@ def test_list_by_category() -> None:
         "section_review",
         "originality_boundary_check",
     }
-    assert {spec.name for spec in list_by_category(PrimitiveCategory.COMPREHENSION)} == {
+    assert {
+        spec.name for spec in list_by_category(PrimitiveCategory.COMPREHENSION)
+    } == {
         "paper_summarize",
         "deep_read",
         "get_deep_reading",
@@ -191,7 +192,9 @@ def test_paper_search_with_topic_filter(db) -> None:
     try:
         conn.execute("INSERT INTO topics (name) VALUES ('topic-a')")
         topic_id = int(
-            conn.execute("SELECT id FROM topics WHERE name = 'topic-a'").fetchone()["id"]
+            conn.execute("SELECT id FROM topics WHERE name = 'topic-a'").fetchone()[
+                "id"
+            ]
         )
         first = conn.execute(
             "INSERT INTO papers (title, authors, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?, ?)",
@@ -289,7 +292,9 @@ def test_paper_ingest_normalizes_relevance(db) -> None:
     try:
         conn.execute("INSERT INTO topics (name) VALUES ('test-topic')")
         conn.commit()
-        topic_id = conn.execute("SELECT id FROM topics WHERE name = 'test-topic'").fetchone()["id"]
+        topic_id = conn.execute(
+            "SELECT id FROM topics WHERE name = 'test-topic'"
+        ).fetchone()["id"]
     finally:
         conn.close()
 
@@ -297,7 +302,9 @@ def test_paper_ingest_normalizes_relevance(db) -> None:
     assert impl is not None
 
     # Pass a float-like relevance
-    result = impl(db=db, source="10.1000/float-rel", topic_id=topic_id, relevance="0.85")
+    result = impl(
+        db=db, source="10.1000/float-rel", topic_id=topic_id, relevance="0.85"
+    )
     assert result.paper_id > 0
 
     # Verify it was stored as "high" not "0.85"
@@ -340,7 +347,9 @@ def test_frozen_dataclasses() -> None:
         PaperIngestOutput(paper_id=1, title="x", status="new"),
         SummaryOutput(paper_id=1, summary="x"),
         ClaimExtractOutput(),
-        EvidenceLinkOutput(link=EvidenceLink(claim_id="c", source_type="paper", source_id="1")),
+        EvidenceLinkOutput(
+            link=EvidenceLink(claim_id="c", source_type="paper", source_id="1")
+        ),
         GapDetectOutput(),
         SectionDraftOutput(draft=DraftText(section="intro", content="hi")),
         ConsistencyCheckOutput(),
@@ -502,7 +511,15 @@ def test_paper_search_dedup_across_sources(db, monkeypatch) -> None:
     try:
         conn.execute(
             "INSERT INTO papers (title, authors, year, venue, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("Attention Is All You Need", '["Vaswani"]', 2017, "NeurIPS", "10.1000/attention", "1706.03762", ""),
+            (
+                "Attention Is All You Need",
+                '["Vaswani"]',
+                2017,
+                "NeurIPS",
+                "10.1000/attention",
+                "1706.03762",
+                "",
+            ),
         )
         conn.commit()
     finally:
@@ -530,7 +547,9 @@ def test_paper_search_dedup_across_sources(db, monkeypatch) -> None:
     result = impl(db=db, query="attention")
 
     # Should be exactly 1 result (deduplicated)
-    attention_papers = [p for p in result.papers if "Attention Is All You Need" in p.title]
+    attention_papers = [
+        p for p in result.papers if "Attention Is All You Need" in p.title
+    ]
     assert len(attention_papers) == 1
     # Should have citation_count from external
     assert attention_papers[0].citation_count == 100000

@@ -8,13 +8,21 @@ import fitz
 from research_harness.cli import main
 
 
-
 def _make_pdf(path: Path) -> Path:
     doc = fitz.open()
     pages = [
-        ("Sample Paper Title", "Abstract\nThis paper studies budget pacing and proposes a stable control policy."),
-        ("Method", "Method\nWe optimize spend allocation with a constrained controller and staged updates."),
-        ("Experiments", "Experiments\nWe compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "Abstract\nThis paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "Method",
+            "Method\nWe optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "Experiments",
+            "Experiments\nWe compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]
     for title, body in pages:
         page = doc.new_page()
@@ -26,8 +34,9 @@ def _make_pdf(path: Path) -> Path:
     return path
 
 
-
-def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: float = 0.0) -> str:
+def _fake_llm_chat(
+    self, prompt: str, model: str | None = None, temperature: float = 0.0
+) -> str:
     del self, model, temperature
     return json.dumps(
         {
@@ -49,7 +58,9 @@ def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: flo
             "baselines": ["baseline A"],
             "reproduction_notes": "Needs logs.",
             "reproducibility_score": "medium",
-            "evidence": [{"section": "summary", "confidence": 0.9, "snippet": "budget pacing"}],
+            "evidence": [
+                {"section": "summary", "confidence": 0.9, "snippet": "budget pacing"}
+            ],
             "structured_results": [],
             "artifact_links": [],
             "domain_tags": [],
@@ -71,7 +82,6 @@ def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: flo
     )
 
 
-
 def test_paper_annotate_cli(runner, tmp_path, monkeypatch):
     monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
     pdf_path = _make_pdf(tmp_path / "sample.pdf")
@@ -82,14 +92,23 @@ def test_paper_annotate_cli(runner, tmp_path, monkeypatch):
     ingest = runner.invoke(
         main,
         [
-            "--json", "paper", "ingest",
-            "--arxiv-id", "1706.03762",
-            "--title", "Attention Is All You Need",
-            "--authors", "Vaswani,Shazeer",
-            "--year", "2017",
-            "--venue", "NeurIPS",
-            "--topic", "demo",
-            "--pdf-path", str(pdf_path),
+            "--json",
+            "paper",
+            "ingest",
+            "--arxiv-id",
+            "1706.03762",
+            "--title",
+            "Attention Is All You Need",
+            "--authors",
+            "Vaswani,Shazeer",
+            "--year",
+            "2017",
+            "--venue",
+            "NeurIPS",
+            "--topic",
+            "demo",
+            "--pdf-path",
+            str(pdf_path),
         ],
     )
     assert ingest.exit_code == 0
@@ -131,31 +150,50 @@ def test_paper_annotate_cli(runner, tmp_path, monkeypatch):
     }
 
 
-
-def test_paper_annotate_incremental_reuses_cached_sections(runner, tmp_path, monkeypatch):
+def test_paper_annotate_incremental_reuses_cached_sections(
+    runner, tmp_path, monkeypatch
+):
     monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
     pdf_path = _make_pdf(tmp_path / "incremental.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(
-        main,
-        ["paper", "ingest", "--title", "Incremental Paper", "--topic", "demo", "--pdf-path", str(pdf_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Incremental Paper",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
-    first = runner.invoke(main, ["--json", "paper", "annotate", "1", "--section", "summary"])
+    first = runner.invoke(
+        main, ["--json", "paper", "annotate", "1", "--section", "summary"]
+    )
     assert first.exit_code == 0
     first_payload = json.loads(first.output)
     assert first_payload["structure_source"] == "fresh"
     assert first_payload["extracted_sections"] == ["summary"]
     assert first_payload["reused_sections"] == []
 
-    second = runner.invoke(main, ["--json", "paper", "annotate", "1", "--section", "experiments"])
+    second = runner.invoke(
+        main, ["--json", "paper", "annotate", "1", "--section", "experiments"]
+    )
     assert second.exit_code == 0
     second_payload = json.loads(second.output)
     assert second_payload["structure_source"] == "cache"
     assert second_payload["extracted_sections"] == ["experiments"]
     assert second_payload["reused_sections"] == []
 
-    third = runner.invoke(main, ["--json", "paper", "annotate", "1", "--section", "summary"])
+    third = runner.invoke(
+        main, ["--json", "paper", "annotate", "1", "--section", "summary"]
+    )
     assert third.exit_code == 0
     third_payload = json.loads(third.output)
     assert third_payload["structure_source"] == "cache"
@@ -165,11 +203,16 @@ def test_paper_annotate_incremental_reuses_cached_sections(runner, tmp_path, mon
     annotations = runner.invoke(main, ["--json", "paper", "annotations", "1"])
     assert annotations.exit_code == 0
     annotation_payload = json.loads(annotations.output)
-    assert {item["section"] for item in annotation_payload} == {"summary", "experiments"}
+    assert {item["section"] for item in annotation_payload} == {
+        "summary",
+        "experiments",
+    }
 
     artifacts = runner.invoke(main, ["--json", "paper", "artifacts", "1"])
     assert artifacts.exit_code == 0
     artifact_payload = json.loads(artifacts.output)
-    metadata_by_type = {item["artifact_type"]: json.loads(item["metadata"]) for item in artifact_payload}
+    metadata_by_type = {
+        item["artifact_type"]: json.loads(item["metadata"]) for item in artifact_payload
+    }
     assert metadata_by_type["paperindex_structure"]["source"] == "cache"
     assert metadata_by_type["paperindex_card"]["section_count"] == 2

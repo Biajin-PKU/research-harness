@@ -15,13 +15,16 @@ import dataclasses
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..execution.backend import PrimitiveResult
 from ..execution.factory import create_backend
 from ..orchestrator.service import OrchestratorService
 from ..primitives.registry import PRIMITIVE_REGISTRY
 from ..storage.db import Database
+
+if TYPE_CHECKING:
+    from .budget import BudgetMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,8 @@ def _extract_review_feedback(output: dict[str, Any]) -> str:
     if dims:
         return "; ".join(
             f"{d.get('dimension', '?')}: {d.get('comment', '')}"
-            for d in dims if isinstance(d, dict)
+            for d in dims
+            if isinstance(d, dict)
         )
     return output.get("feedback", output.get("issues", ""))
 
@@ -94,38 +98,44 @@ def _to_dict(obj: Any) -> dict[str, Any]:
 _PRIMITIVE_TOOLS = frozenset(PRIMITIVE_REGISTRY.keys())
 
 # Orchestrator tools — dispatched via OrchestratorService
-_ORCHESTRATOR_TOOLS = frozenset({
-    "orchestrator_status",
-    "orchestrator_record_artifact",
-    "orchestrator_advance",
-    "orchestrator_gate_check",
-    "orchestrator_resume",
-})
+_ORCHESTRATOR_TOOLS = frozenset(
+    {
+        "orchestrator_status",
+        "orchestrator_record_artifact",
+        "orchestrator_advance",
+        "orchestrator_gate_check",
+        "orchestrator_resume",
+    }
+)
 
 # Service tools — methods on OrchestratorService
-_SERVICE_TOOLS = frozenset({
-    "adversarial_run",
-    "adversarial_resolve",
-    "adversarial_status",
-    "adversarial_review",
-    "integrity_check",
-    "review_add_issue",
-    "review_bundle_create",
-    "review_issues",
-    "review_respond",
-    "review_resolve",
-    "review_status",
-    "finalize_project",
-})
+_SERVICE_TOOLS = frozenset(
+    {
+        "adversarial_run",
+        "adversarial_resolve",
+        "adversarial_status",
+        "adversarial_review",
+        "integrity_check",
+        "review_add_issue",
+        "review_bundle_create",
+        "review_issues",
+        "review_respond",
+        "review_resolve",
+        "review_status",
+        "finalize_project",
+    }
+)
 
 # Read-only query tools — thin wrappers
-_QUERY_TOOLS = frozenset({
-    "paper_list",
-    "paper_coverage_check",
-    "paper_dismiss",
-    "topic_list",
-    "topic_show",
-})
+_QUERY_TOOLS = frozenset(
+    {
+        "paper_list",
+        "paper_coverage_check",
+        "paper_dismiss",
+        "topic_list",
+        "topic_show",
+    }
+)
 
 
 def dispatch(
@@ -145,17 +155,33 @@ def dispatch(
     """
     try:
         if tool_name in _PRIMITIVE_TOOLS:
-            return _dispatch_primitive(tool_name, db=db, topic_id=topic_id, context=context)
+            return _dispatch_primitive(
+                tool_name, db=db, topic_id=topic_id, context=context
+            )
         if tool_name in _ORCHESTRATOR_TOOLS:
-            return _dispatch_orchestrator(tool_name, svc=svc, project_id=project_id,
-                                          topic_id=topic_id, stage=stage, context=context)
+            return _dispatch_orchestrator(
+                tool_name,
+                svc=svc,
+                project_id=project_id,
+                topic_id=topic_id,
+                stage=stage,
+                context=context,
+            )
         if tool_name in _SERVICE_TOOLS:
-            return _dispatch_service(tool_name, svc=svc, project_id=project_id,
-                                     topic_id=topic_id, stage=stage, context=context)
+            return _dispatch_service(
+                tool_name,
+                svc=svc,
+                project_id=project_id,
+                topic_id=topic_id,
+                stage=stage,
+                context=context,
+            )
         if tool_name in _QUERY_TOOLS:
             return _dispatch_query(tool_name, db=db, topic_id=topic_id, context=context)
         logger.warning("Unknown tool '%s', skipping", tool_name)
-        return ToolResult(tool=tool_name, success=False, error=f"Unknown tool: {tool_name}")
+        return ToolResult(
+            tool=tool_name, success=False, error=f"Unknown tool: {tool_name}"
+        )
     except Exception as exc:
         logger.warning("Tool '%s' failed: %s", tool_name, exc)
         return ToolResult(tool=tool_name, success=False, error=str(exc)[:500])
@@ -178,7 +204,6 @@ def dispatch_stage_tools(
     If budget_monitor is provided, syncs cost from provenance after each tool
     and halts early if budget is exhausted.
     """
-    from .budget import BudgetMonitor as _BM
 
     results: list[ToolResult] = []
     errors: list[str] = []
@@ -198,9 +223,12 @@ def dispatch_stage_tools(
                 context["section"] = sec
                 result = dispatch(
                     tool_name,
-                    db=db, svc=svc,
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, context=context,
+                    db=db,
+                    svc=svc,
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    context=context,
                 )
                 results.append(result)
                 if result.success and result.output:
@@ -210,8 +238,13 @@ def dispatch_stage_tools(
                     context[f"_output_{tool_name}_{sec}"] = {"text": text}
                 if not result.success:
                     errors.append(f"{tool_name}[{sec}]: {result.error}")
-                    logger.warning("Tool %s[%s] failed in stage %s: %s",
-                                   tool_name, sec, stage, result.error)
+                    logger.warning(
+                        "Tool %s[%s] failed in stage %s: %s",
+                        tool_name,
+                        sec,
+                        stage,
+                        result.error,
+                    )
             continue
 
         # Multi-section expansion: review each drafted section
@@ -220,9 +253,12 @@ def dispatch_stage_tools(
                 context["section"] = sec
                 result = dispatch(
                     tool_name,
-                    db=db, svc=svc,
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, context=context,
+                    db=db,
+                    svc=svc,
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    context=context,
                 )
                 results.append(result)
                 if result.success and result.output:
@@ -241,9 +277,12 @@ def dispatch_stage_tools(
                 context["_output_section_review"] = review_out
                 result = dispatch(
                     tool_name,
-                    db=db, svc=svc,
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, context=context,
+                    db=db,
+                    svc=svc,
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    context=context,
                 )
                 results.append(result)
                 if result.success and result.output:
@@ -256,44 +295,63 @@ def dispatch_stage_tools(
                     errors.append(f"{tool_name}[{sec}]: {result.error}")
             continue
         # direction_proposal and study_spec artifacts via one tool entry
-        if (tool_name == "orchestrator_record_artifact"
-                and stage == "propose" and context.get("study_spec")):
+        if (
+            tool_name == "orchestrator_record_artifact"
+            and stage == "propose"
+            and context.get("study_spec")
+        ):
             # First: record the primary artifact (direction_proposal)
             result = dispatch(
                 tool_name,
-                db=db, svc=svc,
-                project_id=project_id, topic_id=topic_id,
-                stage=stage, context=context,
+                db=db,
+                svc=svc,
+                project_id=project_id,
+                topic_id=topic_id,
+                stage=stage,
+                context=context,
             )
             results.append(result)
             if not result.success:
                 errors.append(f"{tool_name}[primary]: {result.error}")
 
             # Second: record study_spec artifact
-            saved = (context.get("artifact_type"), context.get("artifact_title"),
-                     context.get("artifact_payload"))
+            saved = (
+                context.get("artifact_type"),
+                context.get("artifact_title"),
+                context.get("artifact_payload"),
+            )
             try:
                 context["artifact_type"] = "study_spec"
                 context["artifact_title"] = "Study design specification"
                 context["artifact_payload"] = {"methodology": context["study_spec"]}
                 result2 = dispatch(
                     tool_name,
-                    db=db, svc=svc,
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, context=context,
+                    db=db,
+                    svc=svc,
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    context=context,
                 )
                 results.append(result2)
                 if not result2.success:
                     errors.append(f"{tool_name}[study_spec]: {result2.error}")
             finally:
-                context["artifact_type"], context["artifact_title"], context["artifact_payload"] = saved
+                (
+                    context["artifact_type"],
+                    context["artifact_title"],
+                    context["artifact_payload"],
+                ) = saved
             continue
 
         result = dispatch(
             tool_name,
-            db=db, svc=svc,
-            project_id=project_id, topic_id=topic_id,
-            stage=stage, context=context,
+            db=db,
+            svc=svc,
+            project_id=project_id,
+            topic_id=topic_id,
+            stage=stage,
+            context=context,
         )
         results.append(result)
 
@@ -303,7 +361,9 @@ def dispatch_stage_tools(
 
         if not result.success:
             errors.append(f"{tool_name}: {result.error}")
-            logger.warning("Tool %s failed in stage %s: %s", tool_name, stage, result.error)
+            logger.warning(
+                "Tool %s failed in stage %s: %s", tool_name, stage, result.error
+            )
             if tool_name in _PRIMITIVE_TOOLS and PRIMITIVE_REGISTRY.get(tool_name):
                 continue
             if tool_name.startswith("orchestrator_record"):
@@ -311,8 +371,13 @@ def dispatch_stage_tools(
 
     # Post-tool artifact recording: ensure all gate-required artifacts exist.
     auto_artifacts = _record_auto_artifacts(
-        svc=svc, project_id=project_id, topic_id=topic_id,
-        stage=stage, context=context, results=results, errors=errors,
+        svc=svc,
+        project_id=project_id,
+        topic_id=topic_id,
+        stage=stage,
+        context=context,
+        results=results,
+        errors=errors,
     )
 
     # Sync budget at stage END and check limits
@@ -321,13 +386,17 @@ def dispatch_stage_tools(
         budget_check = budget_monitor.check()
         if budget_check.action == "halt":
             errors.append(f"Budget halted: {budget_check.message}")
-            logger.warning("Budget halted during stage %s: %s", stage, budget_check.message)
+            logger.warning(
+                "Budget halted during stage %s: %s", stage, budget_check.message
+            )
 
     succeeded = [r for r in results if r.success]
     summary: dict[str, Any] = {
         "summary": f"Stage {stage}: {len(succeeded)}/{len(results)} tools succeeded",
-        "tool_results": [{"tool": r.tool, "success": r.success, "error": r.error,
-                          "output": r.output} for r in results],
+        "tool_results": [
+            {"tool": r.tool, "success": r.success, "error": r.error, "output": r.output}
+            for r in results
+        ],
         "errors": errors,
         "auto_artifacts": auto_artifacts,
     }
@@ -378,11 +447,18 @@ Only return "revise" if there are critical issues. Return ONLY JSON."""
         result = _parse_json(raw, primitive="adversarial_review")
         if result.get("verdict") in ("approved", "revise"):
             return result
-        return {"verdict": "approved", "issues": [], "summary": "LLM returned invalid verdict"}
+        return {
+            "verdict": "approved",
+            "issues": [],
+            "summary": "LLM returned invalid verdict",
+        }
     except Exception as exc:
         logger.warning("Automated adversarial review failed: %s", exc)
-        return {"verdict": "approved", "issues": [],
-                "summary": f"Review unavailable: {str(exc)[:100]}"}
+        return {
+            "verdict": "approved",
+            "issues": [],
+            "summary": f"Review unavailable: {str(exc)[:100]}",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -414,17 +490,22 @@ def _record_auto_artifacts(
     if stage == "init":
         already_recorded = {
             r.output.get("artifact_type") if isinstance(r.output, dict) else None
-            for r in results if r.success and r.tool == "orchestrator_record_artifact"
+            for r in results
+            if r.success and r.tool == "orchestrator_record_artifact"
         }
         if "topic_brief" not in already_recorded:
             topic_desc = context.get("topic_description", context.get("query", ""))
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="topic_brief",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="topic_brief",
                     title="Topic brief",
-                    payload={"description": topic_desc,
-                             "search_queries": context.get("additional_queries", [])},
+                    payload={
+                        "description": topic_desc,
+                        "search_queries": context.get("additional_queries", []),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -434,19 +515,23 @@ def _record_auto_artifacts(
 
     elif stage == "build":
         ps_out = context.get("_output_paper_search", {})
-        seeds_out = context.get("_output_select_seeds", {})
         expand_out = context.get("_output_expand_citations", {})
         acquire_out = context.get("_output_paper_acquire", {})
 
         if ps_out and "paper_search" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="literature_map",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="literature_map",
                     title="Literature map from search",
-                    payload={"papers_found": ps_out.get("ingested_count",
-                             len(ps_out.get("papers", []))),
-                             "query": ps_out.get("query_used", "")},
+                    payload={
+                        "papers_found": ps_out.get(
+                            "ingested_count", len(ps_out.get("papers", []))
+                        ),
+                        "query": ps_out.get("query_used", ""),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -456,11 +541,15 @@ def _record_auto_artifacts(
 
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="paper_pool_snapshot",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="paper_pool_snapshot",
                     title="Paper pool snapshot",
-                    payload={"total_papers": ps_out.get("ingested_count", 0),
-                             "provider": ps_out.get("provider", "")},
+                    payload={
+                        "total_papers": ps_out.get("ingested_count", 0),
+                        "provider": ps_out.get("provider", ""),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -471,8 +560,10 @@ def _record_auto_artifacts(
         if expand_out or "expand_citations" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="citation_expansion_report",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="citation_expansion_report",
                     title="Citation expansion report",
                     payload=expand_out if expand_out else {"status": "completed"},
                 )
@@ -485,8 +576,10 @@ def _record_auto_artifacts(
         if acquire_out or "paper_acquire" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="acquisition_report",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="acquisition_report",
                     title="Paper acquisition report",
                     payload=acquire_out if acquire_out else {"status": "completed"},
                 )
@@ -504,11 +597,15 @@ def _record_auto_artifacts(
         if claims_out and "claim_extract" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="claim_candidate_set",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="claim_candidate_set",
                     title="Extracted claims",
-                    payload={"claims_count": len(claims_out.get("claims", [])),
-                             "papers_processed": claims_out.get("papers_processed", 0)},
+                    payload={
+                        "claims_count": len(claims_out.get("claims", [])),
+                        "papers_processed": claims_out.get("papers_processed", 0),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -521,11 +618,15 @@ def _record_auto_artifacts(
         ):
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="evidence_pack",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="evidence_pack",
                     title="Evidence pack (gaps + baselines)",
-                    payload={"gaps_count": len(gaps_out.get("gaps", [])),
-                             "papers_analyzed": gaps_out.get("papers_analyzed", 0)},
+                    payload={
+                        "gaps_count": len(gaps_out.get("gaps", [])),
+                        "papers_analyzed": gaps_out.get("papers_analyzed", 0),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -536,11 +637,17 @@ def _record_auto_artifacts(
         if gaps_out and "gap_detect" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="direction_proposal",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="direction_proposal",
                     title="Research direction from gap analysis",
-                    payload={"gaps": gaps_out.get("gaps", [])[:5],
-                             "research_question": context.get("focus", "What are the key gaps?")},
+                    payload={
+                        "gaps": gaps_out.get("gaps", [])[:5],
+                        "research_question": context.get(
+                            "focus", "What are the key gaps?"
+                        ),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -554,12 +661,16 @@ def _record_auto_artifacts(
             outcome = _run_automated_adversarial(proposal)
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="adversarial_resolution",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="adversarial_resolution",
                     title=f"Automated adversarial review ({outcome['verdict']})",
-                    payload={"outcome": outcome["verdict"],
-                             "issues": outcome.get("issues", []),
-                             "summary": outcome.get("summary", "")},
+                    payload={
+                        "outcome": outcome["verdict"],
+                        "issues": outcome.get("issues", []),
+                        "summary": outcome.get("summary", ""),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -575,11 +686,15 @@ def _record_auto_artifacts(
         if cg_out and "code_generate" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="experiment_code",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="experiment_code",
                     title="Generated experiment code",
-                    payload={"files": list(cg_out.get("files", {}).keys()),
-                             "entry_point": cg_out.get("entry_point", "main.py")},
+                    payload={
+                        "files": list(cg_out.get("files", {}).keys()),
+                        "entry_point": cg_out.get("entry_point", "main.py"),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -590,8 +705,10 @@ def _record_auto_artifacts(
         if er_out and "experiment_run" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="experiment_result",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="experiment_result",
                     title="Experiment results",
                     payload={"metrics": er_out.get("metrics", {})},
                 )
@@ -606,8 +723,9 @@ def _record_auto_artifacts(
                 svc.record_experiment_run(
                     project_id,
                     code_hash=cg_out.get("entry_point", "main.py"),
-                    primary_metric_name=er_out.get("primary_metric_name",
-                                                   context.get("primary_metric", "")),
+                    primary_metric_name=er_out.get(
+                        "primary_metric_name", context.get("primary_metric", "")
+                    ),
                     primary_metric_value=er_out.get("primary_metric_value", 0.0),
                     metrics=er_out.get("metrics", {}),
                 )
@@ -617,8 +735,10 @@ def _record_auto_artifacts(
         if vr_out and "verified_registry_build" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="verified_registry",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="verified_registry",
                     title="Verified number registry",
                     payload={"whitelist_size": vr_out.get("whitelist_size", 0)},
                 )
@@ -638,8 +758,10 @@ def _record_auto_artifacts(
                     sections_map[sec] = text[:200]
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="draft_pack",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="draft_pack",
                     title="Paper draft sections",
                     payload={"sections": list(sections_map.keys())},
                 )
@@ -653,11 +775,15 @@ def _record_auto_artifacts(
         if latex_out and "latex_compile" in succeeded_tools:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="final_bundle",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="final_bundle",
                     title="Final LaTeX bundle",
-                    payload={"output_dir": latex_out.get("output_dir", ""),
-                             "pdf_path": latex_out.get("pdf_path", "")},
+                    payload={
+                        "output_dir": latex_out.get("output_dir", ""),
+                        "pdf_path": latex_out.get("pdf_path", ""),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -667,11 +793,12 @@ def _record_auto_artifacts(
         elif drafted:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="final_bundle",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="final_bundle",
                     title="Draft bundle (pre-compilation)",
-                    payload={"sections": list(sections_map.keys()),
-                             "status": "draft"},
+                    payload={"sections": list(sections_map.keys()), "status": "draft"},
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -682,12 +809,16 @@ def _record_auto_artifacts(
         if drafted:
             try:
                 art = svc.record_artifact(
-                    project_id=project_id, topic_id=topic_id,
-                    stage=stage, artifact_type="process_summary",
+                    project_id=project_id,
+                    topic_id=topic_id,
+                    stage=stage,
+                    artifact_type="process_summary",
                     title="Writing process summary",
-                    payload={"sections_drafted": drafted,
-                             "sections_count": len(drafted),
-                             "tools_succeeded": list(succeeded_tools)},
+                    payload={
+                        "sections_drafted": drafted,
+                        "sections_count": len(drafted),
+                        "tools_succeeded": list(succeeded_tools),
+                    },
                 )
                 art_id = art.id if hasattr(art, "id") else 0
                 if art_id:
@@ -722,7 +853,9 @@ def _dispatch_primitive(
     result: PrimitiveResult = backend.execute(name, **params)
 
     if not result.success:
-        return ToolResult(tool=name, success=False, error=result.error or "Unknown error")
+        return ToolResult(
+            tool=name, success=False, error=result.error or "Unknown error"
+        )
 
     output = _to_dict(result.output)
     return ToolResult(tool=name, success=True, output=output)
@@ -747,16 +880,26 @@ def _dispatch_orchestrator(
         title = context.get("artifact_title", "")
         payload = context.get("artifact_payload", {})
         if not artifact_type:
-            return ToolResult(tool=name, success=False, error="No artifact_type in context")
+            return ToolResult(
+                tool=name, success=False, error="No artifact_type in context"
+            )
         artifact = svc.record_artifact(
-            project_id=project_id, topic_id=topic_id,
-            stage=stage, artifact_type=artifact_type,
-            title=title, payload=payload,
+            project_id=project_id,
+            topic_id=topic_id,
+            stage=stage,
+            artifact_type=artifact_type,
+            title=title,
+            payload=payload,
         )
         artifact_id = artifact.id if hasattr(artifact, "id") else 0
-        return ToolResult(tool=name, success=True, output={
-            "artifact_type": artifact_type, "artifact_id": artifact_id,
-        })
+        return ToolResult(
+            tool=name,
+            success=True,
+            output={
+                "artifact_type": artifact_type,
+                "artifact_id": artifact_id,
+            },
+        )
 
     if name == "orchestrator_advance":
         result = svc.advance(project_id)
@@ -770,7 +913,9 @@ def _dispatch_orchestrator(
         result = svc.resume_run(project_id, topic_id)
         return ToolResult(tool=name, success=True, output=result)
 
-    return ToolResult(tool=name, success=False, error=f"Unhandled orchestrator tool: {name}")
+    return ToolResult(
+        tool=name, success=False, error=f"Unhandled orchestrator tool: {name}"
+    )
 
 
 def _dispatch_service(
@@ -826,12 +971,19 @@ def _dispatch_service(
         return ToolResult(tool=name, success=True, output=result)
 
     # Tools requiring LLM-driven parameter construction
-    if name in ("adversarial_run", "adversarial_resolve", "adversarial_review",
-                "integrity_check", "review_add_issue", "review_respond"):
+    if name in (
+        "adversarial_run",
+        "adversarial_resolve",
+        "adversarial_review",
+        "integrity_check",
+        "review_add_issue",
+        "review_respond",
+    ):
         return ToolResult(
-            tool=name, success=False,
+            tool=name,
+            success=False,
             error=f"Service tool '{name}' requires LLM-constructed arguments; "
-                  f"delegate to MCP layer or provide arguments in context",
+            f"delegate to MCP layer or provide arguments in context",
         )
 
     return ToolResult(tool=name, success=False, error=f"Unhandled service tool: {name}")
@@ -855,7 +1007,9 @@ def _dispatch_query(
                 (topic_id,),
             ).fetchall()
             papers = [dict(r) for r in rows]
-            return ToolResult(tool=name, success=True, output={"count": len(papers), "papers": papers})
+            return ToolResult(
+                tool=name, success=True, output={"count": len(papers), "papers": papers}
+            )
         finally:
             conn.close()
 
@@ -864,7 +1018,9 @@ def _dispatch_query(
         result = backend.execute("paper_coverage_check", topic_id=topic_id, db=db)
         if result.success:
             return ToolResult(tool=name, success=True, output=_to_dict(result.output))
-        return ToolResult(tool=name, success=False, error=result.error or "coverage_check failed")
+        return ToolResult(
+            tool=name, success=False, error=result.error or "coverage_check failed"
+        )
 
     if name == "paper_dismiss":
         paper_id = context.get("paper_id")
@@ -883,14 +1039,22 @@ def _dispatch_query(
                 (paper_id, topic_id, reason),
             )
             conn.commit()
-            return ToolResult(tool=name, success=True, output={"paper_id": paper_id, "dismissed": True})
+            return ToolResult(
+                tool=name,
+                success=True,
+                output={"paper_id": paper_id, "dismissed": True},
+            )
         except Exception as exc:
             conn.rollback()
-            return ToolResult(tool=name, success=False, error=f"paper_dismiss failed: {exc}")
+            return ToolResult(
+                tool=name, success=False, error=f"paper_dismiss failed: {exc}"
+            )
         finally:
             conn.close()
 
-    return ToolResult(tool=name, success=False, error=f"Query tool '{name}' not implemented")
+    return ToolResult(
+        tool=name, success=False, error=f"Query tool '{name}' not implemented"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -965,7 +1129,9 @@ def _build_primitive_params(
     elif name == "verified_registry_build":
         er_out = context.get("_output_experiment_run", {})
         params["metrics"] = er_out.get("metrics", {})
-        params["primary_metric_name"] = er_out.get("primary_metric_name", context.get("primary_metric", ""))
+        params["primary_metric_name"] = er_out.get(
+            "primary_metric_name", context.get("primary_metric", "")
+        )
 
     elif name == "verified_registry_check":
         er_out = context.get("_output_experiment_run", {})
@@ -989,7 +1155,9 @@ def _build_primitive_params(
         review_out = context.get("_output_section_review", {})
         params["section"] = sec
         params["content"] = draft_out.get("text", "")
-        params["review_feedback"] = review_out.get("feedback", review_out.get("issues", ""))
+        params["review_feedback"] = review_out.get(
+            "feedback", review_out.get("issues", "")
+        )
 
     elif name == "paper_verify_numbers":
         all_text_parts = []
@@ -1002,7 +1170,9 @@ def _build_primitive_params(
     elif name == "citation_verify":
         citations: list[dict[str, Any]] = []
         for sec in context.get("_drafted_sections", []):
-            sec_cites = context.get(f"_output_section_draft_{sec}", {}).get("citations", [])
+            sec_cites = context.get(f"_output_section_draft_{sec}", {}).get(
+                "citations", []
+            )
             if isinstance(sec_cites, list):
                 citations.extend(sec_cites)
         params["citations"] = citations
@@ -1019,7 +1189,11 @@ def _build_primitive_params(
         params["sections"] = sections_map
         params["output_dir"] = context.get("output_dir", "")
         params["template"] = context.get("venue", "arxiv").lower()
-        params["title"] = context.get("contributions", "").split("\n")[0][:200] if context.get("contributions") else ""
+        params["title"] = (
+            context.get("contributions", "").split("\n")[0][:200]
+            if context.get("contributions")
+            else ""
+        )
         params["abstract"] = ""
 
     # Pass through project_id when available in context

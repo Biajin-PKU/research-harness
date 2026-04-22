@@ -136,12 +136,14 @@ def record_event(
     detail: str = "",
 ) -> None:
     """Append an event to the checkpoint history."""
-    data.setdefault("history", []).append({
-        "ts": _utc_now(),
-        "stage": stage,
-        "event": event,
-        "detail": detail,
-    })
+    data.setdefault("history", []).append(
+        {
+            "ts": _utc_now(),
+            "stage": stage,
+            "event": event,
+            "detail": detail,
+        }
+    )
     # Keep history bounded
     if len(data["history"]) > 200:
         data["history"] = data["history"][-200:]
@@ -222,7 +224,9 @@ def set_codex_handoff(
     }
 
 
-def clear_codex_handoff(data: dict[str, Any], *, verdict: str = "", stage: str = "") -> None:
+def clear_codex_handoff(
+    data: dict[str, Any], *, verdict: str = "", stage: str = ""
+) -> None:
     """Clear codex handoff after completion. Preserves stage for verdict scoping."""
     prev_stage = data.get("codex_handoff", {}).get("stage", "")
     data["codex_handoff"] = {

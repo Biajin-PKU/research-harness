@@ -1,9 +1,10 @@
 """PDF downloader with multi-candidate fallback and paywall detection."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -18,24 +19,26 @@ from ..pdf_download import (
 
 logger = logging.getLogger(__name__)
 
-PAYWALL_DOMAINS = frozenset({
-    "sciencedirect.com",
-    "springer.com",
-    "link.springer.com",
-    "wiley.com",
-    "onlinelibrary.wiley.com",
-    "tandfonline.com",
-    "ieeexplore.ieee.org",
-    "dl.acm.org",
-    "nature.com",
-    "science.org",
-    "jstor.org",
-    "emerald.com",
-    "sagepub.com",
-    "cambridge.org",
-    "oxford.org",
-    "oup.com",
-})
+PAYWALL_DOMAINS = frozenset(
+    {
+        "sciencedirect.com",
+        "springer.com",
+        "link.springer.com",
+        "wiley.com",
+        "onlinelibrary.wiley.com",
+        "tandfonline.com",
+        "ieeexplore.ieee.org",
+        "dl.acm.org",
+        "nature.com",
+        "science.org",
+        "jstor.org",
+        "emerald.com",
+        "sagepub.com",
+        "cambridge.org",
+        "oxford.org",
+        "oup.com",
+    }
+)
 
 DOWNLOAD_TIMEOUT = 30.0
 MAX_CONCURRENCY = 5
@@ -53,11 +56,14 @@ class DownloadResult:
 
 def _is_paywall_domain(url: str) -> bool:
     from urllib.parse import urlparse
+
     host = urlparse(url).netloc.lower()
     return any(host == d or host.endswith(f".{d}") for d in PAYWALL_DOMAINS)
 
 
-def _classify_http_error(status_code: int, url: str) -> Literal["skip", "paywall", "transient"]:
+def _classify_http_error(
+    status_code: int, url: str
+) -> Literal["skip", "paywall", "transient"]:
     if status_code == 404:
         return "skip"
     if status_code in (403, 401):
@@ -95,7 +101,12 @@ async def download_single(
             for url in urls:
                 try:
                     resp = await client.get(url)
-                except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError, httpx.DecodingError) as exc:
+                except (
+                    httpx.TimeoutException,
+                    httpx.ConnectError,
+                    httpx.ReadError,
+                    httpx.DecodingError,
+                ) as exc:
                     logger.debug("Timeout/connect error for %s: %s", url, exc)
                     continue
 
@@ -103,7 +114,9 @@ async def download_single(
                     category = _classify_http_error(resp.status_code, url)
                     if category == "paywall":
                         saw_paywall = True
-                    logger.debug("HTTP %d for %s (category=%s)", resp.status_code, url, category)
+                    logger.debug(
+                        "HTTP %d for %s (category=%s)", resp.status_code, url, category
+                    )
                     continue
 
                 content = resp.content
@@ -114,21 +127,31 @@ async def download_single(
                         # Resolve relative URLs against the Sci-Hub mirror
                         if pdf_url.startswith("/"):
                             from urllib.parse import urlparse
+
                             parsed = urlparse(url)
                             pdf_url = f"{parsed.scheme}://{parsed.netloc}{pdf_url}"
                         try:
                             pdf_resp = await client.get(pdf_url)
-                            if pdf_resp.status_code == 200 and is_pdf_bytes(pdf_resp.content):
+                            if pdf_resp.status_code == 200 and is_pdf_bytes(
+                                pdf_resp.content
+                            ):
                                 content = pdf_resp.content
                         except Exception as exc:
                             logger.debug("PDF link %s failed: %s", pdf_url, exc)
 
                 if not is_pdf_bytes(content) or len(content) < MIN_PDF_BYTES:
-                    logger.debug("Not a valid PDF from %s (%d bytes)", url, len(content))
+                    logger.debug(
+                        "Not a valid PDF from %s (%d bytes)", url, len(content)
+                    )
                     continue
 
                 output_path.write_bytes(content)
-                logger.info("Downloaded paper %d from %s (%d bytes)", candidate.paper_id, url, len(content))
+                logger.info(
+                    "Downloaded paper %d from %s (%d bytes)",
+                    candidate.paper_id,
+                    url,
+                    len(content),
+                )
                 return DownloadResult(
                     paper_id=candidate.paper_id,
                     status="success",
@@ -152,10 +175,12 @@ async def download_single(
 def _is_scihub_domain(url: str) -> bool:
     """Check if URL points to a Sci-Hub mirror."""
     import os
+
     raw = os.environ.get("SCIHUB_MIRRORS", "")
     if not raw:
         return False
     from urllib.parse import urlparse
+
     host = urlparse(url).netloc.lower()
     for mirror in raw.split(","):
         mirror_host = urlparse(mirror.strip()).netloc.lower()
@@ -172,6 +197,7 @@ def _extract_scihub_pdf_url(html_bytes: bytes) -> str | None:
       - Current (2024+): <object data="...pdf"> or <meta name="citation_pdf_url">
     """
     import re
+
     try:
         text = html_bytes.decode("utf-8", errors="ignore")
     except Exception:
@@ -180,19 +206,29 @@ def _extract_scihub_pdf_url(html_bytes: bytes) -> str | None:
     def _normalize(url: str) -> str | None:
         if url.startswith("//"):
             url = "https:" + url
-        if ".pdf" in url.lower() or "download" in url.lower() or "/storage/" in url.lower():
+        if (
+            ".pdf" in url.lower()
+            or "download" in url.lower()
+            or "/storage/" in url.lower()
+        ):
             return url
         return None
 
     # Pattern 1: <object data="...pdf#..."> (current sci-hub.st/ru)
-    match = re.search(r'<object[^>]+data=["\']([^"\']+\.pdf[^"\']*)["\']', text, re.IGNORECASE)
+    match = re.search(
+        r'<object[^>]+data=["\']([^"\']+\.pdf[^"\']*)["\']', text, re.IGNORECASE
+    )
     if match:
         result = _normalize(match.group(1).split("#")[0])
         if result:
             return result
 
     # Pattern 2: <meta name="citation_pdf_url" content="...">
-    match = re.search(r'<meta\s+name=["\']citation_pdf_url["\']\s+content=["\']([^"\']+)["\']', text, re.IGNORECASE)
+    match = re.search(
+        r'<meta\s+name=["\']citation_pdf_url["\']\s+content=["\']([^"\']+)["\']',
+        text,
+        re.IGNORECASE,
+    )
     if match:
         result = _normalize(match.group(1))
         if result:
@@ -225,7 +261,13 @@ async def download_batch(
     for i, r in enumerate(results):
         if isinstance(r, BaseException):
             logger.warning("Download task %d failed: %s", i, r)
-            final.append(DownloadResult(paper_id=candidates[i].paper_id, status="failed", failure_reason=str(r)))
+            final.append(
+                DownloadResult(
+                    paper_id=candidates[i].paper_id,
+                    status="failed",
+                    failure_reason=str(r),
+                )
+            )
         else:
             final.append(r)
     return final

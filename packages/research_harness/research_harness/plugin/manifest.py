@@ -16,13 +16,15 @@ from typing import Any
 
 MANIFEST_SCHEMA_VERSION = 1
 
-VALID_EXTENSION_POINTS = frozenset({
-    "primitives",
-    "gates",
-    "stages",
-    "advisory_rules",
-    "backends",
-})
+VALID_EXTENSION_POINTS = frozenset(
+    {
+        "primitives",
+        "gates",
+        "stages",
+        "advisory_rules",
+        "backends",
+    }
+)
 
 
 @dataclass(frozen=True)

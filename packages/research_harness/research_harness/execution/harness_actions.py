@@ -145,6 +145,7 @@ def classify_error(error: str) -> str:
 # Summary generation
 # ---------------------------------------------------------------------------
 
+
 def compute_summary(primitive: str, result: PrimitiveResult) -> str:
     """Generate a one-line human-readable summary of a primitive result."""
     if not result.success:
@@ -298,7 +299,9 @@ def _query_refine_summary(_: str, data: dict[str, Any]) -> str:
     keywords = data.get("top_keywords", [])
     if not candidates:
         return "No new query candidates generated"
-    preview = ", ".join(c.get("query", "?") for c in candidates[:3] if isinstance(c, dict))
+    preview = ", ".join(
+        c.get("query", "?") for c in candidates[:3] if isinstance(c, dict)
+    )
     return f"Generated {len(candidates)} query candidates from keywords: {', '.join(keywords[:4])} ({preview})"
 
 
@@ -319,6 +322,7 @@ _SUMMARY_GENERATORS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Dynamic next_actions derivation
 # ---------------------------------------------------------------------------
+
 
 def _derive_from_result(primitive: str, result: PrimitiveResult) -> list[str]:
     """Derive context-sensitive next_actions from the actual result data."""
@@ -390,9 +394,17 @@ def _derive_gap_detect(data: dict[str, Any]) -> list[str]:
 def _derive_query_refine(data: dict[str, Any]) -> list[str]:
     candidates = data.get("candidates", [])
     if not candidates:
-        return ["paper_search with broader keywords — the current pool may be too narrow"]
-    top = [c.get("query", "") for c in candidates[:3] if isinstance(c, dict) and c.get("query")]
-    actions = [f"paper_search query='{query}' — test candidate coverage" for query in top]
+        return [
+            "paper_search with broader keywords — the current pool may be too narrow"
+        ]
+    top = [
+        c.get("query", "")
+        for c in candidates[:3]
+        if isinstance(c, dict) and c.get("query")
+    ]
+    actions = [
+        f"paper_search query='{query}' — test candidate coverage" for query in top
+    ]
     actions.append("search_query_add — persist chosen candidates in the query registry")
     return actions
 
@@ -407,11 +419,11 @@ def _derive_coverage_check(data: dict[str, Any]) -> list[str]:
         actions.append(
             f"paper_ingest {high} high-necessity papers — download missing PDFs"
         )
-    low = sum(1 for i in items if isinstance(i, dict) and i.get("necessity_level") == "low")
+    low = sum(
+        1 for i in items if isinstance(i, dict) and i.get("necessity_level") == "low"
+    )
     if low > 0:
-        actions.append(
-            f"paper_dismiss {low} low-necessity papers — skip to save cost"
-        )
+        actions.append(f"paper_dismiss {low} low-necessity papers — skip to save cost")
     return actions
 
 
@@ -419,7 +431,11 @@ def _derive_consistency_check(data: dict[str, Any]) -> list[str]:
     issues = data.get("issues", [])
     if not issues:
         return ["No issues found. Ready for formal_review or finalize"]
-    high = [i for i in issues if isinstance(i, dict) and i.get("severity") in ("high", "critical")]
+    high = [
+        i
+        for i in issues
+        if isinstance(i, dict) and i.get("severity") in ("high", "critical")
+    ]
     if high:
         return [
             f"Fix {len(high)} high-severity inconsistencies before proceeding",
@@ -441,6 +457,7 @@ _RESULT_DERIVERS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Orchestrator state enrichment
 # ---------------------------------------------------------------------------
+
 
 def _enrich_from_orchestrator(
     actions: list[str],
@@ -481,6 +498,7 @@ def _enrich_from_orchestrator(
 # Artifact extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_artifacts(result: PrimitiveResult) -> list[str]:
     """Extract artifact identifiers from a primitive result."""
     if not result.success or result.output is None:
@@ -511,7 +529,9 @@ def extract_artifacts(result: PrimitiveResult) -> list[str]:
     # evidence_link → link
     link = data.get("link")
     if isinstance(link, dict) and link.get("claim_id"):
-        artifacts.append(f"evidence_link:{link['claim_id']}→{link.get('source_id', '?')}")
+        artifacts.append(
+            f"evidence_link:{link['claim_id']}→{link.get('source_id', '?')}"
+        )
 
     # section_draft → section name
     draft = data.get("draft")
@@ -524,6 +544,7 @@ def extract_artifacts(result: PrimitiveResult) -> list[str]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_next_actions(
     primitive: str,

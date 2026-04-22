@@ -329,6 +329,17 @@ Primitives are registered via `@register_primitive(spec)`; gates subclass `GateE
 | [`docs/plugin-guide.md`](docs/plugin-guide.md) | Writing custom primitives, gates, backends |
 | [`docs/PAPER_MANAGEMENT.md`](docs/PAPER_MANAGEMENT.md) | Canonical paper-storage protocol |
 
+## Recent Updates
+
+A running log of the iterations that shape the public fork. Most recent first.
+
+### 2026-04-22 — CI green on public fork
+
+- Dropped Python 3.10 from the CI matrix; `research_harness_mcp` already required `>=3.11`.
+- Cleaned up 212 ruff findings (`F401`, `F541`, `E402`, `F821`, `F841`, `E741`) across `llm_primitives.py`, `orchestrator/service.py`, `auto_runner/*`, `paper_source_clients.py`, and several test files; applied `ruff format`.
+- Restored missing re-exports so `from writing_checks import REVIEW_DIMENSIONS` and `from orchestrator.review import REVIEW_DIMENSIONS` resolve to the unified dimension sources.
+- Taught tests to run without a real LLM key: module-level `skipif` on the paperindex LLM tests and on `TestE2ELiteratureReview`, plus an autouse conftest fixture that stubs `PaperIndexer.build_card` when no provider is configured. Previously 22 CI tests failed with `401` / `No LLM provider`; now all 987+ pass in a keyless runner.
+
 ## Status
 
 **Version 0.1.0** — first public release. 987+ tests across the three packages, 69 primitives, 112 MCP tools, 6 stages. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes.

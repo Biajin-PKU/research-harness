@@ -58,7 +58,9 @@ class TestWordCount:
 
 class TestAIBoilerplate:
     def test_clean_text(self):
-        text = "We evaluate our approach on three benchmarks and report accuracy metrics."
+        text = (
+            "We evaluate our approach on three benchmarks and report accuracy metrics."
+        )
         result = check_ai_boilerplate(text)
         assert result.passed
 
@@ -118,7 +120,9 @@ class TestSectionStructure:
         assert not result.passed
 
     def test_intro_without_citations(self):
-        result = check_section_structure("Some text without any citations.", "introduction")
+        result = check_section_structure(
+            "Some text without any citations.", "introduction"
+        )
         assert not result.passed
 
     def test_intro_with_citations(self):
@@ -208,7 +212,10 @@ class TestAssembleLatex:
 
     def test_empty_sections(self):
         tex, bib = assemble_latex(
-            title="Empty", authors=[], abstract="", sections={},
+            title="Empty",
+            authors=[],
+            abstract="",
+            sections={},
         )
         assert r"\title{Empty}" in tex
         assert "Anonymous" in tex
@@ -218,7 +225,10 @@ class TestAssembleLatex:
             "@article{test2024, title={Test}, author={Smith}, year={2024}}",
         ]
         tex, bib = assemble_latex(
-            title="T", authors=[], abstract="", sections={},
+            title="T",
+            authors=[],
+            abstract="",
+            sections={},
             bibliography_entries=bib_entries,
         )
         assert "@article{test2024" in bib
@@ -226,7 +236,10 @@ class TestAssembleLatex:
     def test_template_selection(self):
         for tmpl_name in TEMPLATES:
             tex, _ = assemble_latex(
-                title="T", authors=["A"], abstract="A", sections={},
+                title="T",
+                authors=["A"],
+                abstract="A",
+                sections={},
                 template=tmpl_name,
             )
             assert r"\title{T}" in tex or r"\icmltitle{T}" in tex
@@ -273,7 +286,9 @@ class TestWritingPrimitives:
         )
         result = section_review(section="introduction", content=boilerplate)
         assert result.needs_revision
-        boilerplate_check = [c for c in result.deterministic_checks if c.check_name == "ai_boilerplate"][0]
+        boilerplate_check = [
+            c for c in result.deterministic_checks if c.check_name == "ai_boilerplate"
+        ][0]
         assert not boilerplate_check.passed
 
     def test_section_revise_stub(self):
@@ -290,7 +305,7 @@ class TestWritingPrimitives:
     def test_latex_compile_basic(self, tmp_path):
         from research_harness.primitives.writing_impls import latex_compile
 
-        result = latex_compile(
+        _result = latex_compile(
             project_id=1,
             output_dir=str(tmp_path / "output"),
             template="generic",
@@ -313,7 +328,7 @@ class TestWritingPrimitives:
     def test_latex_compile_with_bib(self, tmp_path):
         from research_harness.primitives.writing_impls import latex_compile
 
-        result = latex_compile(
+        _result = latex_compile(
             project_id=1,
             output_dir=str(tmp_path / "output"),
             sections={"introduction": "See \\cite{test2024}."},
@@ -357,6 +372,7 @@ class TestValidateBeforeCompile:
 
     def setup_method(self):
         from research_harness.execution.latex_compiler import _validate_before_compile
+
         self._validate = _validate_before_compile
 
     def test_clean_document_passes(self):
@@ -376,7 +392,9 @@ See \cite{ref1} and \cite{ref_missing}.
 \end{document}"""
         bib = "@article{ref1, title={T}, author={A}, year={2024}}"
         findings = self._validate(tex, bib)
-        errors = [f for f in findings if f.level == "error" and f.category == "cite_missing"]
+        errors = [
+            f for f in findings if f.level == "error" and f.category == "cite_missing"
+        ]
         assert len(errors) == 1
         assert "ref_missing" in errors[0].message
 
@@ -387,7 +405,9 @@ See \cite{ref1, ref2, ref3}.
 \end{document}"""
         bib = "@article{ref1, title={T}, author={A}, year={2024}}\n@article{ref2, title={T2}, author={B}, year={2024}}"
         findings = self._validate(tex, bib)
-        errors = [f for f in findings if f.level == "error" and f.category == "cite_missing"]
+        errors = [
+            f for f in findings if f.level == "error" and f.category == "cite_missing"
+        ]
         assert len(errors) == 1
         assert "ref3" in errors[0].message
 
@@ -467,7 +487,9 @@ Clean content.
 \end{document}"""
         bib = "@article{ref1, title={T}, author={A}, year={2024}}"
         findings = self._validate(tex, bib)
-        errors = [f for f in findings if f.level == "error" and f.category == "cite_missing"]
+        errors = [
+            f for f in findings if f.level == "error" and f.category == "cite_missing"
+        ]
         assert len(errors) == 1
         assert "ref_bad" in errors[0].message
 
@@ -480,6 +502,7 @@ class TestAuditDraftCitations:
 
     def setup_method(self):
         from research_harness.execution.llm_primitives import _audit_draft_citations
+
         self._audit = _audit_draft_citations
 
     def test_valid_citations_no_warnings(self):
@@ -513,17 +536,33 @@ class TestWritingLessonHelpers:
 
     def test_load_writing_lessons_returns_empty_without_db(self):
         from research_harness.execution.llm_primitives import _load_writing_lessons
+
         result = _load_writing_lessons(None, topic_id=1)
         assert result == ""
 
     def test_record_writing_lessons_no_crash_without_db(self):
-        from research_harness.execution.llm_primitives import _record_writing_lessons_from_draft
-        _record_writing_lessons_from_draft(None, topic_id=1, section="intro", content="test", audit_warnings=[], target_words=0)
+        from research_harness.execution.llm_primitives import (
+            _record_writing_lessons_from_draft,
+        )
+
+        _record_writing_lessons_from_draft(
+            None,
+            topic_id=1,
+            section="intro",
+            content="test",
+            audit_warnings=[],
+            target_words=0,
+        )
 
     def test_record_with_audit_warnings_no_crash_without_db(self):
-        from research_harness.execution.llm_primitives import _record_writing_lessons_from_draft
+        from research_harness.execution.llm_primitives import (
+            _record_writing_lessons_from_draft,
+        )
+
         _record_writing_lessons_from_draft(
-            None, topic_id=1, section="intro",
+            None,
+            topic_id=1,
+            section="intro",
             content="test content",
             audit_warnings=["[99] out of range"],
             target_words=0,
@@ -539,6 +578,7 @@ class TestVenueWritingProfiles:
     @pytest.fixture
     def db(self, tmp_path):
         from research_harness.storage.db import Database
+
         db = Database(tmp_path / "test.db")
         db.migrate()
         return db
@@ -551,8 +591,18 @@ class TestVenueWritingProfiles:
         )
 
         patterns = [
-            WritingPattern(dimension="abstract_hook", pattern="empirical gap", example="", source_paper=""),
-            WritingPattern(dimension="exp_analysis", pattern="paired comparison", example="", source_paper=""),
+            WritingPattern(
+                dimension="abstract_hook",
+                pattern="empirical gap",
+                example="",
+                source_paper="",
+            ),
+            WritingPattern(
+                dimension="exp_analysis",
+                pattern="paired comparison",
+                example="",
+                source_paper="",
+            ),
         ]
         _persist_venue_profiles(db, "NeurIPS", patterns, 5)
 
@@ -564,7 +614,9 @@ class TestVenueWritingProfiles:
         assert cached.model_used == "cache"
 
     def test_no_cache_for_unknown_venue(self, db):
-        from research_harness.execution.llm_primitives import _load_cached_venue_profiles
+        from research_harness.execution.llm_primitives import (
+            _load_cached_venue_profiles,
+        )
 
         assert _load_cached_venue_profiles(db, "UNKNOWN_VENUE") is None
 
@@ -575,10 +627,14 @@ class TestVenueWritingProfiles:
             WritingPattern,
         )
 
-        p1 = [WritingPattern(dimension="hook", pattern="old", example="", source_paper="")]
+        p1 = [
+            WritingPattern(dimension="hook", pattern="old", example="", source_paper="")
+        ]
         _persist_venue_profiles(db, "KDD", p1, 3)
 
-        p2 = [WritingPattern(dimension="hook", pattern="new", example="", source_paper="")]
+        p2 = [
+            WritingPattern(dimension="hook", pattern="new", example="", source_paper="")
+        ]
         _persist_venue_profiles(db, "KDD", p2, 8)
 
         cached = _load_cached_venue_profiles(db, "KDD")
@@ -594,7 +650,12 @@ class TestVenueWritingProfiles:
         from research_harness.evolution.writing_skill import WritingSkillAggregator
 
         patterns = [
-            WritingPattern(dimension="abstract_hook", pattern="state gap then solve", example="", source_paper=""),
+            WritingPattern(
+                dimension="abstract_hook",
+                pattern="state gap then solve",
+                example="",
+                source_paper="",
+            ),
         ]
         _persist_venue_profiles(db, "ICML", patterns, 4)
 
@@ -617,6 +678,7 @@ class TestOutlineGenerateContribGuard:
     @pytest.fixture
     def db(self, tmp_path):
         from research_harness.storage.db import Database
+
         db = Database(tmp_path / "test.db")
         db.migrate()
         return db

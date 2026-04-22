@@ -17,7 +17,9 @@ class Advisory:
     topic_id: int = 0
     project_id: int | None = None
     level: str = "info"  # "info" | "warning"
-    category: str = ""   # coverage | recency | bias | dependency | contradiction | missing_stage
+    category: str = (
+        ""  # coverage | recency | bias | dependency | contradiction | missing_stage
+    )
     message: str = ""
     details: dict[str, Any] = field(default_factory=dict)
     created_at: str = ""

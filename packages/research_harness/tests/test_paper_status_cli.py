@@ -11,9 +11,18 @@ from research_harness.cli import main
 def _make_pdf(path: Path) -> Path:
     doc = fitz.open()
     for title, body in [
-        ("Sample Paper Title", "Abstract\nThis paper studies budget pacing and proposes a stable control policy."),
-        ("Method", "Method\nWe optimize spend allocation with a constrained controller and staged updates."),
-        ("Experiments", "Experiments\nWe compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "Abstract\nThis paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "Method",
+            "Method\nWe optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "Experiments",
+            "Experiments\nWe compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]:
         page = doc.new_page()
         page.insert_text((72, 72), title, fontsize=18)
@@ -26,7 +35,12 @@ def _make_pdf(path: Path) -> Path:
 
 def test_paper_status_reports_missing_sections_before_annotation(runner):
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Loose Paper", "--topic", "demo"]).exit_code == 0
+    assert (
+        runner.invoke(
+            main, ["paper", "ingest", "--title", "Loose Paper", "--topic", "demo"]
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(main, ["--json", "paper", "status", "1"])
     assert result.exit_code == 0
@@ -42,15 +56,58 @@ def test_paper_status_reports_missing_sections_before_annotation(runner):
 def test_paper_status_reports_artifacts_sections_and_notes(runner, tmp_path):
     pdf_path = _make_pdf(tmp_path / "status.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(
-        main,
-        ["paper", "ingest", "--title", "Status Paper", "--topic", "demo", "--pdf-path", str(pdf_path)],
-    ).exit_code == 0
-    assert runner.invoke(main, ["paper", "annotate", "1", "--section", "summary", "--section", "experiments"]).exit_code == 0
-    assert runner.invoke(
-        main,
-        ["paper", "note", "set", "--paper-id", "1", "--topic", "demo", "--type", "relevance", "--content", "Important for pacing", "--source", "codex"],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Status Paper",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_path),
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "annotate",
+                "1",
+                "--section",
+                "summary",
+                "--section",
+                "experiments",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "note",
+                "set",
+                "--paper-id",
+                "1",
+                "--topic",
+                "demo",
+                "--type",
+                "relevance",
+                "--content",
+                "Important for pacing",
+                "--source",
+                "codex",
+            ],
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(main, ["--json", "paper", "status", "1"])
     assert result.exit_code == 0
@@ -59,7 +116,10 @@ def test_paper_status_reports_artifacts_sections_and_notes(runner, tmp_path):
     assert payload["ready"]["can_export_card"] is True
     assert payload["artifact_status"]["has_structure"] is True
     assert payload["artifact_status"]["has_card"] is True
-    assert set(payload["annotation_status"]["completed_sections"]) == {"summary", "experiments"}
+    assert set(payload["annotation_status"]["completed_sections"]) == {
+        "summary",
+        "experiments",
+    }
     assert "methodology" in payload["annotation_status"]["missing_sections"]
     assert payload["topic_note_status"]["count"] == 1
     assert payload["topic_note_status"]["by_topic"]["demo"] == ["relevance"]

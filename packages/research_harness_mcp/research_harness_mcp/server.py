@@ -24,10 +24,16 @@ async def handle_list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any] | None
+) -> list[TextContent]:
     arguments = arguments or {}
     result = execute_tool(name, arguments)
-    return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
+    return [
+        TextContent(
+            type="text", text=json.dumps(result, ensure_ascii=False, default=str)
+        )
+    ]
 
 
 async def main() -> None:

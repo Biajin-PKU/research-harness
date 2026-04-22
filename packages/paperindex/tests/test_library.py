@@ -1,7 +1,21 @@
+import os
+
+import pytest
+
 from paperindex import PaperIndexer
 from paperindex.library import PaperLibrary
 from paperindex.retrieval import find_structure_matches, search_catalog, search_records
 from paperindex.retrieval.rerankers import _extract_ranked_items
+
+pytestmark = pytest.mark.skipif(
+    not (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("CURSOR_AGENT_ENABLED")
+        or os.getenv("CODEX_ENABLED")
+    ),
+    reason="Requires an LLM provider (OPENAI_API_KEY / ANTHROPIC_API_KEY / CURSOR_AGENT_ENABLED / CODEX_ENABLED)",
+)
 
 
 def test_library_lists_saved_records(sample_pdf, tmp_path):
@@ -64,7 +78,10 @@ def test_search_catalog_matches_structure_titles(sample_pdf, tmp_path):
     results = search_catalog(catalog, "controller")
 
     assert len(results) == 1
-    assert "structure_summary" in results[0].matched_fields or "structure" in results[0].matched_fields
+    assert (
+        "structure_summary" in results[0].matched_fields
+        or "structure" in results[0].matched_fields
+    )
 
 
 def test_find_structure_matches_returns_node_hits(sample_pdf):

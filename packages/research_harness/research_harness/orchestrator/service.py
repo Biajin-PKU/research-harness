@@ -5,26 +5,24 @@ Used by CLI, MCP, and dashboard.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from ..config import load_runtime_config
 from ..storage.db import Database
+from .adversarial import AdversarialLoop, Objection
 from .artifacts import ArtifactManager
+from .integrity import FinalizeManager, IntegrityVerifier
 from .models import (
+    STAGE_GRAPH,
+    SUBSTEP_TO_STAGE,
     GateDecision,
-    GateStatus,
     OrchestratorRun,
     ProjectArtifact,
-    StageEvent,
     StageName,
-    StageStatus,
     WorkflowMode,
 )
-from .models import STAGE_GRAPH, SUBSTEP_TO_STAGE
+from .review import ReviewManager
 from .stages import (
     ARTIFACT_STAGE_ALIASES,
     STAGE_ORDER,
@@ -32,10 +30,9 @@ from .stages import (
     next_stage,
     resolve_stage,
 )
-from .adversarial import AdversarialLoop, Objection
-from .integrity import FinalizeManager, IntegrityVerifier
-from .review import ReviewManager
 from .transitions import GateEvaluator, TransitionValidator
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestratorService:
@@ -167,7 +164,8 @@ class OrchestratorService:
                 except Exception:
                     logger.warning(
                         "Failed to persist stop_before for project %s",
-                        project_id, exc_info=True,
+                        project_id,
+                        exc_info=True,
                     )
                 finally:
                     conn.close()
@@ -401,7 +399,10 @@ class OrchestratorService:
         upstream = self._artifact_manager.get(from_artifact_id)
         downstream = self._artifact_manager.get(to_artifact_id)
         if upstream is None:
-            return {"success": False, "error": f"Artifact not found: {from_artifact_id}"}
+            return {
+                "success": False,
+                "error": f"Artifact not found: {from_artifact_id}",
+            }
         if downstream is None:
             return {"success": False, "error": f"Artifact not found: {to_artifact_id}"}
         self._artifact_manager.add_dependency(
@@ -492,7 +493,9 @@ class OrchestratorService:
             }
 
         # 2. Check required artifacts exist
-        allowed, reason, advisories = self._validator.can_advance(project_id, current, nxt)
+        allowed, reason, advisories = self._validator.can_advance(
+            project_id, current, nxt
+        )
         if not allowed:
             return {
                 "success": False,
@@ -565,7 +568,9 @@ class OrchestratorService:
     MAX_GAP_LOOPBACKS = 2
 
     def _try_gap_loopback(
-        self, run: OrchestratorRun, actor: str,
+        self,
+        run: OrchestratorRun,
+        actor: str,
     ) -> dict[str, Any] | None:
         """Attempt an automatic analyze→build loopback when gaps are insufficient.
 
@@ -593,7 +598,10 @@ class OrchestratorService:
             f"insufficient research gaps detected — expanding paper pool"
         )
         result = self.transition_to(
-            run.project_id, "build", rationale=rationale, actor=actor,
+            run.project_id,
+            "build",
+            rationale=rationale,
+            actor=actor,
         )
         if not result.get("success"):
             return None
@@ -609,7 +617,8 @@ class OrchestratorService:
 
         logger.info(
             "Auto loopback analyze→build for project %d (round %d)",
-            run.project_id, loopback_count + 1,
+            run.project_id,
+            loopback_count + 1,
         )
         return {
             "success": True,
@@ -631,7 +640,9 @@ class OrchestratorService:
             # 1. Promote draft strategies that passed probation
             promoted = patcher.check_promotions()
             if promoted:
-                logger.info("Auto-promoted %d strategies from draft to active", len(promoted))
+                logger.info(
+                    "Auto-promoted %d strategies from draft to active", len(promoted)
+                )
 
             # 2. Check stale strategies and auto-patch
             conn = self._db.connect()
@@ -647,7 +658,8 @@ class OrchestratorService:
                 if stale.is_stale:
                     logger.info(
                         "Strategy %d is stale (%s), attempting patch",
-                        row["id"], stale.reason,
+                        row["id"],
+                        stale.reason,
                     )
                     # Patch is LLM-powered — only attempt if stale
                     # (actual patching deferred to explicit strategy_patch call
@@ -658,7 +670,10 @@ class OrchestratorService:
             logger.debug("Auto-housekeeping failed", exc_info=True)
 
     def _auto_extract_lessons(
-        self, stage: str, project_id: int, topic_id: int | None,
+        self,
+        stage: str,
+        project_id: int,
+        topic_id: int | None,
     ) -> None:
         """Auto-extract lessons from a completed stage (best-effort, non-blocking)."""
         try:
@@ -687,7 +702,9 @@ class OrchestratorService:
             summary_parts: list[str] = []
             for r in rows:
                 if r["success"]:
-                    summary_parts.append(f"{r['primitive']}: {r['cnt']} calls, ${r['cost'] or 0:.4f}")
+                    summary_parts.append(
+                        f"{r['primitive']}: {r['cnt']} calls, ${r['cost'] or 0:.4f}"
+                    )
                 else:
                     issues.append(f"{r['primitive']} failed {r['cnt']} times")
 
@@ -697,22 +714,33 @@ class OrchestratorService:
             store = DBLessonStore(self._db)
             for issue in issues:
                 store.append(
-                    Lesson(stage=stage, content=issue, lesson_type="failure", tags=[stage]),
+                    Lesson(
+                        stage=stage, content=issue, lesson_type="failure", tags=[stage]
+                    ),
                     source="auto_extracted",
                     source_project_id=project_id,
                     topic_id=topic_id,
                 )
             if stage_summary:
                 store.append(
-                    Lesson(stage=stage, content=stage_summary, lesson_type="observation", tags=[stage]),
+                    Lesson(
+                        stage=stage,
+                        content=stage_summary,
+                        lesson_type="observation",
+                        tags=[stage],
+                    ),
                     source="auto_extracted",
                     source_project_id=project_id,
                     topic_id=topic_id,
                 )
 
-            logger.info("Auto-extracted %d lessons from stage %s", len(issues) + 1, stage)
+            logger.info(
+                "Auto-extracted %d lessons from stage %s", len(issues) + 1, stage
+            )
         except Exception:
-            logger.debug("Auto lesson extraction failed for stage %s", stage, exc_info=True)
+            logger.debug(
+                "Auto lesson extraction failed for stage %s", stage, exc_info=True
+            )
 
     def transition_to(
         self,
@@ -777,10 +805,14 @@ class OrchestratorService:
             "success": True,
             "from_stage": current,
             "to_stage": target_stage,
-            "transition_type": "loopback" if target_stage != next_stage(current) else "linear",
+            "transition_type": "loopback"
+            if target_stage != next_stage(current)
+            else "linear",
         }
 
-    def check_gate(self, project_id: int, stage: StageName | None = None) -> GateDecision:
+    def check_gate(
+        self, project_id: int, stage: StageName | None = None
+    ) -> GateDecision:
         """Evaluate the gate for a stage (defaults to current stage)."""
         if stage is None:
             run = self.get_run(project_id)
@@ -859,7 +891,10 @@ class OrchestratorService:
         # Get round number from artifact
         round_artifact = self._artifact_manager.get(round_artifact_id)
         if round_artifact is None:
-            return {"success": False, "error": f"Round artifact {round_artifact_id} not found"}
+            return {
+                "success": False,
+                "error": f"Round artifact {round_artifact_id} not found",
+            }
 
         round_number = round_artifact.metadata.get("round_number", 1)
 
@@ -908,6 +943,7 @@ class OrchestratorService:
             }
 
         from .adversarial import AdversarialResolution
+
         resolution = AdversarialResolution.from_payload(resolution_artifact.payload)
 
         should_repeat, reason = self._adversarial.should_repeat(
@@ -1134,9 +1170,15 @@ class OrchestratorService:
                    (project_id, iteration, code_hash, primary_metric_name,
                     primary_metric_value, all_metrics_json, kept)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (project_id, iteration, code_hash, primary_metric_name,
-                 primary_metric_value, _json.dumps(metrics or {}),
-                 1 if kept else 0),
+                (
+                    project_id,
+                    iteration,
+                    code_hash,
+                    primary_metric_name,
+                    primary_metric_value,
+                    _json.dumps(metrics or {}),
+                    1 if kept else 0,
+                ),
             )
             conn.commit()
         finally:

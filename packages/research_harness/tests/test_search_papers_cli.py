@@ -40,10 +40,15 @@ def test_search_papers_returns_ranked_download_plan(runner, monkeypatch):
             )
         ]
 
-    monkeypatch.setattr("research_harness.paper_source_clients.build_provider_suite", fake_build_provider_suite)
+    monkeypatch.setattr(
+        "research_harness.paper_source_clients.build_provider_suite",
+        fake_build_provider_suite,
+    )
     monkeypatch.setattr(
         "research_harness.paper_source_clients.available_provider_specs",
-        lambda: [ProviderSpec(name="google_scholar", enabled=True, reason="configured")],
+        lambda: [
+            ProviderSpec(name="google_scholar", enabled=True, reason="configured")
+        ],
     )
 
     result = runner.invoke(main, ["--json", "search", "papers", "--query", "attention"])
@@ -53,7 +58,9 @@ def test_search_papers_returns_ranked_download_plan(runner, monkeypatch):
     assert payload["result_count"] == 1
     assert payload["provider_errors"] == []
     assert payload["results"][0]["title"] == "Attention Is All You Need"
-    assert payload["results"][0]["pdf_candidates"][0]["source_type"] == "open_access_pdf"
+    assert (
+        payload["results"][0]["pdf_candidates"][0]["source_type"] == "open_access_pdf"
+    )
 
 
 def test_search_papers_can_log_run(runner, monkeypatch):
@@ -61,23 +68,30 @@ def test_search_papers_can_log_run(runner, monkeypatch):
 
     monkeypatch.setattr(
         "research_harness.paper_source_clients.build_provider_suite",
-        lambda fetcher=None: [StubProvider("openalex", [PaperRecord(title="Paper A", provider="openalex")])],
+        lambda fetcher=None: [
+            StubProvider(
+                "openalex", [PaperRecord(title="Paper A", provider="openalex")]
+            )
+        ],
     )
     monkeypatch.setattr(
         "research_harness.paper_source_clients.available_provider_specs",
         lambda: [ProviderSpec(name="openalex", enabled=True, reason="official api")],
     )
 
-    result = runner.invoke(main, ["search", "papers", "--query", "budget", "--topic", "demo", "--log-run"])
+    result = runner.invoke(
+        main, ["search", "papers", "--query", "budget", "--topic", "demo", "--log-run"]
+    )
 
     assert result.exit_code == 0
 
-    listed = runner.invoke(main, ["--json", "search", "list", "--provider", "multi-source", "--limit", "5"])
+    listed = runner.invoke(
+        main, ["--json", "search", "list", "--provider", "multi-source", "--limit", "5"]
+    )
     payload = json.loads(listed.output)
     assert len(payload) == 1
     assert payload[0]["query"] == "budget"
     assert payload[0]["provider"] == "multi-source"
-
 
 
 def test_search_papers_reports_provider_errors_but_returns_success(runner, monkeypatch):
@@ -90,7 +104,13 @@ def test_search_papers_reports_provider_errors_but_returns_success(runner, monke
 
     monkeypatch.setattr(
         "research_harness.paper_source_clients.build_provider_suite",
-        lambda fetcher=None: [FailingProvider(), StubProvider("semantic_scholar", [PaperRecord(title="Recovered Result", provider="semantic_scholar")])],
+        lambda fetcher=None: [
+            FailingProvider(),
+            StubProvider(
+                "semantic_scholar",
+                [PaperRecord(title="Recovered Result", provider="semantic_scholar")],
+            ),
+        ],
     )
     monkeypatch.setattr(
         "research_harness.paper_source_clients.available_provider_specs",

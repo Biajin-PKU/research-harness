@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 
 from research_harness.cli import main
-from research_harness.paper_source_clients import available_provider_specs, build_provider_suite
+from research_harness.paper_source_clients import (
+    available_provider_specs,
+    build_provider_suite,
+)
 
 
 def test_available_provider_specs_reflect_current_env(monkeypatch):

@@ -140,10 +140,18 @@ class ProvenanceRecorder:
         successes = 0
 
         for record in records:
-            operations_by_backend[record.backend] = operations_by_backend.get(record.backend, 0) + 1
-            operations_by_primitive[record.primitive] = operations_by_primitive.get(record.primitive, 0) + 1
-            cost_by_backend[record.backend] = cost_by_backend.get(record.backend, 0.0) + record.cost_usd
-            cost_by_primitive[record.primitive] = cost_by_primitive.get(record.primitive, 0.0) + record.cost_usd
+            operations_by_backend[record.backend] = (
+                operations_by_backend.get(record.backend, 0) + 1
+            )
+            operations_by_primitive[record.primitive] = (
+                operations_by_primitive.get(record.primitive, 0) + 1
+            )
+            cost_by_backend[record.backend] = (
+                cost_by_backend.get(record.backend, 0.0) + record.cost_usd
+            )
+            cost_by_primitive[record.primitive] = (
+                cost_by_primitive.get(record.primitive, 0.0) + record.cost_usd
+            )
 
             pt = record.prompt_tokens or 0
             ct = record.completion_tokens or 0
@@ -230,7 +238,9 @@ class ProvenanceRecorder:
                         "total_tokens": prompt + completion,
                         "cost_usd": cost,
                         "cost_per_call": cost / calls if calls else 0.0,
-                        "success_rate": (int(row["successes"]) / calls) if calls else 0.0,
+                        "success_rate": (int(row["successes"]) / calls)
+                        if calls
+                        else 0.0,
                     }
                 )
             return report
@@ -276,8 +286,12 @@ class ProvenanceRecorder:
             error=row["error"],
             parent_id=row["parent_id"],
             artifact_id=row["artifact_id"] if "artifact_id" in keys else None,
-            quality_score=float(row["quality_score"]) if "quality_score" in keys and row["quality_score"] is not None else None,
-            human_accept=bool(row["human_accept"]) if "human_accept" in keys and row["human_accept"] is not None else None,
+            quality_score=float(row["quality_score"])
+            if "quality_score" in keys and row["quality_score"] is not None
+            else None,
+            human_accept=bool(row["human_accept"])
+            if "human_accept" in keys and row["human_accept"] is not None
+            else None,
             loop_round=int(row["loop_round"] or 0) if "loop_round" in keys else 0,
             created_at=row["created_at"],
             prompt_tokens=_opt_int("prompt_tokens"),

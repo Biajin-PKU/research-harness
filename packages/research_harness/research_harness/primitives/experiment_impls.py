@@ -6,11 +6,9 @@ code_validate, experiment_run, verified_registry_build, verified_registry_check.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from ..experiment.metric_parser import parse_metrics
 from ..experiment.sandbox import run_experiment
 from ..experiment.validator import auto_fix_unbound_locals, validate_code
 from ..experiment.verified_registry import (
@@ -37,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 @register_primitive(CODE_VALIDATE_SPEC)
-def code_validate(*, code: str, auto_fix: bool = True, **_: Any) -> CodeValidationOutput:
+def code_validate(
+    *, code: str, auto_fix: bool = True, **_: Any
+) -> CodeValidationOutput:
     """Validate experiment code: syntax, security, imports."""
     auto_fixed = 0
     if auto_fix:

@@ -61,8 +61,11 @@ def plan_stage(
 
     try:
         result = planner_fn(
-            db=db, svc=svc, project_id=project_id,
-            topic_id=topic_id, checkpoint_data=checkpoint_data,
+            db=db,
+            svc=svc,
+            project_id=project_id,
+            topic_id=topic_id,
+            checkpoint_data=checkpoint_data,
         )
         if not isinstance(result, dict):
             return {}
@@ -128,7 +131,9 @@ def _get_paper_count(db: Database, topic_id: int) -> int:
         conn.close()
 
 
-def _get_top_papers(db: Database, topic_id: int, limit: int = 50) -> list[dict[str, Any]]:
+def _get_top_papers(
+    db: Database, topic_id: int, limit: int = 50
+) -> list[dict[str, Any]]:
     """Get top papers by relevance and citation count."""
     conn = db.connect()
     try:
@@ -209,8 +214,8 @@ def _plan_build(
 
     prompt = f"""You are a paper retrieval planner. Given a research topic, generate a search strategy.
 
-Topic: {meta['name']}
-Description: {meta['description']}
+Topic: {meta["name"]}
+Description: {meta["description"]}
 Current paper count: {paper_count}
 Existing queries: {json.dumps(existing_queries[:10], ensure_ascii=False)}
 
@@ -258,7 +263,7 @@ def _plan_analyze(
 
     prompt = f"""You are a paper analysis planner. Select papers for deep analysis and define the research focus.
 
-Topic: {meta['name']} — {meta['description']}
+Topic: {meta["name"]} — {meta["description"]}
 Paper pool ({paper_count} papers, showing top 30):
 {papers_table}
 
@@ -288,10 +293,16 @@ def _plan_propose(
     # direction_ranking is not in analyze's tool list; fall back to
     # direction_proposal (auto-recorded by analyze from gap_detect output)
     # or evidence_pack as additional context.
-    directions = _gather_artifact_payload(svc, project_id, "analyze", "direction_ranking")
+    directions = _gather_artifact_payload(
+        svc, project_id, "analyze", "direction_ranking"
+    )
     if not directions:
-        directions = _gather_artifact_payload(svc, project_id, "analyze", "direction_proposal")
-    baselines = _gather_artifact_payload(svc, project_id, "analyze", "baseline_identify")
+        directions = _gather_artifact_payload(
+            svc, project_id, "analyze", "direction_proposal"
+        )
+    baselines = _gather_artifact_payload(
+        svc, project_id, "analyze", "baseline_identify"
+    )
     meta = _gather_topic_meta(db, topic_id)
 
     prompt = f"""You are a research direction planner. Synthesize gaps, directions, and baselines into a proposal.
@@ -315,7 +326,9 @@ Return ONLY the JSON object, no extra text."""
     # Ensure research_question exists in payload (required by orchestrator invariant)
     payload = result.get("artifact_payload", {})
     if isinstance(payload, dict) and "research_question" not in payload:
-        payload["research_question"] = payload.get("direction", "What is the optimal approach?")
+        payload["research_question"] = payload.get(
+            "direction", "What is the optimal approach?"
+        )
     result["artifact_payload"] = payload
     # P0-4: study_spec must be non-empty for the artifact to be recorded.
     # Synthesize from direction if LLM returned empty.
@@ -338,7 +351,9 @@ def _plan_experiment(
     topic_id: int,
     checkpoint_data: dict[str, Any],
 ) -> dict[str, Any]:
-    proposal = _gather_artifact_payload(svc, project_id, "propose", "direction_proposal")
+    proposal = _gather_artifact_payload(
+        svc, project_id, "propose", "direction_proposal"
+    )
     study_spec = _gather_artifact_payload(svc, project_id, "propose", "study_spec")
 
     prompt = f"""You are an experiment planner. Design an experiment based on the research direction.
@@ -368,16 +383,20 @@ def _plan_write(
 ) -> dict[str, Any]:
     meta = _gather_topic_meta(db, topic_id)
     contributions = _get_contributions(db, project_id)
-    experiment = _gather_artifact_payload(svc, project_id, "experiment", "experiment_result")
-    proposal = _gather_artifact_payload(svc, project_id, "propose", "direction_proposal")
+    experiment = _gather_artifact_payload(
+        svc, project_id, "experiment", "experiment_result"
+    )
+    proposal = _gather_artifact_payload(
+        svc, project_id, "propose", "direction_proposal"
+    )
 
     prompt = f"""You are a paper writing planner. Plan the structure and parameters for drafting a research paper.
 
-Topic: {meta['name']}
-Target venue: {meta['target_venue'] or 'top AI conference'}
-Contributions: {contributions[:1000] or 'Not yet defined'}
-Experiment results: {json.dumps(experiment, ensure_ascii=False, default=str)[:1500] or 'None'}
-Direction: {json.dumps(proposal, ensure_ascii=False, default=str)[:1000] or 'None'}
+Topic: {meta["name"]}
+Target venue: {meta["target_venue"] or "top AI conference"}
+Contributions: {contributions[:1000] or "Not yet defined"}
+Experiment results: {json.dumps(experiment, ensure_ascii=False, default=str)[:1500] or "None"}
+Direction: {json.dumps(proposal, ensure_ascii=False, default=str)[:1000] or "None"}
 
 Return a JSON object with:
 - "venue": target venue name
@@ -391,7 +410,14 @@ Return ONLY the JSON object, no extra text."""
     result = _call_planner_llm(prompt)
     result.setdefault("venue", meta["target_venue"] or "NeurIPS")
     result.setdefault("contributions", contributions)
-    result.setdefault("sections_to_draft", [
-        "introduction", "related_work", "method", "experiments", "conclusion",
-    ])
+    result.setdefault(
+        "sections_to_draft",
+        [
+            "introduction",
+            "related_work",
+            "method",
+            "experiments",
+            "conclusion",
+        ],
+    )
     return result

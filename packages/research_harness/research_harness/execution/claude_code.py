@@ -34,9 +34,12 @@ class ClaudeCodeBackend:
 
     def get_info(self) -> BackendInfo:
         harness_info = self._harness.get_info()
-        local_info = self._local.get_info() if self._local else BackendInfo(name="local")
+        local_info = (
+            self._local.get_info() if self._local else BackendInfo(name="local")
+        )
         all_primitives = sorted(
-            set(harness_info.supported_primitives) | set(local_info.supported_primitives)
+            set(harness_info.supported_primitives)
+            | set(local_info.supported_primitives)
         )
         return BackendInfo(
             name="claude_code",

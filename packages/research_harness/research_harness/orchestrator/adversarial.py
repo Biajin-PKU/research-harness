@@ -103,7 +103,9 @@ class AdversarialRound:
 class AdversarialResolution:
     """Outcome of an adversarial round."""
 
-    outcome: str  # approved, approved_with_conditions, revise_and_repeat, reject_and_return
+    outcome: (
+        str  # approved, approved_with_conditions, revise_and_repeat, reject_and_return
+    )
     scores: dict[str, float] = field(default_factory=dict)
     mean_score: float = 0.0
     critical_unresolved: int = 0
@@ -195,7 +197,10 @@ class AdversarialLoop:
             artifact_type="adversarial_round",
             title=f"Adversarial Round {round_number}",
             payload=round_obj.to_payload(),
-            metadata={"round_number": round_number, "target_artifact_id": target_artifact_id},
+            metadata={
+                "round_number": round_number,
+                "target_artifact_id": target_artifact_id,
+            },
         )
 
         return {
@@ -223,11 +228,17 @@ class AdversarialLoop:
         round_payload = round_artifact.payload
         round_obj = AdversarialRound.from_payload(round_payload)
 
-        critical = sum(1 for o in round_obj.unresolved_objections if o.severity == "critical")
+        critical = sum(
+            1 for o in round_obj.unresolved_objections if o.severity == "critical"
+        )
         major = sum(1 for o in round_obj.unresolved_objections if o.severity == "major")
 
         computed_scores = scores or {}
-        mean_score = sum(computed_scores.values()) / len(computed_scores) if computed_scores else 0.0
+        mean_score = (
+            sum(computed_scores.values()) / len(computed_scores)
+            if computed_scores
+            else 0.0
+        )
 
         outcome = self._determine_outcome(
             critical=critical,
@@ -296,7 +307,10 @@ class AdversarialLoop:
         if round_count >= max_rounds:
             return False, f"Max rounds ({max_rounds}) reached"
 
-        return True, f"Round {round_count}/{max_rounds}: outcome was {resolution.outcome}"
+        return (
+            True,
+            f"Round {round_count}/{max_rounds}: outcome was {resolution.outcome}",
+        )
 
     def check_convergence(
         self,
@@ -337,7 +351,9 @@ class AdversarialLoop:
         if not responses:
             return list(objections)
 
-        resolved_targets = {r.get("target", "") for r in responses if r.get("resolved", False)}
+        resolved_targets = {
+            r.get("target", "") for r in responses if r.get("resolved", False)
+        }
         return [o for o in objections if o.target not in resolved_targets]
 
     def _determine_outcome(

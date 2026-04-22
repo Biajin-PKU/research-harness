@@ -5,25 +5,19 @@ from __future__ import annotations
 import pytest
 
 from research_harness.experiment.paper_verifier import (
-    LENIENT_SECTIONS,
-    STRICT_SECTIONS,
-    NumberOccurrence,
     _classify_section,
     extract_numbers,
     verify_paper_numbers,
 )
 from research_harness.experiment.citation_verifier import (
     CitationInput,
-    CitationResult,
     _tokenize,
     jaccard_similarity,
     verify_citation,
     verify_citations,
 )
 from research_harness.experiment.verified_registry import (
-    ALWAYS_ALLOWED,
     VerifiedRegistry,
-    build_registry_from_metrics,
 )
 
 
@@ -181,7 +175,9 @@ class TestPaperVerification:
 
 class TestJaccardSimilarity:
     def test_identical(self):
-        assert jaccard_similarity("Attention Is All You Need", "Attention Is All You Need") == pytest.approx(1.0)
+        assert jaccard_similarity(
+            "Attention Is All You Need", "Attention Is All You Need"
+        ) == pytest.approx(1.0)
 
     def test_similar(self):
         sim = jaccard_similarity(
@@ -265,7 +261,9 @@ class TestCitationVerification:
                     "message": {
                         "items": [
                             {
-                                "title": ["Self-Attention Network Architecture for Translation"],
+                                "title": [
+                                    "Self-Attention Network Architecture for Translation"
+                                ],
                                 "DOI": "10.1234/something",
                             }
                         ]
@@ -282,7 +280,9 @@ class TestCitationVerification:
         def mock_http(source, title):
             return {"message": {"items": []}, "data": [], "results": []}
 
-        citation = CitationInput(title="Completely Fabricated Paper Title That Does Not Exist")
+        citation = CitationInput(
+            title="Completely Fabricated Paper Title That Does Not Exist"
+        )
         result = verify_citation(citation, http_fn=mock_http)
         assert result.status == "hallucinated"
         assert result.confidence == 0.0
@@ -428,20 +428,26 @@ class TestVerificationPrimitives:
         conn.execute(
             "INSERT INTO papers (id, title, doi, arxiv_id, s2_id) VALUES (1, 'Test Paper', '10.1000/test', '', '')"
         )
-        conn.execute("INSERT INTO paper_topics (paper_id, topic_id, relevance) VALUES (1, 1, 'high')")
+        conn.execute(
+            "INSERT INTO paper_topics (paper_id, topic_id, relevance) VALUES (1, 1, 'high')"
+        )
         # Add verified numbers
         conn.execute(
             "INSERT INTO verified_numbers (project_id, source, number_original, number_rounded) VALUES (1, 'test', 0.95, 0.95)"
         )
         # Add claims artifact
-        claims_payload = json.dumps({"claims": [{"claim_id": "claim_abc123", "content": "Test claim"}]})
+        claims_payload = json.dumps(
+            {"claims": [{"claim_id": "claim_abc123", "content": "Test claim"}]}
+        )
         conn.execute(
             """INSERT INTO project_artifacts (project_id, topic_id, stage, artifact_type, payload_json, status)
                VALUES (1, 1, 'analyze', 'claims', ?, 'active')""",
             (claims_payload,),
         )
         # Add evidence link artifact
-        link_payload = json.dumps({"claim_id": "claim_abc123", "source_type": "paper", "source_id": "1"})
+        link_payload = json.dumps(
+            {"claim_id": "claim_abc123", "source_type": "paper", "source_id": "1"}
+        )
         conn.execute(
             """INSERT INTO project_artifacts (project_id, topic_id, stage, artifact_type, payload_json, status)
                VALUES (1, 1, 'analyze', 'evidence_links', ?, 'active')""",

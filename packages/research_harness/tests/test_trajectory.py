@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from research_harness.evolution.trajectory import TrajectoryRecorder
 
@@ -60,8 +59,11 @@ class TestTrajectoryRecorder:
     def test_record_gate_outcome(self, db):
         rec = TrajectoryRecorder(db, "sess-005")
         eid = rec.record_gate_outcome(
-            "coverage_gate", "passed", "50 papers >= threshold",
-            stage="build", topic_id=1,
+            "coverage_gate",
+            "passed",
+            "50 papers >= threshold",
+            stage="build",
+            topic_id=1,
         )
         assert eid > 0
         events = rec.get_session_trajectory()
@@ -133,8 +135,10 @@ class TestTrajectoryRecorder:
     def test_parent_event_id(self, db):
         rec = TrajectoryRecorder(db, "sess-e")
         parent_id = rec.record_tool_call("deep_read", stage="analyze")
-        child_id = rec.record_tool_call(
-            "paper_summarize", stage="analyze", parent_event_id=parent_id,
+        _child_id = rec.record_tool_call(
+            "paper_summarize",
+            stage="analyze",
+            parent_event_id=parent_id,
         )
         events = rec.get_session_trajectory()
         assert events[1].parent_event_id == parent_id

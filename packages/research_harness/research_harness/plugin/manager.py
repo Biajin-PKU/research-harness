@@ -39,10 +39,12 @@ class PluginManager:
             for manifest_path in path.rglob("plugin.yaml"):
                 try:
                     import yaml
+
                     data = yaml.safe_load(manifest_path.read_text())
                 except ImportError:
                     # Fallback: try JSON
                     import json
+
                     json_path = manifest_path.with_suffix(".json")
                     if json_path.exists():
                         data = json.loads(json_path.read_text())
@@ -62,7 +64,8 @@ class PluginManager:
                     self._load_errors[manifest.name or str(manifest_path)] = errors
                     logger.warning(
                         "Plugin %s has validation errors: %s",
-                        manifest_path, errors,
+                        manifest_path,
+                        errors,
                     )
                 else:
                     discovered.append(manifest)
@@ -80,7 +83,9 @@ class PluginManager:
             existing = self._plugins[manifest.name]
             logger.info(
                 "Replacing plugin %s v%s with v%s",
-                manifest.name, existing.version, manifest.version,
+                manifest.name,
+                existing.version,
+                manifest.version,
             )
 
         self._plugins[manifest.name] = manifest
@@ -99,9 +104,11 @@ class PluginManager:
         extensions: list[dict[str, Any]] = []
         for plugin in self._plugins.values():
             for ext in plugin.extension_points.get(point, []):
-                extensions.append({
-                    "plugin": plugin.name,
-                    "plugin_version": plugin.version,
-                    **ext,
-                })
+                extensions.append(
+                    {
+                        "plugin": plugin.name,
+                        "plugin_version": plugin.version,
+                        **ext,
+                    }
+                )
         return extensions

@@ -97,7 +97,11 @@ LEGACY_STAGE_REGISTRY: dict[str, StageMetadata] = {
         display_name="Formal Review",
         description="Run integrity + scholarly review on the draft package.",
         predecessor="draft_preparation",
-        required_artifacts=("integrity_review_report", "scholarly_review_report", "review_bundle"),
+        required_artifacts=(
+            "integrity_review_report",
+            "scholarly_review_report",
+            "review_bundle",
+        ),
         fallback_stage="draft_preparation",
         gate_type="review_gate",
     ),
@@ -176,7 +180,11 @@ STAGE_REGISTRY: dict[str, StageMetadata] = {
         display_name="Analyze",
         description="Claim extraction, claim graph, gap detection, research direction ranking.",
         predecessor="build",
-        required_artifacts=("evidence_pack", "claim_candidate_set", "direction_proposal"),
+        required_artifacts=(
+            "evidence_pack",
+            "claim_candidate_set",
+            "direction_proposal",
+        ),
         fallback_stage="build",
         gate_type="approval_gate",
         soft_prerequisites=(
@@ -199,14 +207,19 @@ STAGE_REGISTRY: dict[str, StageMetadata] = {
             f"Paper pool contains >= {DEFAULT_MIN_PAPER_COUNT} papers",
             "Claims extracted from >= 10 papers",
             "Algorithm design loop completed or algorithm_proposal artifact recorded",
-        ),    ),
+        ),
+    ),
     "experiment": StageMetadata(
         name="experiment",
         display_name="Experiment",
         description="Code generation, sandbox execution, metric evaluation, "
         "iterative improvement, verified registry construction.",
         predecessor="propose",
-        required_artifacts=("experiment_code", "experiment_result", "verified_registry"),
+        required_artifacts=(
+            "experiment_code",
+            "experiment_result",
+            "verified_registry",
+        ),
         fallback_stage="propose",
         gate_type="experiment_gate",
         soft_prerequisites=(

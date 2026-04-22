@@ -26,7 +26,9 @@ def titles_match(left: str, right: str) -> bool:
     return len(shorter) >= 6 and shorter in longer
 
 
-def attach_section_text(tree: list[SectionNode], pages_text: list[str]) -> list[SectionNode]:
+def attach_section_text(
+    tree: list[SectionNode], pages_text: list[str]
+) -> list[SectionNode]:
     for node in flatten_nodes(tree):
         start = max(1, node.start_page)
         end = max(start, node.end_page)
@@ -47,7 +49,9 @@ def _trim_page_span_text(text: str, title: str) -> str:
     lines = [line for line in text.splitlines() if line.strip()]
     for idx, line in enumerate(lines):
         normalized_line = normalize_section_title(line)
-        if titles_match(title, line) or (normalized_title and normalized_title in normalized_line):
+        if titles_match(title, line) or (
+            normalized_title and normalized_title in normalized_line
+        ):
             return "\n".join(lines[idx:]).strip()
     return text.strip()
 

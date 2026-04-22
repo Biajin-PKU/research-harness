@@ -475,20 +475,55 @@ def build_section_draft_prompt(
     """Dispatch to section-specific prompt if available, else generic."""
     sec = (section or "").strip().lower().replace(" ", "_")
     if sec in {"introduction", "intro"}:
-        return intro_draft_prompt(outline, evidence_text, max_words, section_guidance, citation_quota, evidence_count=evidence_count)
+        return intro_draft_prompt(
+            outline,
+            evidence_text,
+            max_words,
+            section_guidance,
+            citation_quota,
+            evidence_count=evidence_count,
+        )
     if sec in {"related_work", "related-work", "related"}:
-        return related_work_draft_prompt(outline, evidence_text, max_words, section_guidance, citation_quota, evidence_count=evidence_count)
+        return related_work_draft_prompt(
+            outline,
+            evidence_text,
+            max_words,
+            section_guidance,
+            citation_quota,
+            evidence_count=evidence_count,
+        )
     if sec in {"method", "methodology", "approach", "proposed_method"}:
-        return method_draft_prompt(outline, evidence_text, max_words, section_guidance, citation_quota, evidence_count=evidence_count)
+        return method_draft_prompt(
+            outline,
+            evidence_text,
+            max_words,
+            section_guidance,
+            citation_quota,
+            evidence_count=evidence_count,
+        )
     if sec in {"experiments", "experiment", "results", "evaluation"}:
-        return experiments_draft_prompt(outline, evidence_text, max_words, section_guidance, citation_quota, evidence_count=evidence_count)
+        return experiments_draft_prompt(
+            outline,
+            evidence_text,
+            max_words,
+            section_guidance,
+            citation_quota,
+            evidence_count=evidence_count,
+        )
     if writing_patterns:
         return section_draft_with_patterns_prompt(
-            section, outline, evidence_text, writing_patterns, max_words,
+            section,
+            outline,
+            evidence_text,
+            writing_patterns,
+            max_words,
             section_guidance=section_guidance,
         )
     return section_draft_prompt(
-        section, outline, evidence_text, max_words,
+        section,
+        outline,
+        evidence_text,
+        max_words,
         section_guidance=section_guidance,
         citation_quota=citation_quota,
     )
@@ -533,9 +568,7 @@ Return JSON only — include every paper_id listed above:
 {{"assessments": [{{"paper_id": <int>, "necessity_level": "<high|medium|low>", "reason": "<one sentence>"}}]}}"""
 
 
-def deep_read_pass1_prompt(
-    paper_title: str, paper_text: str, focus: str = ""
-) -> str:
+def deep_read_pass1_prompt(paper_title: str, paper_text: str, focus: str = "") -> str:
     focus_line = f"\nFocus area: {focus}" if focus else ""
     return f"""You are a senior research scientist performing a critical deep reading.{focus_line}
 
@@ -822,6 +855,7 @@ Return JSON only:
 # Phase 2: Cross-paper analysis prompts
 # ---------------------------------------------------------------------------
 
+
 def method_taxonomy_prompt(papers_context: str, focus: str = "") -> str:
     """Prompt for building a method taxonomy from paper summaries."""
     focus_line = f"\nResearch focus: {focus}" if focus else ""
@@ -897,6 +931,7 @@ Return JSON only:
 # ---------------------------------------------------------------------------
 # Phase 2: Prompt extensions
 # ---------------------------------------------------------------------------
+
 
 def deep_read_math_prompt(paper_title: str, paper_text: str, focus: str = "") -> str:
     """Deep read with math explanation mode — simplifies equations, builds symbol table."""
@@ -989,7 +1024,9 @@ def rebuttal_draft_prompt(
     paper_context: str = "",
 ) -> str:
     """Prompt for formatting a rebuttal letter from review issues and responses."""
-    context_line = f"\nPaper context:\n{_truncate(paper_context, 3000)}\n" if paper_context else ""
+    context_line = (
+        f"\nPaper context:\n{_truncate(paper_context, 3000)}\n" if paper_context else ""
+    )
     return f"""Format a professional rebuttal letter from the following reviewer comments and author responses.{context_line}
 
 Reviewer issues:
@@ -1010,6 +1047,7 @@ Write the full rebuttal text. No JSON needed."""
 # ---------------------------------------------------------------------------
 # Phase 3: Quantitative extraction prompts
 # ---------------------------------------------------------------------------
+
 
 def table_extract_prompt(paper_title: str, paper_text: str) -> str:
     """Prompt for extracting structured tables from paper text."""

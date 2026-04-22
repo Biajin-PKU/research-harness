@@ -20,7 +20,7 @@ from typing import Any
 from ..storage.db import Database
 from . import prompts as evo_prompts
 from .models import Strategy, StrategyDistillResult
-from .store import DBLessonStore, Lesson
+from .store import DBLessonStore
 from .trajectory import TrajectoryRecorder
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ QUALITY_THRESHOLD = 0.75
 def _get_llm_client(tier: str) -> Any:
     """Get an LLM client via the shared paperindex routing."""
     from paperindex.llm.client import LLMClient, resolve_llm_config
+
     client = LLMClient(resolve_llm_config())
     client._default_tier = tier  # type: ignore[attr-defined]
     return client
@@ -88,7 +89,9 @@ class StrategyDistiller:
         if not force and evidence["lesson_count"] < min_lessons:
             logger.info(
                 "Not enough lessons for %s (%d < %d)",
-                stage, evidence["lesson_count"], min_lessons,
+                stage,
+                evidence["lesson_count"],
+                min_lessons,
             )
             return result
 
@@ -154,22 +157,28 @@ class StrategyDistiller:
     # ---- Phase 1: Collect ----
 
     def _collect_evidence(
-        self, stage: str, *, topic_id: int | None = None,
+        self,
+        stage: str,
+        *,
+        topic_id: int | None = None,
     ) -> dict[str, Any]:
         """Gather lessons and trajectory snippets for a stage."""
         lessons = self._lesson_store.query(
-            stage, top_k=30, topic_id=topic_id,
+            stage,
+            top_k=30,
+            topic_id=topic_id,
         )
         trajectory_events = TrajectoryRecorder.get_stage_trajectories(
-            self._db, stage, topic_id=topic_id, limit=50,
+            self._db,
+            stage,
+            topic_id=topic_id,
+            limit=50,
         )
 
         # Build evidence text
         parts: list[str] = []
         for i, lesson in enumerate(lessons):
-            parts.append(
-                f"[L{i+1}] [{lesson.lesson_type}] {lesson.content}"
-            )
+            parts.append(f"[L{i + 1}] [{lesson.lesson_type}] {lesson.content}")
         if trajectory_events:
             parts.append("\n--- Trajectory Patterns ---")
             traj_text = TrajectoryRecorder.format_trajectory_text(
@@ -187,11 +196,14 @@ class StrategyDistiller:
     # ---- Phase 2: Aggregate ----
 
     def _aggregate_themes(
-        self, stage: str, evidence: dict[str, Any],
+        self,
+        stage: str,
+        evidence: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """LLM clusters evidence into themes (light tier)."""
         prompt = evo_prompts.aggregate_themes_prompt(
-            stage, evidence["evidence_text"],
+            stage,
+            evidence["evidence_text"],
         )
         client = _get_llm_client("light")
         raw = _llm_chat(client, prompt)
@@ -216,8 +228,7 @@ class StrategyDistiller:
             t["title"] = title
             t["summary"] = str(t.get("summary", "")).strip()
             t["evidence_ids"] = [
-                int(x) for x in (t.get("evidence_ids") or [])
-                if str(x).isdigit()
+                int(x) for x in (t.get("evidence_ids") or []) if str(x).isdigit()
             ]
             t["scope"] = t.get("scope", "global")
             valid.append(t)
@@ -227,7 +238,9 @@ class StrategyDistiller:
     # ---- Phase 3: Distill ----
 
     def _distill_strategy(
-        self, stage: str, theme: dict[str, Any],
+        self,
+        stage: str,
+        theme: dict[str, Any],
     ) -> str:
         """LLM generates strategy text for a theme (light tier)."""
         # Gather supporting lesson content for this theme
@@ -235,7 +248,8 @@ class StrategyDistiller:
         if evidence_ids:
             supporting_lessons = self._lesson_store.get_by_ids(evidence_ids)
             evidence_text = "\n".join(
-                f"- [{l.lesson_type}] {l.content}" for l in supporting_lessons
+                f"- [{lesson.lesson_type}] {lesson.content}"
+                for lesson in supporting_lessons
             )
         else:
             evidence_text = theme.get("summary", "")
@@ -259,7 +273,9 @@ class StrategyDistiller:
     # ---- Phase 4: Quality Gate ----
 
     def _quality_gate(
-        self, strategy_text: str, stage: str,
+        self,
+        strategy_text: str,
+        stage: str,
     ) -> tuple[float, str, bool]:
         """LLM 4-dimension quality evaluation (medium tier).
 
@@ -331,9 +347,18 @@ class StrategyDistiller:
                     source_session_count, status)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    stage, strategy_key, title, content, scope, topic_id,
-                    version, quality_score, gate_model,
-                    json.dumps(lesson_ids), len(lesson_ids), status,
+                    stage,
+                    strategy_key,
+                    title,
+                    content,
+                    scope,
+                    topic_id,
+                    version,
+                    quality_score,
+                    gate_model,
+                    json.dumps(lesson_ids),
+                    len(lesson_ids),
+                    status,
                 ),
             )
             sid = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -378,9 +403,11 @@ class StrategyDistiller:
         else:
             for row in rows:
                 lines.append(f"## {row['title']}")
-                lines.append(f"_Key: `{row['strategy_key']}` | "
-                             f"Version: {row['version']} | "
-                             f"Score: {row['quality_score']:.2f}_\n")
+                lines.append(
+                    f"_Key: `{row['strategy_key']}` | "
+                    f"Version: {row['version']} | "
+                    f"Score: {row['quality_score']:.2f}_\n"
+                )
                 lines.append(row["content"])
                 lines.append("")
 

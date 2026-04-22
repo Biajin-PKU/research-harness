@@ -1,4 +1,5 @@
 """Tests for review readiness detection in topic overview and task generate."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,19 @@ def _setup_topic_all_done(runner, topic: str = "t1") -> None:
     """Create a topic where all papers are actionable but tasks are all done."""
     runner.invoke(main, ["topic", "init", topic])
     # Paper without PDF → generates task
-    runner.invoke(main, ["paper", "ingest", "--title", "P1", "--arxiv-id", "2401.80001", "--topic", topic])
+    runner.invoke(
+        main,
+        [
+            "paper",
+            "ingest",
+            "--title",
+            "P1",
+            "--arxiv-id",
+            "2401.80001",
+            "--topic",
+            topic,
+        ],
+    )
     runner.invoke(main, ["task", "generate", "--topic", topic])
     # Mark all tasks as done
     tasks_result = runner.invoke(main, ["--json", "task", "list", "--topic", topic])
@@ -20,7 +33,19 @@ def _setup_topic_all_done(runner, topic: str = "t1") -> None:
 
 def _setup_topic_with_pending(runner, topic: str = "t2") -> None:
     runner.invoke(main, ["topic", "init", topic])
-    runner.invoke(main, ["paper", "ingest", "--title", "P2", "--arxiv-id", "2401.80002", "--topic", topic])
+    runner.invoke(
+        main,
+        [
+            "paper",
+            "ingest",
+            "--title",
+            "P2",
+            "--arxiv-id",
+            "2401.80002",
+            "--topic",
+            topic,
+        ],
+    )
     runner.invoke(main, ["task", "generate", "--topic", topic])
 
 
@@ -45,7 +70,9 @@ def test_task_generate_signals_review_ready_when_no_actionable_papers(runner):
     runner.invoke(main, ["topic", "init", "t3"])
     # Manually add a task and mark it done (no actionable papers)
     runner.invoke(main, ["task", "add", "--topic", "t3", "--title", "Manual task"])
-    tasks = json.loads(runner.invoke(main, ["--json", "task", "list", "--topic", "t3"]).output)
+    tasks = json.loads(
+        runner.invoke(main, ["--json", "task", "list", "--topic", "t3"]).output
+    )
     runner.invoke(main, ["task", "update", str(tasks[0]["id"]), "--status", "done"])
     result = runner.invoke(main, ["--json", "task", "generate", "--topic", "t3"])
     assert result.exit_code == 0

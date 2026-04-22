@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from research_harness.evolution.store import DBLessonStore, Lesson, LessonStore
 
@@ -26,7 +25,9 @@ class TestDBLessonStore:
         store = DBLessonStore(db)
         store.append(Lesson(stage="build", content="failed X", lesson_type="failure"))
         store.append(Lesson(stage="build", content="worked Y", lesson_type="success"))
-        store.append(Lesson(stage="build", content="observed Z", lesson_type="observation"))
+        store.append(
+            Lesson(stage="build", content="observed Z", lesson_type="observation")
+        )
 
         failures = store.query("build", lesson_type="failure")
         assert len(failures) == 1
@@ -47,7 +48,15 @@ class TestDBLessonStore:
         conn.execute(
             "INSERT INTO lessons (stage, content, lesson_type, tags, weight, source, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("build", "fresh lesson", "observation", "[]", 1.0, "manual", now.isoformat()),
+            (
+                "build",
+                "fresh lesson",
+                "observation",
+                "[]",
+                1.0,
+                "manual",
+                now.isoformat(),
+            ),
         )
         conn.commit()
         conn.close()
@@ -58,8 +67,14 @@ class TestDBLessonStore:
 
     def test_build_overlay(self, db):
         store = DBLessonStore(db)
-        store.append(Lesson(stage="build", content="S2 rate limit at 50/min", lesson_type="failure"))
-        store.append(Lesson(stage="build", content="CrossRef works well", lesson_type="success"))
+        store.append(
+            Lesson(
+                stage="build", content="S2 rate limit at 50/min", lesson_type="failure"
+            )
+        )
+        store.append(
+            Lesson(stage="build", content="CrossRef works well", lesson_type="success")
+        )
 
         overlay = store.build_overlay("build")
         assert "Lessons from previous runs" in overlay
@@ -113,7 +128,7 @@ class TestDBLessonStore:
 
         # topic_id=1 should return topic-1 and global lessons
         lessons = store.query("build", topic_id=1)
-        contents = {l.content for l in lessons}
+        contents = {lesson.content for lesson in lessons}
         assert "topic 1 lesson" in contents
         assert "global lesson" in contents
         # topic 2 lesson should not appear
@@ -127,7 +142,7 @@ class TestDBLessonStore:
 
         fetched = store.get_by_ids([id1, id2])
         assert len(fetched) == 2
-        contents = {l.content for l in fetched}
+        contents = {lesson.content for lesson in fetched}
         assert "lesson A" in contents
         assert "lesson B" in contents
 
@@ -141,7 +156,9 @@ class TestDBLessonStore:
         old_store = LessonStore(jsonl_path)
         old_store.append(Lesson(stage="build", content="migrated lesson 1"))
         old_store.append(Lesson(stage="analyze", content="migrated lesson 2"))
-        old_store.append(Lesson(stage="build", content="migrated lesson 3", lesson_type="failure"))
+        old_store.append(
+            Lesson(stage="build", content="migrated lesson 3", lesson_type="failure")
+        )
 
         # Migrate to DB
         db_store = DBLessonStore(db)
@@ -152,7 +169,7 @@ class TestDBLessonStore:
 
         # Verify content preserved
         build_lessons = db_store.query("build")
-        contents = {l.content for l in build_lessons}
+        contents = {lesson.content for lesson in build_lessons}
         assert "migrated lesson 1" in contents
         assert "migrated lesson 3" in contents
 

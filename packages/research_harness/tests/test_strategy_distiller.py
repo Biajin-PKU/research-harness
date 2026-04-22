@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from research_harness.evolution.distiller import StrategyDistiller, QUALITY_THRESHOLD
 from research_harness.evolution.store import DBLessonStore, Lesson
@@ -31,8 +30,11 @@ class TestStrategyDistiller:
         for i in range(count):
             rec = TrajectoryRecorder(db, f"test-sess-{i}")
             rec.record_tool_call(
-                "paper_search", stage=stage, topic_id=1,
-                input_summary=f"query={i}", output_summary="found papers",
+                "paper_search",
+                stage=stage,
+                topic_id=1,
+                input_summary=f"query={i}",
+                output_summary="found papers",
             )
 
     def test_distill_insufficient_lessons(self, db, tmp_path):
@@ -52,7 +54,11 @@ class TestStrategyDistiller:
         mock_llm_response_gate = '{"scores": {"evidence_grounded": 0.9, "preserves_existing": 0.8, "specific_reusable": 0.85, "safe_to_publish": 0.9}, "overall": 0.86, "decision": "accept", "reasoning": "Good"}'
 
         call_count = [0]
-        responses = [mock_llm_response_aggregate, mock_llm_response_distill, mock_llm_response_gate]
+        responses = [
+            mock_llm_response_aggregate,
+            mock_llm_response_distill,
+            mock_llm_response_gate,
+        ]
 
         def mock_chat(prompt, **kwargs):
             idx = min(call_count[0], len(responses) - 1)
@@ -63,7 +69,10 @@ class TestStrategyDistiller:
         mock_client.chat = mock_chat
         mock_client.model = "test-model"
 
-        with patch("research_harness.evolution.distiller._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.distiller._get_llm_client",
+            return_value=mock_client,
+        ):
             distiller = StrategyDistiller(db, tmp_path / "strategies")
             result = distiller.distill_stage("build", force=True)
 
@@ -91,7 +100,10 @@ class TestStrategyDistiller:
         mock_client.chat = mock_chat
         mock_client.model = "test-model"
 
-        with patch("research_harness.evolution.distiller._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.distiller._get_llm_client",
+            return_value=mock_client,
+        ):
             distiller = StrategyDistiller(db, tmp_path / "strategies")
             result = distiller.distill_stage("build")
 
@@ -130,7 +142,10 @@ class TestStrategyDistiller:
         mock_client.model = "test-model"
 
         strat_dir = tmp_path / "strategies"
-        with patch("research_harness.evolution.distiller._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.distiller._get_llm_client",
+            return_value=mock_client,
+        ):
             distiller = StrategyDistiller(db, strat_dir)
             distiller.distill_stage("build")
 
@@ -161,7 +176,10 @@ class TestStrategyDistiller:
         mock_client.chat = mock_chat
         mock_client.model = "test-model"
 
-        with patch("research_harness.evolution.distiller._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.distiller._get_llm_client",
+            return_value=mock_client,
+        ):
             distiller = StrategyDistiller(db, tmp_path / "strategies")
             distiller.distill_stage("build")
             distiller.distill_stage("build")
@@ -203,7 +221,10 @@ class TestStrategyDistiller:
         mock_client.chat = MagicMock(return_value=mock_aggregate)
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.distiller._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.distiller._get_llm_client",
+            return_value=mock_client,
+        ):
             distiller = StrategyDistiller(db, tmp_path / "strategies")
             results = distiller.distill_all(min_lessons=3)
 

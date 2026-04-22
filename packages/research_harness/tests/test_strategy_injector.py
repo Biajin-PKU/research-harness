@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
-import json
-
-import pytest
 
 from research_harness.evolution.injector import StrategyInjector
 
 
-def _insert_strategy(db, *, stage="build", key="build.test", title="Test Strategy",
-                     content="Do X then Y", scope="global", topic_id=None,
-                     version=1, quality_score=0.85, status="active"):
+def _insert_strategy(
+    db,
+    *,
+    stage="build",
+    key="build.test",
+    title="Test Strategy",
+    content="Do X then Y",
+    scope="global",
+    topic_id=None,
+    version=1,
+    quality_score=0.85,
+    status="active",
+):
     """Insert a test strategy directly into DB."""
     conn = db.connect()
     try:
@@ -20,8 +27,19 @@ def _insert_strategy(db, *, stage="build", key="build.test", title="Test Strateg
                (stage, strategy_key, title, content, scope, topic_id, version,
                 quality_score, gate_model, source_lesson_ids, status)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (stage, key, title, content, scope, topic_id, version,
-             quality_score, "test-model", "[]", status),
+            (
+                stage,
+                key,
+                title,
+                content,
+                scope,
+                topic_id,
+                version,
+                quality_score,
+                "test-model",
+                "[]",
+                status,
+            ),
         )
         conn.commit()
         return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -46,7 +64,9 @@ class TestStrategyInjector:
     def test_max_strategies_limit(self, db):
         for i in range(5):
             _insert_strategy(
-                db, key=f"build.strat_{i}", title=f"Strategy {i}",
+                db,
+                key=f"build.strat_{i}",
+                title=f"Strategy {i}",
                 quality_score=0.9 - i * 0.1,
             )
         injector = StrategyInjector(db)
@@ -57,8 +77,12 @@ class TestStrategyInjector:
 
     def test_global_and_topic_strategies(self, db):
         _insert_strategy(db, key="build.global", title="Global", scope="global")
-        _insert_strategy(db, key="build.topic1", title="Topic 1", scope="topic", topic_id=1)
-        _insert_strategy(db, key="build.topic2", title="Topic 2", scope="topic", topic_id=2)
+        _insert_strategy(
+            db, key="build.topic1", title="Topic 1", scope="topic", topic_id=1
+        )
+        _insert_strategy(
+            db, key="build.topic2", title="Topic 2", scope="topic", topic_id=2
+        )
 
         injector = StrategyInjector(db)
 
@@ -111,7 +135,9 @@ class TestStrategyInjector:
 
         conn = db.connect()
         try:
-            row = conn.execute("SELECT injection_count FROM strategies WHERE id = ?", (sid,)).fetchone()
+            row = conn.execute(
+                "SELECT injection_count FROM strategies WHERE id = ?", (sid,)
+            ).fetchone()
             assert row["injection_count"] == 2
         finally:
             conn.close()
@@ -123,14 +149,17 @@ class TestStrategyInjector:
 
         conn = db.connect()
         try:
-            row = conn.execute("SELECT positive_feedback FROM strategies WHERE id = ?", (sid,)).fetchone()
+            row = conn.execute(
+                "SELECT positive_feedback FROM strategies WHERE id = ?", (sid,)
+            ).fetchone()
             assert row["positive_feedback"] == 1
         finally:
             conn.close()
 
     def test_overlay_shows_scope_tag(self, db):
-        _insert_strategy(db, key="build.topic_strat", title="Topic Strat",
-                         scope="topic", topic_id=1)
+        _insert_strategy(
+            db, key="build.topic_strat", title="Topic Strat", scope="topic", topic_id=1
+        )
 
         injector = StrategyInjector(db)
         overlay = injector.build_strategy_overlay("build", topic_id=1)

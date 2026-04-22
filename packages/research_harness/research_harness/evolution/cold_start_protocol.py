@@ -81,7 +81,9 @@ class ColdStartProtocol:
         notes = []
         if not complete:
             deficit = self._targets.min_papers - paper_count
-            notes.append(f"Need {deficit} more papers (have {paper_count}/{self._targets.min_papers})")
+            notes.append(
+                f"Need {deficit} more papers (have {paper_count}/{self._targets.min_papers})"
+            )
         return PhaseProgress(
             phase=ColdStartPhase.SEED,
             targets=targets,
@@ -112,9 +114,13 @@ class ColdStartProtocol:
         )
         notes = []
         if card_count < self._targets.min_paper_cards:
-            notes.append(f"Need {self._targets.min_paper_cards - card_count} more paper cards")
+            notes.append(
+                f"Need {self._targets.min_paper_cards - card_count} more paper cards"
+            )
         if deep_read_count < self._targets.min_deep_reads:
-            notes.append(f"Need {self._targets.min_deep_reads - deep_read_count} more deep reads")
+            notes.append(
+                f"Need {self._targets.min_deep_reads - deep_read_count} more deep reads"
+            )
         if writing_obs_count < self._targets.min_writing_observations:
             notes.append(
                 f"Need {self._targets.min_writing_observations - writing_obs_count} more writing observations"
@@ -145,7 +151,9 @@ class ColdStartProtocol:
         )
         notes = []
         if gap_count < self._targets.min_gaps:
-            notes.append(f"Need {self._targets.min_gaps - gap_count} more detected gaps")
+            notes.append(
+                f"Need {self._targets.min_gaps - gap_count} more detected gaps"
+            )
         if writing_dims < self._targets.min_writing_dimensions:
             notes.append(
                 f"Writing skill covers {writing_dims}/{self._targets.min_writing_dimensions} dimensions"
@@ -252,7 +260,9 @@ class ColdStartProtocol:
 
         card_count = progress.current.get("min_paper_cards", 0)
         if card_count < self._targets.min_paper_cards:
-            plan.append(f"Run paper_acquire for topic {self._topic_id} ({len(paper_ids)} papers)")
+            plan.append(
+                f"Run paper_acquire for topic {self._topic_id} ({len(paper_ids)} papers)"
+            )
 
         deep_count = progress.current.get("min_deep_reads", 0)
         if deep_count < self._targets.min_deep_reads:
@@ -280,7 +290,9 @@ class ColdStartProtocol:
 
         dim_count = progress.current.get("min_writing_dimensions", 0)
         if dim_count < self._targets.min_writing_dimensions:
-            plan.append(f"Run writing_skill_aggregate (need {self._targets.min_writing_dimensions - dim_count} more dims)")
+            plan.append(
+                f"Run writing_skill_aggregate (need {self._targets.min_writing_dimensions - dim_count} more dims)"
+            )
 
         progress.notes = plan + progress.notes
         return progress
@@ -295,16 +307,33 @@ class ColdStartProtocol:
         next_steps: list[str] = []
 
         if seed.notes:
-            actions.extend([n for n in seed.notes if n.startswith(("Ingested", "Searched"))])
+            actions.extend(
+                [n for n in seed.notes if n.startswith(("Ingested", "Searched"))]
+            )
         if not index.complete:
             next_steps.extend([n for n in index.notes if n.startswith("Run ")])
         if not calibrate.complete:
             next_steps.extend([n for n in calibrate.notes if n.startswith("Run ")])
 
         phases = {
-            "seed": {"targets": seed.targets, "current": seed.current, "complete": seed.complete, "notes": seed.notes},
-            "index": {"targets": index.targets, "current": index.current, "complete": index.complete, "notes": index.notes},
-            "calibrate": {"targets": calibrate.targets, "current": calibrate.current, "complete": calibrate.complete, "notes": calibrate.notes},
+            "seed": {
+                "targets": seed.targets,
+                "current": seed.current,
+                "complete": seed.complete,
+                "notes": seed.notes,
+            },
+            "index": {
+                "targets": index.targets,
+                "current": index.current,
+                "complete": index.complete,
+                "notes": index.notes,
+            },
+            "calibrate": {
+                "targets": calibrate.targets,
+                "current": calibrate.current,
+                "complete": calibrate.complete,
+                "notes": calibrate.notes,
+            },
         }
 
         return ColdStartProtocolOutput(

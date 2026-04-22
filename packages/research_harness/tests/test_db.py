@@ -2,7 +2,9 @@ def test_migrate_creates_core_tables(db):
     conn = db.connect()
     tables = {
         row[0]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
     }
     conn.close()
     assert "topics" in tables

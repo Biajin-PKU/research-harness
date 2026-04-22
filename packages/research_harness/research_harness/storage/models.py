@@ -1,4 +1,5 @@
 """Pure data models for research hub storage."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

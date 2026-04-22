@@ -6,10 +6,10 @@ Legacy 13-stage policies preserved for reference.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Literal
 
-from ..orchestrator.stages import STAGE_ORDER, STAGE_REGISTRY
+from ..orchestrator.stages import STAGE_REGISTRY
 
 
 CodexPolicy = Literal["required", "recommended", "optional", "none"]
@@ -244,7 +244,9 @@ def should_invoke_codex(stage: str, mode: str = "standard") -> bool:
     return False
 
 
-def should_pause_human(stage: str, mode: str = "standard", autonomy: str = "supervised") -> bool:
+def should_pause_human(
+    stage: str, mode: str = "standard", autonomy: str = "supervised"
+) -> bool:
     """Determine if the runner should pause for human approval."""
     policy = get_policy(stage)
     if policy is None:

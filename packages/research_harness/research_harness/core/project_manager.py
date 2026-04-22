@@ -1,4 +1,5 @@
 """Project manager."""
+
 from __future__ import annotations
 
 import sqlite3

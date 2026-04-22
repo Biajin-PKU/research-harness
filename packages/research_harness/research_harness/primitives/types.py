@@ -96,6 +96,7 @@ class PaperIngestOutput:
 @dataclass(frozen=True)
 class ProjectSetContributionsOutput:
     """Result of reading/writing project-level contributions config."""
+
     project_id: int
     contributions: str
     updated: bool = False  # True for setter, False for getter
@@ -362,8 +363,8 @@ class SeedPaper:
     venue_tier: str = ""
     year: int | None = None
     citation_count: int | None = None
-    relevance: str = ""       # high / medium / low (from paper_topics)
-    seed_score: float = 0.0   # composite score used for ranking
+    relevance: str = ""  # high / medium / low (from paper_topics)
+    seed_score: float = 0.0  # composite score used for ranking
     s2_id: str = ""
     arxiv_id: str = ""
     doi: str = ""
@@ -373,7 +374,7 @@ class SeedPaper:
 class SelectSeedsOutput:
     seeds: list[SeedPaper] = field(default_factory=list)
     topic_id: int = 0
-    total_pool: int = 0       # number of papers considered
+    total_pool: int = 0  # number of papers considered
 
 
 @dataclass(frozen=True)
@@ -389,7 +390,7 @@ class ExpandCandidatePaper:
     venue_tier: str = ""
     citation_count: int | None = None
     abstract: str = ""
-    direction: str = ""   # "forward" (cites seed) | "backward" (cited by seed)
+    direction: str = ""  # "forward" (cites seed) | "backward" (cited by seed)
     seed_paper_id: int = 0  # local DB id of the seed that produced this candidate
 
 
@@ -399,7 +400,7 @@ class ExpandCitationsOutput:
 
     topic_id: int
     seeds_used: int = 0
-    forward_count: int = 0   # how many citing-paper candidates found
+    forward_count: int = 0  # how many citing-paper candidates found
     backward_count: int = 0  # how many reference candidates found
     candidates: list[ExpandCandidatePaper] = field(default_factory=list)
     # Guidance for the model to decide next steps
@@ -475,7 +476,8 @@ class PrimitiveResult:
         if not self.started_at or not self.finished_at:
             return 0.0
         return (
-            datetime.fromisoformat(self.finished_at) - datetime.fromisoformat(self.started_at)
+            datetime.fromisoformat(self.finished_at)
+            - datetime.fromisoformat(self.started_at)
         ).total_seconds()
 
     def input_hash(self, input_data: Any) -> str:
@@ -934,6 +936,7 @@ class AffiliationOutput:
 # Phase 2: Cross-paper analysis types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PrioritizedPaper:
     paper_id: int
@@ -1025,6 +1028,7 @@ class ContradictionDetectOutput:
 # Phase 3: Quantitative extraction types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ExtractedTable:
     table_id: int = 0
@@ -1113,6 +1117,7 @@ class AuthorCoverageOutput:
 # Phase 4: Workflow and export types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class RebuttalFormatOutput:
     rebuttal_text: str = ""
@@ -1145,15 +1150,17 @@ class VisualizationOutput:
 class FigurePlanItem:
     """A planned figure or table for a paper section."""
 
-    figure_id: str = ""        # e.g. "fig:arch", "tab:main"
-    kind: str = "figure"       # "figure" | "table"
-    title: str = ""            # short descriptive title
-    caption: str = ""          # full LaTeX caption text
-    section: str = ""          # target section (introduction/method/experiments)
-    purpose: str = ""          # what this figure/table communicates
-    data_source: str = ""      # where the data/source material comes from
-    suggested_layout: str = "" # e.g. "2-column multirow table with cellcolor for Ours row"
-    placement_hint: str = ""   # e.g. "after main results paragraph in Section 4.2"
+    figure_id: str = ""  # e.g. "fig:arch", "tab:main"
+    kind: str = "figure"  # "figure" | "table"
+    title: str = ""  # short descriptive title
+    caption: str = ""  # full LaTeX caption text
+    section: str = ""  # target section (introduction/method/experiments)
+    purpose: str = ""  # what this figure/table communicates
+    data_source: str = ""  # where the data/source material comes from
+    suggested_layout: str = (
+        ""  # e.g. "2-column multirow table with cellcolor for Ours row"
+    )
+    placement_hint: str = ""  # e.g. "after main results paragraph in Section 4.2"
 
 
 @dataclass(frozen=True)
@@ -1219,10 +1226,10 @@ class WritingObservation:
     """A structural writing observation from a single paper."""
 
     paper_id: int = 0
-    dimension: str = ""       # e.g. 'abstract_hook_type'
-    section: str = ""         # e.g. 'abstract'
-    observation: str = ""     # structured observation (JSON string)
-    example_text: str = ""    # verbatim excerpt from the paper
+    dimension: str = ""  # e.g. 'abstract_hook_type'
+    section: str = ""  # e.g. 'abstract'
+    observation: str = ""  # structured observation (JSON string)
+    example_text: str = ""  # verbatim excerpt from the paper
     paper_venue: str = ""
     paper_venue_tier: str = ""
     paper_year: int = 0
@@ -1242,14 +1249,14 @@ class WritingPatternExtractOutput:
 class DimensionGuidance:
     """Aggregated writing guidance for a single dimension."""
 
-    dimension: str = ""              # e.g. 'abstract_hook_type'
-    section: str = ""                # e.g. 'abstract'
+    dimension: str = ""  # e.g. 'abstract_hook_type'
+    section: str = ""  # e.g. 'abstract'
     pattern_distribution: dict[str, float] = field(default_factory=dict)
-    recommended_approach: str = ""   # 2-3 sentence guidance
-    examples: list[str] = field(default_factory=list)   # 2-3 good examples
+    recommended_approach: str = ""  # 2-3 sentence guidance
+    examples: list[str] = field(default_factory=list)  # 2-3 good examples
     anti_patterns: list[str] = field(default_factory=list)
     source_paper_count: int = 0
-    confidence: float = 0.0          # based on sample size
+    confidence: float = 0.0  # based on sample size
 
 
 @dataclass(frozen=True)
@@ -1472,8 +1479,12 @@ class AlgorithmDesignLoopOutput:
     convergence_reason: str = ""
     briefs: list[DesignBriefOutput] = field(default_factory=list)
     gap_probes: list[DesignGapProbeOutput] = field(default_factory=list)
-    candidates_history: list[AlgorithmCandidateGenerateOutput] = field(default_factory=list)
-    originality_checks: list[OriginalityBoundaryCheckOutput] = field(default_factory=list)
+    candidates_history: list[AlgorithmCandidateGenerateOutput] = field(
+        default_factory=list
+    )
+    originality_checks: list[OriginalityBoundaryCheckOutput] = field(
+        default_factory=list
+    )
     papers_read_during_loop: int = 0
     model_used: str = ""
 

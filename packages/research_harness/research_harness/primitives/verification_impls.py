@@ -169,7 +169,6 @@ def evidence_trace(
         ).fetchall()
 
         # Get papers with verified numbers
-        papers_with_numbers = set()
         rows = conn.execute(
             "SELECT DISTINCT project_id FROM verified_numbers WHERE project_id = ?",
             (project_id,),

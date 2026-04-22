@@ -19,12 +19,12 @@ from typing import Any
 
 from ..storage.db import Database
 from .models import Strategy
-from .store import DBLessonStore, Lesson
+from .store import DBLessonStore
 
 logger = logging.getLogger(__name__)
 
 PROBATION_INJECTION_THRESHOLD = 3  # must be injected N times
-PROBATION_POSITIVE_THRESHOLD = 1   # must have at least 1 positive feedback
+PROBATION_POSITIVE_THRESHOLD = 1  # must have at least 1 positive feedback
 
 
 @dataclass
@@ -39,6 +39,7 @@ class StaleCheckResult:
 
 def _get_llm_client(tier: str) -> Any:
     from paperindex.llm.client import LLMClient, resolve_llm_config
+
     client = LLMClient(resolve_llm_config())
     client._default_tier = tier  # type: ignore[attr-defined]
     return client
@@ -82,7 +83,8 @@ class StrategyPatcher:
         conn = self._db.connect()
         try:
             row = conn.execute(
-                "SELECT * FROM strategies WHERE id = ?", (strategy_id,),
+                "SELECT * FROM strategies WHERE id = ?",
+                (strategy_id,),
             ).fetchone()
             if not row:
                 return StaleCheckResult(strategy_id=strategy_id, reason="not found")
@@ -96,7 +98,9 @@ class StrategyPatcher:
             new_count = new_lessons["n"] if new_lessons else 0
 
             is_stale = new_count >= 3  # at least 3 new lessons to justify a patch
-            reason = f"{new_count} new lessons since strategy creation" if is_stale else ""
+            reason = (
+                f"{new_count} new lessons since strategy creation" if is_stale else ""
+            )
 
             return StaleCheckResult(
                 strategy_id=strategy_id,
@@ -110,7 +114,8 @@ class StrategyPatcher:
     # ---- Incremental Patching ----
 
     def patch_strategy(
-        self, strategy_id: int,
+        self,
+        strategy_id: int,
     ) -> Strategy | None:
         """Generate and apply an incremental patch to a strategy.
 
@@ -119,7 +124,8 @@ class StrategyPatcher:
         conn = self._db.connect()
         try:
             row = conn.execute(
-                "SELECT * FROM strategies WHERE id = ?", (strategy_id,),
+                "SELECT * FROM strategies WHERE id = ?",
+                (strategy_id,),
             ).fetchone()
             if not row:
                 return None
@@ -149,7 +155,9 @@ class StrategyPatcher:
         # Quality gate (medium tier)
         score, gate_model, accepted = self._quality_gate(patched_content, row["stage"])
         if not accepted:
-            logger.info("Patch rejected for strategy %d (score=%.2f)", strategy_id, score)
+            logger.info(
+                "Patch rejected for strategy %d (score=%.2f)", strategy_id, score
+            )
             return None
 
         # Create new version
@@ -182,10 +190,13 @@ Return JSON: {{"patched_content": "<updated markdown>"}}"""
         return content if content else raw.strip() if raw.strip() else ""
 
     def _quality_gate(
-        self, content: str, stage: str,
+        self,
+        content: str,
+        stage: str,
     ) -> tuple[float, str, bool]:
         """Quality gate for patched content (medium tier)."""
         from .prompts import quality_gate_prompt
+
         prompt = quality_gate_prompt(content, stage)
         client = _get_llm_client("medium")
         raw = _llm_chat(client, prompt)
@@ -212,8 +223,11 @@ Return JSON: {{"patched_content": "<updated markdown>"}}"""
         return overall, model_name, accepted
 
     def _create_new_version(
-        self, old_row: Any, new_content: str,
-        quality_score: float, gate_model: str,
+        self,
+        old_row: Any,
+        new_content: str,
+        quality_score: float,
+        gate_model: str,
     ) -> Strategy:
         """Create a new version of a strategy, superseding the old one."""
         conn = self._db.connect()
@@ -234,10 +248,17 @@ Return JSON: {{"patched_content": "<updated markdown>"}}"""
                     source_session_count, status)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
                 (
-                    old_row["stage"], old_row["strategy_key"], old_row["title"],
-                    new_content, old_row["scope"], old_row["topic_id"],
-                    new_version, quality_score, gate_model,
-                    old_row["source_lesson_ids"], old_row["source_session_count"],
+                    old_row["stage"],
+                    old_row["strategy_key"],
+                    old_row["title"],
+                    new_content,
+                    old_row["scope"],
+                    old_row["topic_id"],
+                    new_version,
+                    quality_score,
+                    gate_model,
+                    old_row["source_lesson_ids"],
+                    old_row["source_session_count"],
                 ),
             )
             new_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -284,7 +305,9 @@ Return JSON: {{"patched_content": "<updated markdown>"}}"""
 
             if promoted:
                 conn.commit()
-                logger.info("Promoted %d strategies from draft to active", len(promoted))
+                logger.info(
+                    "Promoted %d strategies from draft to active", len(promoted)
+                )
 
             return promoted
         finally:
@@ -305,8 +328,12 @@ Return JSON: {{"patched_content": "<updated markdown>"}}"""
                     "title": r["title"],
                     "injection_count": r["injection_count"],
                     "positive_feedback": r["positive_feedback"],
-                    "injections_needed": max(0, PROBATION_INJECTION_THRESHOLD - r["injection_count"]),
-                    "feedback_needed": max(0, PROBATION_POSITIVE_THRESHOLD - (r["positive_feedback"] or 0)),
+                    "injections_needed": max(
+                        0, PROBATION_INJECTION_THRESHOLD - r["injection_count"]
+                    ),
+                    "feedback_needed": max(
+                        0, PROBATION_POSITIVE_THRESHOLD - (r["positive_feedback"] or 0)
+                    ),
                 }
                 for r in rows
             ]

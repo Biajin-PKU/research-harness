@@ -45,6 +45,7 @@ PHASE_DESCRIPTIONS: dict[str, str] = {
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IntegrityFinding:
     """A single finding from one integrity phase."""
@@ -106,10 +107,7 @@ class IntegrityReport:
 
     @classmethod
     def from_payload(cls, p: dict[str, Any]) -> IntegrityReport:
-        findings = [
-            IntegrityFinding.from_dict(f)
-            for f in p.get("findings", [])
-        ]
+        findings = [IntegrityFinding.from_dict(f) for f in p.get("findings", [])]
         return cls(
             phases_completed=p.get("phases_completed", []),
             findings=findings,
@@ -124,6 +122,7 @@ class IntegrityReport:
 # ---------------------------------------------------------------------------
 # IntegrityVerifier
 # ---------------------------------------------------------------------------
+
 
 class IntegrityVerifier:
     """Runs the 5-phase integrity verification protocol."""
@@ -148,9 +147,7 @@ class IntegrityVerifier:
         Returns the IntegrityReport.
         """
         report = IntegrityReport()
-        external_findings = [
-            IntegrityFinding.from_dict(f) for f in (findings or [])
-        ]
+        external_findings = [IntegrityFinding.from_dict(f) for f in (findings or [])]
 
         # Phase 1: References — check citation papers exist in pool
         phase1_findings = self._check_references(project_id, topic_id, stage)
@@ -169,9 +166,7 @@ class IntegrityVerifier:
         report.phases_completed.append("statistical_data")
 
         # Phase 4: Originality — from external findings
-        phase4_findings = [
-            f for f in external_findings if f.phase == "originality"
-        ]
+        phase4_findings = [f for f in external_findings if f.phase == "originality"]
         report.phases_completed.append("originality")
 
         # Phase 5: Claims — check evidence links exist
@@ -264,6 +259,7 @@ class IntegrityVerifier:
                 return findings
 
             import json
+
             payload = json.loads(draft["payload_json"] or "{}")
             cited_ids = payload.get("cited_paper_ids", [])
             if not cited_ids:
@@ -275,14 +271,16 @@ class IntegrityVerifier:
                     "SELECT 1 FROM papers WHERE id = ?", (paper_id,)
                 ).fetchone()
                 if row is None:
-                    findings.append(IntegrityFinding(
-                        phase="references",
-                        severity="critical",
-                        category="citation",
-                        summary=f"Cited paper ID {paper_id} not found in paper pool",
-                        affected_artifact_type="paper",
-                        affected_artifact_id=str(paper_id),
-                    ))
+                    findings.append(
+                        IntegrityFinding(
+                            phase="references",
+                            severity="critical",
+                            category="citation",
+                            summary=f"Cited paper ID {paper_id} not found in paper pool",
+                            affected_artifact_type="paper",
+                            affected_artifact_id=str(paper_id),
+                        )
+                    )
         finally:
             conn.close()
         return findings
@@ -310,6 +308,7 @@ class IntegrityVerifier:
                 return findings
 
             import json
+
             payload = json.loads(evidence["payload_json"] or "{}")
             claims = payload.get("claims", [])
 
@@ -319,14 +318,16 @@ class IntegrityVerifier:
                 claim_id = claim.get("claim_id", claim.get("content", "")[:50])
                 evidence_links = claim.get("evidence_links", [])
                 if not evidence_links:
-                    findings.append(IntegrityFinding(
-                        phase="claims",
-                        severity="high",
-                        category="evidence",
-                        summary=f"Claim has no evidence links: {claim_id}",
-                        affected_artifact_type="claim",
-                        affected_artifact_id=str(claim_id),
-                    ))
+                    findings.append(
+                        IntegrityFinding(
+                            phase="claims",
+                            severity="high",
+                            category="evidence",
+                            summary=f"Claim has no evidence links: {claim_id}",
+                            affected_artifact_type="claim",
+                            affected_artifact_id=str(claim_id),
+                        )
+                    )
         finally:
             conn.close()
         return findings
@@ -335,6 +336,7 @@ class IntegrityVerifier:
 # ---------------------------------------------------------------------------
 # FinalizeManager
 # ---------------------------------------------------------------------------
+
 
 class FinalizeManager:
     """Produces the final bundle and process summary for the finalize stage."""
@@ -457,9 +459,7 @@ class FinalizeManager:
                 "resolved": issue_row["resolved"] if issue_row else 0,
                 "critical": issue_row["critical"] if issue_row else 0,
             },
-            "artifacts_by_stage": {
-                r["stage"]: r["cnt"] for r in artifact_counts
-            },
+            "artifacts_by_stage": {r["stage"]: r["cnt"] for r in artifact_counts},
             "provenance": {
                 "total_operations": prov_row["ops"] if prov_row else 0,
                 "total_cost_usd": float(prov_row["cost"]) if prov_row else 0.0,

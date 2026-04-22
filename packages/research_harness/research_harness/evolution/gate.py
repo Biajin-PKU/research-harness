@@ -60,7 +60,9 @@ class ValidationGate:
         from .experience import ExperienceRecord
 
         if not isinstance(record, ExperienceRecord):
-            return GateVerdict(verdict="rejected", score=0.0, reasoning="Invalid record type")
+            return GateVerdict(
+                verdict="rejected", score=0.0, reasoning="Invalid record type"
+            )
 
         # Human edits are always trusted
         if record.source_kind == "human_edit":
@@ -109,7 +111,11 @@ class ValidationGate:
             scores["quality_signal"] = 0.7  # neutral for non-gold
 
         # Composite score
-        weights = {"content_presence": 0.3, "source_reliability": 0.4, "quality_signal": 0.3}
+        weights = {
+            "content_presence": 0.3,
+            "source_reliability": 0.4,
+            "quality_signal": 0.3,
+        }
         composite = sum(scores.get(k, 0) * w for k, w in weights.items())
 
         if composite >= ACCEPT_THRESHOLD:

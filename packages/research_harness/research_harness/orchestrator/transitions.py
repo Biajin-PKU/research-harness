@@ -47,10 +47,14 @@ class TransitionValidator:
                         (project_id, *stage_names, artifact_type),
                     ).fetchone()
                     if row is None:
-                        return False, (
-                            f"Missing required artifact '{artifact_type}' "
-                            f"for stage '{from_stage}'"
-                        ), []
+                        return (
+                            False,
+                            (
+                                f"Missing required artifact '{artifact_type}' "
+                                f"for stage '{from_stage}'"
+                            ),
+                            [],
+                        )
             finally:
                 conn.close()
 
@@ -107,6 +111,7 @@ class GateEvaluator:
         blocking = [v for v in violations if is_blocking(v)]
         if blocking:
             import logging
+
             logger = logging.getLogger(__name__)
             for v in blocking:
                 logger.warning("Invariant violation: %s", v.message)
@@ -383,12 +388,14 @@ class GateEvaluator:
 
         # Check if this stage allows auto-resolution
         from ..auto_runner.stage_policy import get_policy
+
         policy = get_policy(stage)
         if policy and policy.risk_level == "high":
             # High-risk stages always need human even in autonomous mode
             return decision, False
 
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("Auto-resolving gate for stage %s: %s → pass", stage, decision)
         return "pass", True

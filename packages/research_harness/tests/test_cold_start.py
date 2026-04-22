@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import json
-
-import pytest
 
 from research_harness.evolution.cold_start import (
     ColdStartRunner,
     TemporalRelevance,
 )
 from research_harness.evolution.gold_selector import GoldSelector
-from research_harness.evolution.experience import ExperienceStore
 
 
 def _seed_papers(conn, topic_id: int = 1) -> list[int]:
@@ -76,7 +72,7 @@ class TestTemporalRelevance:
 class TestGoldSelector:
     def test_selects_high_quality_papers(self, db):
         conn = db.connect()
-        paper_ids = _seed_papers(conn)
+        _paper_ids = _seed_papers(conn)
         conn.close()
 
         selector = GoldSelector(db)
@@ -115,7 +111,7 @@ class TestGoldSelector:
 class TestColdStartRunner:
     def test_bootstrap_generates_experiences(self, db):
         conn = db.connect()
-        paper_ids = _seed_papers(conn)
+        _paper_ids = _seed_papers(conn)
         conn.close()
 
         runner = ColdStartRunner(db)

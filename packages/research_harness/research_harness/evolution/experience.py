@@ -16,7 +16,9 @@ from .store import DBLessonStore, Lesson
 
 logger = logging.getLogger(__name__)
 
-SOURCE_KINDS = frozenset({"human_edit", "self_review", "gold_comparison", "auto_extracted"})
+SOURCE_KINDS = frozenset(
+    {"human_edit", "self_review", "gold_comparison", "auto_extracted"}
+)
 
 _SOURCE_TO_LESSON_TYPE = {
     "human_edit": "tip",
@@ -98,7 +100,9 @@ class ExperienceStore:
                 stored = self.get(record_id)
                 if stored is not None:
                     verdict = self._gate.evaluate_tier1(stored)
-                    self.update_gate(record_id, verdict=verdict.verdict, score=verdict.score)
+                    self.update_gate(
+                        record_id, verdict=verdict.verdict, score=verdict.score
+                    )
                     gate_passed = verdict.verdict != "rejected"
             except Exception as exc:
                 logger.debug("Gate evaluation failed for record %d: %s", record_id, exc)
@@ -186,12 +190,16 @@ class ExperienceStore:
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         conn = self._db.connect()
         try:
-            row = conn.execute(f"SELECT COUNT(*) FROM experience_records{where}", params).fetchone()
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM experience_records{where}", params
+            ).fetchone()
             return int(row[0])
         finally:
             conn.close()
 
-    def update_gate(self, record_id: int, *, verdict: str, score: float | None = None) -> None:
+    def update_gate(
+        self, record_id: int, *, verdict: str, score: float | None = None
+    ) -> None:
         conn = self._db.connect()
         try:
             conn.execute(
@@ -210,7 +218,9 @@ class ExperienceStore:
             stage=record.stage,
             content=content,
             lesson_type=_SOURCE_TO_LESSON_TYPE.get(record.source_kind, "observation"),
-            tags=[record.source_kind, record.section] if record.section else [record.source_kind],
+            tags=[record.source_kind, record.section]
+            if record.section
+            else [record.source_kind],
         )
         return self._lesson_store.append(
             lesson,

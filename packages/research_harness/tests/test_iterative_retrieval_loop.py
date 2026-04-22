@@ -6,7 +6,6 @@ can be driven deterministically without hitting the LLM or external providers.
 
 from __future__ import annotations
 
-from dataclasses import replace
 
 import pytest
 
@@ -37,21 +36,29 @@ def _insert_topic(db, name: str = "t1") -> int:
     conn = db.connect()
     try:
         conn.execute("INSERT INTO topics (name) VALUES (?)", (name,))
-        tid = int(conn.execute("SELECT id FROM topics WHERE name = ?", (name,)).fetchone()["id"])
+        tid = int(
+            conn.execute("SELECT id FROM topics WHERE name = ?", (name,)).fetchone()[
+                "id"
+            ]
+        )
         conn.commit()
         return tid
     finally:
         conn.close()
 
 
-def _insert_paper_into_pool(db, *, arxiv_id: str = "", doi: str = "", topic_id: int | None = None) -> int:
+def _insert_paper_into_pool(
+    db, *, arxiv_id: str = "", doi: str = "", topic_id: int | None = None
+) -> int:
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO papers (title, arxiv_id, doi, s2_id) VALUES (?, ?, ?, NULL)",
             (f"Pool paper {arxiv_id or doi}", arxiv_id or None, doi or None),
         )
-        paper_id = int(conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"])
+        paper_id = int(
+            conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+        )
         if topic_id is not None:
             conn.execute(
                 "INSERT INTO paper_topics (paper_id, topic_id, relevance) VALUES (?, ?, 'medium')",
@@ -84,7 +91,9 @@ class _StubScript:
         entries = self.rounds[self.round_idx]
         self.query_to_refs = {q: refs for q, refs in entries}
         return [
-            QueryCandidate(query=q, rationale=f"round-{self.round_idx}", priority="high")
+            QueryCandidate(
+                query=q, rationale=f"round-{self.round_idx}", priority="high"
+            )
             for q, _ in entries
         ]
 
@@ -125,7 +134,9 @@ def _install_stubs(monkeypatch, script: _StubScript, topic_id: int, db):
                     "INSERT INTO papers (title, arxiv_id, doi, s2_id) VALUES (?, ?, NULL, NULL)",
                     (f"Ingested {source}", source),
                 )
-            paper_id = int(conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"])
+            paper_id = int(
+                conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+            )
             if topic_id is not None:
                 conn.execute(
                     "INSERT INTO paper_topics (paper_id, topic_id, relevance) VALUES (?, ?, 'medium')",
@@ -164,34 +175,62 @@ def test_two_round_convergence(db, monkeypatch) -> None:
 
     # Round 1: two queries, each finds 3 fresh papers (overlap=0)
     round1 = [
-        ("query alpha", [_mk_ref(arxiv_id="2301.0001"), _mk_ref(arxiv_id="2301.0002"), _mk_ref(arxiv_id="2301.0003")]),
-        ("query beta",  [_mk_ref(arxiv_id="2301.0004"), _mk_ref(arxiv_id="2301.0005"), _mk_ref(arxiv_id="2301.0006")]),
+        (
+            "query alpha",
+            [
+                _mk_ref(arxiv_id="2301.0001"),
+                _mk_ref(arxiv_id="2301.0002"),
+                _mk_ref(arxiv_id="2301.0003"),
+            ],
+        ),
+        (
+            "query beta",
+            [
+                _mk_ref(arxiv_id="2301.0004"),
+                _mk_ref(arxiv_id="2301.0005"),
+                _mk_ref(arxiv_id="2301.0006"),
+            ],
+        ),
     ]
     # Round 2: two NEW queries but the hits are mostly existing papers
     round2 = [
-        ("query gamma", [
-            _mk_ref(arxiv_id="2301.0001"),  # existing
-            _mk_ref(arxiv_id="2301.0002"),  # existing
-            _mk_ref(arxiv_id="2301.0003"),  # existing
-            _mk_ref(arxiv_id="2301.0004"),  # existing
-        ]),
-        ("query delta", [
-            _mk_ref(arxiv_id="2301.0005"),  # existing
-            _mk_ref(arxiv_id="2301.0006"),  # existing
-            _mk_ref(arxiv_id="2301.0099"),  # new (1 of 7 total = low ratio, but within floor)
-        ]),
+        (
+            "query gamma",
+            [
+                _mk_ref(arxiv_id="2301.0001"),  # existing
+                _mk_ref(arxiv_id="2301.0002"),  # existing
+                _mk_ref(arxiv_id="2301.0003"),  # existing
+                _mk_ref(arxiv_id="2301.0004"),  # existing
+            ],
+        ),
+        (
+            "query delta",
+            [
+                _mk_ref(arxiv_id="2301.0005"),  # existing
+                _mk_ref(arxiv_id="2301.0006"),  # existing
+                _mk_ref(
+                    arxiv_id="2301.0099"
+                ),  # new (1 of 7 total = low ratio, but within floor)
+            ],
+        ),
     ]
     # Round 3: same as round 2, nearly-all duplicates — second converged round
     round3 = [
-        ("query epsilon", [
-            _mk_ref(arxiv_id="2301.0001"),
-            _mk_ref(arxiv_id="2301.0002"),
-            _mk_ref(arxiv_id="2301.0003"),
-        ]),
-        ("query zeta", [
-            _mk_ref(arxiv_id="2301.0004"),
-            _mk_ref(arxiv_id="2301.0005"),
-        ]),
+        (
+            "query epsilon",
+            [
+                _mk_ref(arxiv_id="2301.0001"),
+                _mk_ref(arxiv_id="2301.0002"),
+                _mk_ref(arxiv_id="2301.0003"),
+            ],
+        ),
+        (
+            "query zeta",
+            [
+                _mk_ref(arxiv_id="2301.0004"),
+                _mk_ref(arxiv_id="2301.0005"),
+            ],
+        ),
     ]
 
     script = _StubScript([round1, round2, round3])
@@ -231,14 +270,19 @@ def test_two_round_convergence(db, monkeypatch) -> None:
 def test_query_exhaustion_stops_loop(db, monkeypatch) -> None:
     """When query_refine returns no fresh queries, loop stops."""
     topic_id = _insert_topic(db)
-    script = _StubScript([
-        [("q1", [_mk_ref(arxiv_id="2401.0001")])],
-        [],  # round 2: nothing fresh
-    ])
+    script = _StubScript(
+        [
+            [("q1", [_mk_ref(arxiv_id="2401.0001")])],
+            [],  # round 2: nothing fresh
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=5, queries_per_round=2,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=5,
+        queries_per_round=2,
     )
     assert result.stop_reason == "query_refine_exhausted"
     assert result.rounds_run == 1
@@ -249,17 +293,27 @@ def test_dedup_on_identity_key(db, monkeypatch) -> None:
     """Same paper returned twice (once by arxiv, once by doi) counts once."""
     topic_id = _insert_topic(db)
     # Two PaperRefs with the same arxiv_id: should dedup to 1
-    script = _StubScript([
-        [("q1", [
-            _mk_ref(arxiv_id="2501.0001"),
-            _mk_ref(arxiv_id="2501.0001"),  # duplicate
-            _mk_ref(arxiv_id="2501.0002"),
-        ])],
-    ])
+    script = _StubScript(
+        [
+            [
+                (
+                    "q1",
+                    [
+                        _mk_ref(arxiv_id="2501.0001"),
+                        _mk_ref(arxiv_id="2501.0001"),  # duplicate
+                        _mk_ref(arxiv_id="2501.0002"),
+                    ],
+                )
+            ],
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=1, queries_per_round=2,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=1,
+        queries_per_round=2,
     )
     assert result.rounds_run == 1
     assert result.rounds[0].total_hits == 3
@@ -270,17 +324,27 @@ def test_dedup_on_identity_key(db, monkeypatch) -> None:
 def test_papers_without_identity_are_dropped(db, monkeypatch) -> None:
     """PaperRefs with no arxiv_id/doi/s2_id are excluded from overlap check."""
     topic_id = _insert_topic(db)
-    script = _StubScript([
-        [("q1", [
-            _mk_ref(arxiv_id="2501.0001"),
-            _mk_ref(title="No identifier paper"),  # dropped
-            _mk_ref(doi="10.1/xyz"),
-        ])],
-    ])
+    script = _StubScript(
+        [
+            [
+                (
+                    "q1",
+                    [
+                        _mk_ref(arxiv_id="2501.0001"),
+                        _mk_ref(title="No identifier paper"),  # dropped
+                        _mk_ref(doi="10.1/xyz"),
+                    ],
+                )
+            ],
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=1, queries_per_round=2,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=1,
+        queries_per_round=2,
     )
     assert result.rounds[0].total_hits == 3
     assert result.rounds[0].dedup_hits == 2  # dropped the identifier-less one
@@ -292,16 +356,21 @@ def test_empty_query_not_counted_in_overlap(db, monkeypatch) -> None:
     # Pre-populate pool with one paper so the real query has 100% overlap
     _insert_paper_into_pool(db, arxiv_id="2301.0100", topic_id=topic_id)
 
-    script = _StubScript([
+    script = _StubScript(
         [
-            ("dead query", []),  # zero hits — must not make mean look 0%
-            ("real query", [_mk_ref(arxiv_id="2301.0100")]),  # existing
-        ],
-    ])
+            [
+                ("dead query", []),  # zero hits — must not make mean look 0%
+                ("real query", [_mk_ref(arxiv_id="2301.0100")]),  # existing
+            ],
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=1, queries_per_round=2,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=1,
+        queries_per_round=2,
     )
     # real query overlap = 1.0 (1/1), dead query excluded → mean = 1.0
     assert result.per_round_mean_overlap[0] == pytest.approx(1.0)
@@ -312,16 +381,26 @@ def test_existing_papers_not_reingested(db, monkeypatch) -> None:
     topic_id = _insert_topic(db)
     _insert_paper_into_pool(db, arxiv_id="2301.9999", topic_id=topic_id)
 
-    script = _StubScript([
-        [("q1", [
-            _mk_ref(arxiv_id="2301.9999"),  # already in pool
-            _mk_ref(arxiv_id="2301.0001"),  # new
-        ])],
-    ])
+    script = _StubScript(
+        [
+            [
+                (
+                    "q1",
+                    [
+                        _mk_ref(arxiv_id="2301.9999"),  # already in pool
+                        _mk_ref(arxiv_id="2301.0001"),  # new
+                    ],
+                )
+            ],
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=1, queries_per_round=2,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=1,
+        queries_per_round=2,
     )
     assert result.rounds[0].existing_hits == 1
     assert result.rounds[0].new_papers_added == 1
@@ -341,17 +420,22 @@ def test_known_queries_filtered(db, monkeypatch) -> None:
     finally:
         conn.close()
 
-    script = _StubScript([
+    script = _StubScript(
         [
-            ("q1", [_mk_ref(arxiv_id="2301.0001")]),  # already known — skipped
-            ("q2", [_mk_ref(arxiv_id="2301.0002")]),  # fresh
-        ],
-        [],  # stop after round 1
-    ])
+            [
+                ("q1", [_mk_ref(arxiv_id="2301.0001")]),  # already known — skipped
+                ("q2", [_mk_ref(arxiv_id="2301.0002")]),  # fresh
+            ],
+            [],  # stop after round 1
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     result = llm_primitives.iterative_retrieval_loop(
-        db=db, topic_id=topic_id, max_rounds=3, queries_per_round=4,
+        db=db,
+        topic_id=topic_id,
+        max_rounds=3,
+        queries_per_round=4,
     )
     # Only q2 actually ran
     assert result.total_new_papers == 1
@@ -362,15 +446,17 @@ def test_known_queries_filtered(db, monkeypatch) -> None:
 def test_cost_budget_stops_loop(db, monkeypatch) -> None:
     """If budget_per_new_paper_usd is exceeded, loop stops with cost_budget_exceeded."""
     topic_id = _insert_topic(db)
-    script = _StubScript([
-        [("q1", [_mk_ref(arxiv_id="2301.0001")])],
-        [("q2", [_mk_ref(arxiv_id="2301.0002")])],
-    ])
+    script = _StubScript(
+        [
+            [("q1", [_mk_ref(arxiv_id="2301.0001")])],
+            [("q2", [_mk_ref(arxiv_id="2301.0002")])],
+        ]
+    )
     _install_stubs(monkeypatch, script, topic_id, db)
 
     # Force the token accumulator to reflect a huge cost before each round so
     # cost_per_new_paper will trigger
-    original_accumulated = llm_primitives._accumulated_tokens
+    _original_accumulated = llm_primitives._accumulated_tokens
 
     def _fake_accum():
         return (100_000_000, 50_000_000)  # ~$50 + $75 = $125

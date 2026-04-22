@@ -27,7 +27,10 @@ Return JSON: {{"themes": [...]}}"""
 
 
 def distill_strategy_prompt(
-    stage: str, theme_key: str, theme_title: str, theme_summary: str,
+    stage: str,
+    theme_key: str,
+    theme_title: str,
+    theme_summary: str,
     supporting_evidence: str,
 ) -> str:
     """Prompt to distill a theme into an actionable strategy."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Protocol
+from typing import Protocol
 
 from ..storage.db import Database
 from .models import GateDecision, StageName
@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 class IGateEvaluator(Protocol):
     """Protocol for gate evaluators."""
 
-    def evaluate(self, db: Database, project_id: int, stage: StageName) -> GateDecision: ...
+    def evaluate(
+        self, db: Database, project_id: int, stage: StageName
+    ) -> GateDecision: ...
 
 
 class CoverageGateEvaluator:
@@ -44,7 +46,10 @@ class CoverageGateEvaluator:
                 if row is None:
                     return "needs_coverage"
 
-            if min_papers > 0 and stage in ("literature_mapping", "evidence_structuring"):
+            if min_papers > 0 and stage in (
+                "literature_mapping",
+                "evidence_structuring",
+            ):
                 row = conn.execute(
                     """
                     SELECT COUNT(*) as cnt FROM papers p

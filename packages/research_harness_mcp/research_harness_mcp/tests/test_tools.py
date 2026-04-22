@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -65,14 +62,26 @@ def test_tool_definitions_have_schemas() -> None:
 # HarnessResponse envelope — all tool results now have these keys
 # ---------------------------------------------------------------------------
 
-ENVELOPE_KEYS = {"status", "summary", "output", "next_actions", "artifacts",
-                 "recovery_hint", "primitive", "backend", "model_used", "cost_usd",
-                 "session_advisory"}
+ENVELOPE_KEYS = {
+    "status",
+    "summary",
+    "output",
+    "next_actions",
+    "artifacts",
+    "recovery_hint",
+    "primitive",
+    "backend",
+    "model_used",
+    "cost_usd",
+    "session_advisory",
+}
 
 
 def _assert_envelope(result: dict) -> None:
     """Assert result conforms to HarnessResponse envelope."""
-    assert ENVELOPE_KEYS.issubset(result.keys()), f"Missing keys: {ENVELOPE_KEYS - result.keys()}"
+    assert ENVELOPE_KEYS.issubset(result.keys()), (
+        f"Missing keys: {ENVELOPE_KEYS - result.keys()}"
+    )
     assert result["status"] in ("success", "error", "warning")
     assert isinstance(result["summary"], str)
     assert isinstance(result["next_actions"], list)
@@ -181,7 +190,9 @@ def test_provenance_export(db: Database) -> None:
             ("prov-topic", "topic for provenance export", "active"),
         )
         conn.commit()
-        topic_id = conn.execute("SELECT id FROM topics WHERE name = ?", ("prov-topic",)).fetchone()[0]
+        topic_id = conn.execute(
+            "SELECT id FROM topics WHERE name = ?", ("prov-topic",)
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -314,7 +325,9 @@ def test_orchestrator_stale_artifact_tools(db: Database) -> None:
     assert listed["output"]["count"] == 1
     assert listed["output"]["artifacts"][0]["id"] == artifact_id
 
-    cleared = execute_tool("orchestrator_clear_artifact_stale", {"artifact_id": artifact_id})
+    cleared = execute_tool(
+        "orchestrator_clear_artifact_stale", {"artifact_id": artifact_id}
+    )
     _assert_envelope(cleared)
     assert cleared["output"]["success"] is True
 

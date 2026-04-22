@@ -19,45 +19,131 @@ logger = logging.getLogger(__name__)
 
 # -- Security rules -----------------------------------------------------------
 
-DANGEROUS_CALLS: frozenset[str] = frozenset({
-    "os.system", "os.exec", "os.execl", "os.execle", "os.execlp",
-    "os.execv", "os.execve", "os.execvp", "os.execvpe",
-    "os.popen", "os.remove", "os.unlink", "os.rmdir",
-    "subprocess.call", "subprocess.run", "subprocess.Popen",
-    "subprocess.check_call", "subprocess.check_output",
-    "shutil.rmtree",
-})
+DANGEROUS_CALLS: frozenset[str] = frozenset(
+    {
+        "os.system",
+        "os.exec",
+        "os.execl",
+        "os.execle",
+        "os.execlp",
+        "os.execv",
+        "os.execve",
+        "os.execvp",
+        "os.execvpe",
+        "os.popen",
+        "os.remove",
+        "os.unlink",
+        "os.rmdir",
+        "subprocess.call",
+        "subprocess.run",
+        "subprocess.Popen",
+        "subprocess.check_call",
+        "subprocess.check_output",
+        "shutil.rmtree",
+    }
+)
 
-DANGEROUS_BUILTINS: frozenset[str] = frozenset({
-    "eval", "exec", "compile", "__import__",
-})
+DANGEROUS_BUILTINS: frozenset[str] = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+    }
+)
 
-BANNED_MODULES: frozenset[str] = frozenset({
-    "subprocess", "shutil", "socket", "http", "urllib",
-    "requests", "ftplib", "smtplib", "ctypes", "signal",
-})
+BANNED_MODULES: frozenset[str] = frozenset(
+    {
+        "subprocess",
+        "shutil",
+        "socket",
+        "http",
+        "urllib",
+        "requests",
+        "ftplib",
+        "smtplib",
+        "ctypes",
+        "signal",
+    }
+)
 
-SAFE_STDLIB: frozenset[str] = frozenset({
-    "os", "sys", "math", "json", "re", "time", "pathlib",
-    "csv", "pickle", "dataclasses", "logging", "contextlib",
-    "functools", "itertools", "collections", "typing", "enum",
-    "abc", "copy", "random", "statistics", "datetime",
-    "argparse", "configparser", "io", "hashlib", "glob",
-    "tempfile", "textwrap", "warnings", "traceback",
-})
+SAFE_STDLIB: frozenset[str] = frozenset(
+    {
+        "os",
+        "sys",
+        "math",
+        "json",
+        "re",
+        "time",
+        "pathlib",
+        "csv",
+        "pickle",
+        "dataclasses",
+        "logging",
+        "contextlib",
+        "functools",
+        "itertools",
+        "collections",
+        "typing",
+        "enum",
+        "abc",
+        "copy",
+        "random",
+        "statistics",
+        "datetime",
+        "argparse",
+        "configparser",
+        "io",
+        "hashlib",
+        "glob",
+        "tempfile",
+        "textwrap",
+        "warnings",
+        "traceback",
+    }
+)
 
-COMMON_SCIENCE: frozenset[str] = frozenset({
-    "numpy", "np", "pandas", "pd", "scipy", "sklearn",
-    "matplotlib", "plt", "seaborn", "sns",
-    "torch", "torchvision", "torchaudio",
-    "tensorflow", "tf", "keras",
-    "transformers", "datasets", "tokenizers", "accelerate",
-    "tqdm", "wandb", "tensorboard",
-    "gym", "gymnasium", "stable_baselines3",
-    "PIL", "cv2", "einops", "flash_attn",
-    "peft", "bitsandbytes", "safetensors",
-    "yaml", "pyyaml", "toml", "rich",
-})
+COMMON_SCIENCE: frozenset[str] = frozenset(
+    {
+        "numpy",
+        "np",
+        "pandas",
+        "pd",
+        "scipy",
+        "sklearn",
+        "matplotlib",
+        "plt",
+        "seaborn",
+        "sns",
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "tensorflow",
+        "tf",
+        "keras",
+        "transformers",
+        "datasets",
+        "tokenizers",
+        "accelerate",
+        "tqdm",
+        "wandb",
+        "tensorboard",
+        "gym",
+        "gymnasium",
+        "stable_baselines3",
+        "PIL",
+        "cv2",
+        "einops",
+        "flash_attn",
+        "peft",
+        "bitsandbytes",
+        "safetensors",
+        "yaml",
+        "pyyaml",
+        "toml",
+        "rich",
+    }
+)
 
 
 # -- Data structures ----------------------------------------------------------
@@ -105,43 +191,51 @@ class _SecurityVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         func_name = self._get_call_name(node)
         if func_name in DANGEROUS_CALLS:
-            self.issues.append(ValidationIssue(
-                severity="error",
-                category="security",
-                message=f"Dangerous call: {func_name}",
-                line=node.lineno,
-            ))
+            self.issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="security",
+                    message=f"Dangerous call: {func_name}",
+                    line=node.lineno,
+                )
+            )
         if func_name in DANGEROUS_BUILTINS:
-            self.issues.append(ValidationIssue(
-                severity="error",
-                category="security",
-                message=f"Dangerous builtin: {func_name}",
-                line=node.lineno,
-            ))
+            self.issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="security",
+                    message=f"Dangerous builtin: {func_name}",
+                    line=node.lineno,
+                )
+            )
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             mod = alias.name.split(".")[0]
             if mod in BANNED_MODULES:
-                self.issues.append(ValidationIssue(
-                    severity="error",
-                    category="security",
-                    message=f"Banned module: {mod}",
-                    line=node.lineno,
-                ))
+                self.issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        category="security",
+                        message=f"Banned module: {mod}",
+                        line=node.lineno,
+                    )
+                )
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module:
             mod = node.module.split(".")[0]
             if mod in BANNED_MODULES:
-                self.issues.append(ValidationIssue(
-                    severity="error",
-                    category="security",
-                    message=f"Banned module: {mod}",
-                    line=node.lineno,
-                ))
+                self.issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        category="security",
+                        message=f"Banned module: {mod}",
+                        line=node.lineno,
+                    )
+                )
         self.generic_visit(node)
 
     @staticmethod
@@ -160,12 +254,14 @@ def validate_syntax(code: str) -> list[ValidationIssue]:
         ast.parse(code)
         return []
     except SyntaxError as exc:
-        return [ValidationIssue(
-            severity="error",
-            category="syntax",
-            message=str(exc),
-            line=exc.lineno,
-        )]
+        return [
+            ValidationIssue(
+                severity="error",
+                category="syntax",
+                message=str(exc),
+                line=exc.lineno,
+            )
+        ]
 
 
 def validate_security(code: str) -> list[ValidationIssue]:
@@ -192,21 +288,25 @@ def validate_imports(code: str) -> list[ValidationIssue]:
             for alias in node.names:
                 mod = alias.name.split(".")[0]
                 if mod not in known and mod not in BANNED_MODULES:
-                    issues.append(ValidationIssue(
+                    issues.append(
+                        ValidationIssue(
+                            severity="warning",
+                            category="import",
+                            message=f"Unknown package: {mod} (may need pip install)",
+                            line=node.lineno,
+                        )
+                    )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            mod = node.module.split(".")[0]
+            if mod not in known and mod not in BANNED_MODULES:
+                issues.append(
+                    ValidationIssue(
                         severity="warning",
                         category="import",
                         message=f"Unknown package: {mod} (may need pip install)",
                         line=node.lineno,
-                    ))
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            mod = node.module.split(".")[0]
-            if mod not in known and mod not in BANNED_MODULES:
-                issues.append(ValidationIssue(
-                    severity="warning",
-                    category="import",
-                    message=f"Unknown package: {mod} (may need pip install)",
-                    line=node.lineno,
-                ))
+                    )
+                )
     return issues
 
 
@@ -251,7 +351,9 @@ def auto_fix_unbound_locals(code: str) -> tuple[str, int]:
                 line = lines[node.lineno - 1]
                 indent = line[: len(line) - len(line.lstrip())]
                 for var in sorted(if_assigns):
-                    init_line = f"{indent}{var} = None  # auto-fix: initialize before if\n"
+                    init_line = (
+                        f"{indent}{var} = None  # auto-fix: initialize before if\n"
+                    )
                     lines.insert(node.lineno - 1, init_line)
                     fixes += 1
 

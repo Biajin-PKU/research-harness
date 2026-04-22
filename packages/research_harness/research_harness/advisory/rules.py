@@ -81,7 +81,10 @@ class AdvisoryEngine:
                 level="info",
                 category="coverage_low",
                 message=f"Topic has only {count} papers; recommended minimum is {DEFAULT_MIN_PAPER_COUNT} before deeper analysis.",
-                details={"paper_count": count, "recommended_minimum": DEFAULT_MIN_PAPER_COUNT},
+                details={
+                    "paper_count": count,
+                    "recommended_minimum": DEFAULT_MIN_PAPER_COUNT,
+                },
             )
         ]
 
@@ -134,7 +137,9 @@ class AdvisoryEngine:
                 parsed = json.loads(row["authors"]) if row["authors"] else []
             except (TypeError, json.JSONDecodeError):
                 parsed = []
-            authors.extend(str(author).strip() for author in parsed if str(author).strip())
+            authors.extend(
+                str(author).strip() for author in parsed if str(author).strip()
+            )
         if len(authors) < 6:
             return []
         counts = Counter(authors)
@@ -149,11 +154,17 @@ class AdvisoryEngine:
                 level="info",
                 category="source_bias",
                 message=f"Author concentration is high: {top_author} appears in {share:.0%} of author slots.",
-                details={"top_author": top_author, "share": round(share, 3), "author_slots": len(authors)},
+                details={
+                    "top_author": top_author,
+                    "share": round(share, 3),
+                    "author_slots": len(authors),
+                },
             )
         ]
 
-    def _dependency_stale(self, topic_id: int, project_id: int | None) -> list[Advisory]:
+    def _dependency_stale(
+        self, topic_id: int, project_id: int | None
+    ) -> list[Advisory]:
         if project_id is None:
             return []
         conn = self._db.connect()
@@ -240,7 +251,9 @@ class AdvisoryEngine:
             )
         ]
 
-    def _claim_contradiction(self, topic_id: int, project_id: int | None) -> list[Advisory]:
+    def _claim_contradiction(
+        self, topic_id: int, project_id: int | None
+    ) -> list[Advisory]:
         conn = self._db.connect()
         try:
             rows = conn.execute(

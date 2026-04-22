@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ..primitives.registry import get_primitive_impl, get_primitive_spec, list_primitives
+from ..primitives.registry import (
+    get_primitive_impl,
+    get_primitive_spec,
+    list_primitives,
+)
 from ..primitives.types import PrimitiveResult
 from .backend import BackendInfo
 

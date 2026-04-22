@@ -53,10 +53,15 @@ _LLM_DISPATCH: dict[str, PrimitiveImpl] = {
     "algorithm_design_loop": llm_primitives.algorithm_design_loop,
 }
 
+
 def _writing_skill_aggregate_impl(
-    *, db: Database, min_papers: int = 10, **_: Any,
+    *,
+    db: Database,
+    min_papers: int = 10,
+    **_: Any,
 ) -> Any:
     from ..evolution.writing_skill import WritingSkillAggregator
+
     return WritingSkillAggregator(db).aggregate(min_papers=min_papers)
 
 
@@ -94,31 +99,47 @@ def _load_local_dispatch() -> None:
     if _LOCAL_DISPATCH:
         return
     _LOCAL_NAMES = (
-        "paper_search", "paper_ingest", "get_deep_reading", "enrich_affiliations",
+        "paper_search",
+        "paper_ingest",
+        "get_deep_reading",
+        "enrich_affiliations",
         # Project-level config (no LLM)
-        "project_set_contributions", "project_get_contributions",
+        "project_set_contributions",
+        "project_get_contributions",
         # Citation expansion (S2 API, no LLM)
-        "select_seeds", "expand_citations",
+        "select_seeds",
+        "expand_citations",
         # Acquisition (no LLM)
         "paper_acquire",
         # Experiment primitives (registered via @register_primitive in experiment_impls)
-        "code_validate", "experiment_run", "verified_registry_build", "verified_registry_check",
+        "code_validate",
+        "experiment_run",
+        "verified_registry_build",
+        "verified_registry_check",
         # Phase 2 analysis (no LLM)
-        "reading_prioritize", "experiment_design_checklist",
-        "dataset_index", "author_coverage",
+        "reading_prioritize",
+        "experiment_design_checklist",
+        "dataset_index",
+        "author_coverage",
         # Phase 3 (no LLM)
         "metrics_aggregate",
         # Phase 4 (no LLM)
-        "topic_export", "visualize_topic",
+        "topic_export",
+        "visualize_topic",
         # Write-stage integrity (no LLM)
-        "paper_verify_numbers", "citation_verify", "evidence_trace",
+        "paper_verify_numbers",
+        "citation_verify",
+        "evidence_trace",
         # Evolution (manages own LLM calls)
-        "strategy_distill", "strategy_inject",
-        "experiment_log", "meta_reflect",
+        "strategy_distill",
+        "strategy_inject",
+        "experiment_log",
+        "meta_reflect",
         # Cold start protocol (no LLM — orchestrates other primitives)
         "cold_start_run",
         # LaTeX compilation (pure local)
-        "latex_compile", "paper_finalize",
+        "latex_compile",
+        "paper_finalize",
     )
     for name in _LOCAL_NAMES:
         impl = get_primitive_impl(name)
@@ -136,7 +157,10 @@ class ResearchHarnessBackend:
         self._llm_config = resolve_llm_config()
         self._provider = self._llm_config.provider
         self._model = self._llm_config.model
-        self._has_api_key = bool(self._llm_config.api_key) or self._provider in ("cursor_agent", "codex")
+        self._has_api_key = bool(self._llm_config.api_key) or self._provider in (
+            "cursor_agent",
+            "codex",
+        )
 
     def execute(self, primitive: str, **kwargs: Any) -> PrimitiveResult:
         if self._db is None:
@@ -223,9 +247,13 @@ class ResearchHarnessBackend:
         try:
             output = impl(db=db, **call_kwargs)
             finished = _utc_now()
-            model_used = getattr(output, "model_used", "") or (self._model if spec.requires_llm else "none")
+            model_used = getattr(output, "model_used", "") or (
+                self._model if spec.requires_llm else "none"
+            )
             prompt_tokens, completion_tokens = (
-                llm_primitives._accumulated_tokens() if spec.requires_llm else (None, None)
+                llm_primitives._accumulated_tokens()
+                if spec.requires_llm
+                else (None, None)
             )
             return PrimitiveResult(
                 primitive=primitive,
@@ -242,7 +270,9 @@ class ResearchHarnessBackend:
         except Exception as exc:
             finished = _utc_now()
             prompt_tokens, completion_tokens = (
-                llm_primitives._accumulated_tokens() if spec.requires_llm else (None, None)
+                llm_primitives._accumulated_tokens()
+                if spec.requires_llm
+                else (None, None)
             )
             return PrimitiveResult(
                 primitive=primitive,

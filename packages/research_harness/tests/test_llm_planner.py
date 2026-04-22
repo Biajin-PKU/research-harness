@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from research_harness.auto_runner.llm_planner import (
     _call_planner_llm,
-    _gather_artifact_payload,
     _gather_topic_meta,
     _get_paper_count,
     _get_top_papers,
@@ -51,8 +48,15 @@ def _add_papers(db: Database, topic_id: int, n: int = 5) -> list[int]:
             cur = conn.execute(
                 "INSERT INTO papers (title, year, venue, citation_count, s2_id, doi, arxiv_id) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (f"Paper {i}", 2024, "NeurIPS", 100 - i * 10,
-                 f"s2_{topic_id}_{i}", f"10.1234/{topic_id}.{i}", f"2401.{topic_id:02d}{i:03d}"),
+                (
+                    f"Paper {i}",
+                    2024,
+                    "NeurIPS",
+                    100 - i * 10,
+                    f"s2_{topic_id}_{i}",
+                    f"10.1234/{topic_id}.{i}",
+                    f"2401.{topic_id:02d}{i:03d}",
+                ),
             )
             pid = cur.lastrowid
             ids.append(pid)
@@ -107,8 +111,12 @@ class TestPlanStageDispatch:
         db = _make_db(tmp_path)
         svc = MagicMock()
         result = plan_stage(
-            db=db, svc=svc, project_id=1, topic_id=1,
-            stage="init", checkpoint_data={},
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="init",
+            checkpoint_data={},
         )
         assert result["topic_description"]
         assert result["query"]
@@ -118,8 +126,12 @@ class TestPlanStageDispatch:
         db = _make_db(tmp_path)
         svc = MagicMock()
         result = plan_stage(
-            db=db, svc=svc, project_id=1, topic_id=1,
-            stage="unknown_stage", checkpoint_data={},
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="unknown_stage",
+            checkpoint_data={},
         )
         assert result == {}
 
@@ -130,8 +142,12 @@ class TestPlanStageDispatch:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = plan_stage(
-            db=db, svc=svc, project_id=1, topic_id=1,
-            stage="build", checkpoint_data={},
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="build",
+            checkpoint_data={},
         )
         assert result == {}
 
@@ -141,8 +157,12 @@ class TestPlanStageDispatch:
         db = _make_db(tmp_path)
         svc = MagicMock()
         result = plan_stage(
-            db=db, svc=svc, project_id=42, topic_id=1,
-            stage="build", checkpoint_data={},
+            db=db,
+            svc=svc,
+            project_id=42,
+            topic_id=1,
+            stage="build",
+            checkpoint_data={},
         )
         assert result["project_id"] == 42
 
@@ -163,7 +183,10 @@ class TestPlanBuild:
         }
         db = _make_db(tmp_path)
         result = _plan_build(
-            db=db, svc=MagicMock(), project_id=1, topic_id=1,
+            db=db,
+            svc=MagicMock(),
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert result["query"] == "multimodal time series forecasting"
@@ -175,7 +198,10 @@ class TestPlanBuild:
         mock_llm.return_value = {}
         db = _make_db(tmp_path)
         result = _plan_build(
-            db=db, svc=MagicMock(), project_id=1, topic_id=1,
+            db=db,
+            svc=MagicMock(),
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert result["query"]  # falls back to topic description
@@ -193,7 +219,10 @@ class TestPlanAnalyze:
             "focus": "cross-modal attention mechanisms",
         }
         result = _plan_analyze(
-            db=db, svc=MagicMock(), project_id=1, topic_id=1,
+            db=db,
+            svc=MagicMock(),
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert len(result["paper_ids"]) == 5
@@ -202,10 +231,13 @@ class TestPlanAnalyze:
     @patch("research_harness.auto_runner.llm_planner._call_planner_llm")
     def test_fallback_on_empty_paper_ids(self, mock_llm, tmp_path):
         db = _make_db(tmp_path)
-        paper_ids = _add_papers(db, 1, n=10)
+        _paper_ids = _add_papers(db, 1, n=10)
         mock_llm.return_value = {}
         result = _plan_analyze(
-            db=db, svc=MagicMock(), project_id=1, topic_id=1,
+            db=db,
+            svc=MagicMock(),
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert len(result["paper_ids"]) > 0
@@ -224,7 +256,10 @@ class TestPlanPropose:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_propose(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert result["artifact_type"] == "direction_proposal"
@@ -242,7 +277,10 @@ class TestPlanExperiment:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_experiment(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert result["study_spec"] == "Implement ModalGate with 6 experiment groups"
@@ -256,14 +294,22 @@ class TestPlanWrite:
             "venue": "KDD",
             "contributions": "We propose ModalGate...",
             "outline": "1. Intro 2. Related 3. Method 4. Experiments 5. Conclusion",
-            "sections_to_draft": ["introduction", "related_work", "method",
-                                   "experiments", "conclusion"],
+            "sections_to_draft": [
+                "introduction",
+                "related_work",
+                "method",
+                "experiments",
+                "conclusion",
+            ],
         }
         db = _make_db(tmp_path)
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_write(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert result["venue"] == "KDD"
@@ -277,7 +323,10 @@ class TestPlanWrite:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_write(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert len(result["sections_to_draft"]) == 5
@@ -289,12 +338,13 @@ class TestPlanWrite:
 
 
 class TestCallPlannerLLM:
-    @patch("research_harness.execution.llm_primitives._client_chat",
-           return_value="This is not JSON at all {{")
+    @patch(
+        "research_harness.execution.llm_primitives._client_chat",
+        return_value="This is not JSON at all {{",
+    )
     @patch("research_harness.execution.llm_primitives._get_client")
     def test_bad_json_returns_empty(self, mock_get_client, mock_chat):
         """When LLM returns non-JSON, _call_planner_llm returns empty dict."""
-        from research_harness.auto_runner.llm_planner import _call_planner_llm
 
         result = _call_planner_llm("test prompt")
         assert result == {}
@@ -321,15 +371,25 @@ class TestPlannerInExecutor:
 
         planner_output = {"query": "test-from-planner", "auto_ingest": True}
 
-        with _patch("research_harness.auto_runner.llm_planner.plan_stage",
-                     return_value=planner_output) as mock_plan, \
-             _patch("research_harness.auto_runner.stage_executor._execute_stage_tools",
-                    return_value={"summary": "ok", "tool_results": [], "errors": []}) as mock_exec:
-
-            result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="build", mode="standard",
-                checkpoint_data=cp, base_dir=tmp_path,
+        with (
+            _patch(
+                "research_harness.auto_runner.llm_planner.plan_stage",
+                return_value=planner_output,
+            ) as mock_plan,
+            _patch(
+                "research_harness.auto_runner.stage_executor._execute_stage_tools",
+                return_value={"summary": "ok", "tool_results": [], "errors": []},
+            ) as _mock_exec,
+        ):
+            _result = execute_stage(
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="build",
+                mode="standard",
+                checkpoint_data=cp,
+                base_dir=tmp_path,
             )
 
             mock_plan.assert_called_once()
@@ -356,15 +416,21 @@ class TestMultiSectionLoop:
             "evidence_ids": [],
         }
 
-        with _patch("research_harness.auto_runner.tool_dispatch.dispatch") as mock_dispatch:
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch.dispatch"
+        ) as mock_dispatch:
             mock_dispatch.return_value = MagicMock(
-                tool="section_draft", success=True,
-                output={"text": "drafted"}, error="",
+                tool="section_draft",
+                success=True,
+                output={"text": "drafted"},
+                error="",
             )
 
-            result = dispatch_stage_tools(
-                db=db, svc=svc,
-                project_id=1, topic_id=1,
+            _result = dispatch_stage_tools(
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
                 stage="write",
                 tools=("section_draft",),
                 context=context,
@@ -383,7 +449,7 @@ class TestB1ProposeMultiArtifact:
     """B1: propose stage records both direction_proposal and study_spec artifacts."""
 
     def test_propose_records_study_spec_artifact(self, tmp_path):
-        from unittest.mock import call, patch as _patch
+        from unittest.mock import patch as _patch
 
         from research_harness.auto_runner.tool_dispatch import dispatch_stage_tools
 
@@ -400,17 +466,26 @@ class TestB1ProposeMultiArtifact:
 
         captured_types: list[str] = []
 
-        def capture_dispatch(tool_name, *, db, svc, project_id, topic_id, stage, context):
+        def capture_dispatch(
+            tool_name, *, db, svc, project_id, topic_id, stage, context
+        ):
             captured_types.append(context.get("artifact_type", ""))
             return MagicMock(
-                tool="orchestrator_record_artifact", success=True,
-                output={"artifact_type": context.get("artifact_type")}, error="",
+                tool="orchestrator_record_artifact",
+                success=True,
+                output={"artifact_type": context.get("artifact_type")},
+                error="",
             )
 
-        with _patch("research_harness.auto_runner.tool_dispatch.dispatch", side_effect=capture_dispatch):
-            result = dispatch_stage_tools(
-                db=db, svc=svc,
-                project_id=1, topic_id=1,
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch.dispatch",
+            side_effect=capture_dispatch,
+        ):
+            _result = dispatch_stage_tools(
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
                 stage="propose",
                 tools=("orchestrator_record_artifact",),
                 context=context,
@@ -457,7 +532,9 @@ class TestB2ExperimentRunContract:
                 "primary_metric_name": "accuracy",
             },
         }
-        params = _build_primitive_params("verified_registry_build", topic_id=1, context=context)
+        params = _build_primitive_params(
+            "verified_registry_build", topic_id=1, context=context
+        )
         assert params["metrics"] == {"accuracy": 0.95, "f1": 0.88}
         assert params["primary_metric_name"] == "accuracy"
 
@@ -499,7 +576,9 @@ class TestB3WriteStageParams:
             "_output_section_draft_experiments": {"text": "Experiments text"},
             "project_id": 1,
         }
-        params = _build_primitive_params("paper_verify_numbers", topic_id=1, context=context)
+        params = _build_primitive_params(
+            "paper_verify_numbers", topic_id=1, context=context
+        )
         assert "Method text" in params["text"]
         assert "Experiments text" in params["text"]
 
@@ -535,7 +614,10 @@ class TestB5InvariantCompliance:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_propose(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         payload = result["artifact_payload"]
@@ -557,10 +639,16 @@ class TestB5InvariantCompliance:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_propose(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
-        assert result["artifact_payload"]["research_question"] == "How does adaptive gating improve forecasting?"
+        assert (
+            result["artifact_payload"]["research_question"]
+            == "How does adaptive gating improve forecasting?"
+        )
 
     @patch("research_harness.auto_runner.llm_planner._call_planner_llm")
     def test_study_spec_present(self, mock_llm, tmp_path):
@@ -573,7 +661,10 @@ class TestB5InvariantCompliance:
         svc = MagicMock()
         svc.get_latest_artifact.return_value = None
         result = _plan_propose(
-            db=db, svc=svc, project_id=1, topic_id=1,
+            db=db,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
             checkpoint_data={},
         )
         assert "study_spec" in result
@@ -615,25 +706,32 @@ class TestProposeGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="propose",
+            project_id=1,
+            topic_id=1,
+            stage="propose",
             artifact_type="direction_proposal",
             title="Test direction",
             payload={"research_question": "Does X improve Y?"},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="propose",
+            project_id=1,
+            topic_id=1,
+            stage="propose",
             artifact_type="adversarial_resolution",
             title="Auto-approved",
             payload={"outcome": "approved"},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="propose",
+            project_id=1,
+            topic_id=1,
+            stage="propose",
             artifact_type="study_spec",
             title="Study spec",
             payload={"methodology": "Run 6 experiments on dataset X"},
         )
 
         from research_harness.orchestrator.transitions import TransitionValidator
+
         validator = TransitionValidator(db)
         can, reason, _ = validator.can_advance(1, "propose", "experiment")
         assert can, f"Propose gate should pass but failed: {reason}"
@@ -642,19 +740,24 @@ class TestProposeGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="propose",
+            project_id=1,
+            topic_id=1,
+            stage="propose",
             artifact_type="direction_proposal",
             title="Test",
             payload={"research_question": "Q?"},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="propose",
+            project_id=1,
+            topic_id=1,
+            stage="propose",
             artifact_type="study_spec",
             title="Spec",
             payload={"methodology": "M"},
         )
 
         from research_harness.orchestrator.transitions import TransitionValidator
+
         validator = TransitionValidator(db)
         can, reason, _ = validator.can_advance(1, "propose", "experiment")
         assert not can
@@ -668,25 +771,32 @@ class TestExperimentGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="experiment",
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
             artifact_type="experiment_code",
             title="Code",
             payload={"files": ["main.py"], "entry_point": "main.py"},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="experiment",
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
             artifact_type="experiment_result",
             title="Results",
             payload={"metrics": {"accuracy": 0.95}},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="experiment",
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
             artifact_type="verified_registry",
             title="Registry",
             payload={"whitelist_size": 5},
         )
 
         from research_harness.orchestrator.transitions import TransitionValidator
+
         validator = TransitionValidator(db)
         can, reason, _ = validator.can_advance(1, "experiment", "write")
         assert can, f"Experiment gate should pass but failed: {reason}"
@@ -695,19 +805,24 @@ class TestExperimentGateAdvancement:
         db, svc = _setup_integration_db(tmp_path)
 
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="experiment",
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
             artifact_type="experiment_code",
             title="Code",
             payload={"files": ["main.py"]},
         )
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="experiment",
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
             artifact_type="experiment_result",
             title="Results",
             payload={"metrics": {}},
         )
 
         from research_harness.orchestrator.transitions import TransitionValidator
+
         validator = TransitionValidator(db)
         can, reason, _ = validator.can_advance(1, "experiment", "write")
         assert not can
@@ -731,15 +846,21 @@ class TestWriteGateArtifacts:
             "project_id": 1,
         }
 
-        with _patch("research_harness.auto_runner.tool_dispatch.dispatch") as mock_dispatch:
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch.dispatch"
+        ) as mock_dispatch:
             mock_dispatch.return_value = MagicMock(
-                tool="section_draft", success=True,
-                output={"text": "Section content"}, error="",
+                tool="section_draft",
+                success=True,
+                output={"text": "Section content"},
+                error="",
             )
 
             dispatch_stage_tools(
-                db=db, svc=svc,
-                project_id=1, topic_id=1,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
                 stage="write",
                 tools=("section_draft",),
                 context=context,
@@ -771,11 +892,18 @@ class TestAutoArtifactRecording:
         results = [ToolResult(tool="paper_search", success=True)]
         errors: list[str] = []
 
-        with _patch("research_harness.auto_runner.tool_dispatch._run_automated_adversarial",
-                     return_value={"verdict": "approved", "issues": [], "summary": "OK"}):
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch._run_automated_adversarial",
+            return_value={"verdict": "approved", "issues": [], "summary": "OK"},
+        ):
             recorded = _record_auto_artifacts(
-                svc=svc, project_id=1, topic_id=1,
-                stage="propose", context={}, results=results, errors=errors,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="propose",
+                context={},
+                results=results,
+                errors=errors,
             )
 
         assert len(recorded) >= 1
@@ -791,6 +919,7 @@ class TestAutoArtifactRecording:
             ).fetchone()
             assert row is not None
             import json as _json
+
             payload = _json.loads(row["payload_json"])
             assert payload["outcome"] == "approved"
         finally:
@@ -804,12 +933,19 @@ class TestAutoArtifactRecording:
 
         db, svc = _setup_integration_db(tmp_path)
         results = [
-            ToolResult(tool="code_generate", success=True,
-                       output={"files": {"main.py": "code"}, "entry_point": "main.py"}),
-            ToolResult(tool="experiment_run", success=True,
-                       output={"metrics": {"acc": 0.9}}),
-            ToolResult(tool="verified_registry_build", success=True,
-                       output={"whitelist_size": 3}),
+            ToolResult(
+                tool="code_generate",
+                success=True,
+                output={"files": {"main.py": "code"}, "entry_point": "main.py"},
+            ),
+            ToolResult(
+                tool="experiment_run", success=True, output={"metrics": {"acc": 0.9}}
+            ),
+            ToolResult(
+                tool="verified_registry_build",
+                success=True,
+                output={"whitelist_size": 3},
+            ),
         ]
         context = {
             "_output_code_generate": results[0].output,
@@ -819,8 +955,13 @@ class TestAutoArtifactRecording:
         errors: list[str] = []
 
         recorded = _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="experiment", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         assert len(recorded) == 3
@@ -832,7 +973,11 @@ class TestAutoArtifactRecording:
 
         conn = db.connect()
         try:
-            for art_type in ("experiment_code", "experiment_result", "verified_registry"):
+            for art_type in (
+                "experiment_code",
+                "experiment_result",
+                "verified_registry",
+            ):
                 row = conn.execute(
                     "SELECT * FROM project_artifacts WHERE project_id = 1 AND artifact_type = ?",
                     (art_type,),
@@ -846,7 +991,7 @@ class TestAutoArtifactCheckpointTracking:
     """Fix 5: auto-artifact IDs flow through to checkpoint_data via stage_executor."""
 
     def test_auto_artifacts_tracked_in_checkpoint(self, tmp_path):
-        from unittest.mock import MagicMock, patch as _patch
+        from unittest.mock import patch as _patch
 
         from research_harness.auto_runner import checkpoint as ckpt
         from research_harness.auto_runner.stage_executor import execute_stage
@@ -873,15 +1018,25 @@ class TestAutoArtifactCheckpointTracking:
             ],
         }
 
-        with _patch("research_harness.auto_runner.llm_planner.plan_stage",
-                     return_value=planner_output), \
-             _patch("research_harness.auto_runner.stage_executor._execute_stage_tools",
-                    return_value=tool_results_return):
-
-            result = execute_stage(
-                db=db, svc=svc, project_id=1, topic_id=1,
-                stage="propose", mode="autonomous",
-                checkpoint_data=cp, base_dir=tmp_path,
+        with (
+            _patch(
+                "research_harness.auto_runner.llm_planner.plan_stage",
+                return_value=planner_output,
+            ),
+            _patch(
+                "research_harness.auto_runner.stage_executor._execute_stage_tools",
+                return_value=tool_results_return,
+            ),
+        ):
+            _result = execute_stage(
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                stage="propose",
+                mode="autonomous",
+                checkpoint_data=cp,
+                base_dir=tmp_path,
             )
 
         arts = cp.get("artifacts", {}).get("propose", {})
@@ -904,15 +1059,21 @@ class TestAutoArtifactCheckpointTracking:
             "project_id": 1,
         }
 
-        with _patch("research_harness.auto_runner.tool_dispatch.dispatch") as mock_dispatch:
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch.dispatch"
+        ) as mock_dispatch:
             mock_dispatch.return_value = MagicMock(
-                tool="section_draft", success=True,
-                output={"text": "Section content"}, error="",
+                tool="section_draft",
+                success=True,
+                output={"text": "Section content"},
+                error="",
             )
 
             result = dispatch_stage_tools(
-                db=db, svc=svc,
-                project_id=1, topic_id=1,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
                 stage="write",
                 tools=("section_draft",),
                 context=context,
@@ -927,7 +1088,6 @@ class TestInitGateArtifacts:
     """P0-2: init stage records topic_brief artifact."""
 
     def test_init_records_topic_brief(self, tmp_path):
-        from unittest.mock import patch as _patch
 
         from research_harness.auto_runner.tool_dispatch import (
             ToolResult,
@@ -940,8 +1100,13 @@ class TestInitGateArtifacts:
         context = {"topic_description": "Multimodal time series forecasting"}
 
         recorded = _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="init", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="init",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         assert len(recorded) >= 1
@@ -970,9 +1135,14 @@ class TestBuildGateArtifacts:
 
         db, svc = _setup_integration_db(tmp_path)
         results = [
-            ToolResult(tool="paper_search", success=True,
-                       output={"ingested_count": 50, "query_used": "test"}),
-            ToolResult(tool="expand_citations", success=True, output={"status": "done"}),
+            ToolResult(
+                tool="paper_search",
+                success=True,
+                output={"ingested_count": 50, "query_used": "test"},
+            ),
+            ToolResult(
+                tool="expand_citations", success=True, output={"status": "done"}
+            ),
             ToolResult(tool="paper_acquire", success=True, output={"acquired": 30}),
         ]
         context = {
@@ -983,8 +1153,13 @@ class TestBuildGateArtifacts:
         errors: list[str] = []
 
         recorded = _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="build", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="build",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         art_types = [t for t, _ in recorded]
@@ -1005,12 +1180,19 @@ class TestAnalyzeGateArtifacts:
 
         db, svc = _setup_integration_db(tmp_path)
         results = [
-            ToolResult(tool="claim_extract", success=True,
-                       output={"claims": [{"id": "c1"}], "papers_processed": 20}),
-            ToolResult(tool="gap_detect", success=True,
-                       output={"gaps": [{"id": "g1"}], "papers_analyzed": 20}),
-            ToolResult(tool="baseline_identify", success=True,
-                       output={"baselines": []}),
+            ToolResult(
+                tool="claim_extract",
+                success=True,
+                output={"claims": [{"id": "c1"}], "papers_processed": 20},
+            ),
+            ToolResult(
+                tool="gap_detect",
+                success=True,
+                output={"gaps": [{"id": "g1"}], "papers_analyzed": 20},
+            ),
+            ToolResult(
+                tool="baseline_identify", success=True, output={"baselines": []}
+            ),
         ]
         context = {
             "_output_claim_extract": results[0].output,
@@ -1021,8 +1203,13 @@ class TestAnalyzeGateArtifacts:
         errors: list[str] = []
 
         recorded = _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="analyze", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="analyze",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         art_types = [t for t, _ in recorded]
@@ -1048,15 +1235,21 @@ class TestWriteGateComplete:
             "project_id": 1,
         }
 
-        with _patch("research_harness.auto_runner.tool_dispatch.dispatch") as mock_dispatch:
+        with _patch(
+            "research_harness.auto_runner.tool_dispatch.dispatch"
+        ) as mock_dispatch:
             mock_dispatch.return_value = MagicMock(
-                tool="section_draft", success=True,
-                output={"text": "Section content"}, error="",
+                tool="section_draft",
+                success=True,
+                output={"text": "Section content"},
+                error="",
             )
 
             result = dispatch_stage_tools(
-                db=db, svc=svc,
-                project_id=1, topic_id=1,
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
                 stage="write",
                 tools=("section_draft",),
                 context=context,
@@ -1089,20 +1282,32 @@ class TestWriteTerminalCompletion:
             nonlocal stage_call_count
             stage_call_count += 1
             return {
-                "status": "complete", "stage": "write",
-                "summary": "write done", "tool_results": [], "auto_artifacts": [],
+                "status": "complete",
+                "stage": "write",
+                "summary": "write done",
+                "tool_results": [],
+                "auto_artifacts": [],
             }
 
         from unittest.mock import MagicMock, patch as _patch
 
-        with _patch("research_harness.auto_runner.runner.execute_stage",
-                     side_effect=mock_execute_stage), \
-             _patch("research_harness.auto_runner.runner.Database") as mock_db_cls, \
-             _patch("research_harness.auto_runner.runner.OrchestratorService") as mock_svc_cls, \
-             _patch("research_harness.auto_runner.runner.find_workspace_root",
-                    return_value=tmp_path), \
-             _patch("research_harness.auto_runner.runner.load_runtime_config") as mock_config:
-
+        with (
+            _patch(
+                "research_harness.auto_runner.runner.execute_stage",
+                side_effect=mock_execute_stage,
+            ),
+            _patch("research_harness.auto_runner.runner.Database") as mock_db_cls,
+            _patch(
+                "research_harness.auto_runner.runner.OrchestratorService"
+            ) as mock_svc_cls,
+            _patch(
+                "research_harness.auto_runner.runner.find_workspace_root",
+                return_value=tmp_path,
+            ),
+            _patch(
+                "research_harness.auto_runner.runner.load_runtime_config"
+            ) as mock_config,
+        ):
             mock_config.return_value = MagicMock(db_path=tmp_path / "test.db")
             db, svc = _setup_integration_db(tmp_path)
             mock_db_cls.return_value = db
@@ -1114,8 +1319,10 @@ class TestWriteTerminalCompletion:
             mock_svc.get_run.return_value = run_mock
 
             result = run_project(
-                project_id=1, topic_id=1,
-                base_dir=tmp_path, auto_approve=True,
+                project_id=1,
+                topic_id=1,
+                base_dir=tmp_path,
+                auto_approve=True,
             )
 
         assert result["status"] == "completed"
@@ -1134,8 +1341,14 @@ class TestOutputSchemaNormalization:
     def test_extract_section_text_real_shape(self):
         from research_harness.auto_runner.tool_dispatch import _extract_section_text
 
-        real_output = {"draft": {"content": "We propose...", "section": "intro",
-                                  "citations_used": [1, 2], "word_count": 150}}
+        real_output = {
+            "draft": {
+                "content": "We propose...",
+                "section": "intro",
+                "citations_used": [1, 2],
+                "word_count": 150,
+            }
+        }
         assert _extract_section_text(real_output) == "We propose..."
 
     def test_extract_section_text_legacy_shape(self):
@@ -1147,23 +1360,32 @@ class TestOutputSchemaNormalization:
     def test_extract_review_feedback_real_shape(self):
         from research_harness.auto_runner.tool_dispatch import _extract_review_feedback
 
-        real_output = {"suggestions": ["Add citations", "Clarify method"],
-                       "dimensions": [{"dimension": "clarity", "score": 7.0, "comment": "OK"}]}
+        real_output = {
+            "suggestions": ["Add citations", "Clarify method"],
+            "dimensions": [{"dimension": "clarity", "score": 7.0, "comment": "OK"}],
+        }
         feedback = _extract_review_feedback(real_output)
         assert "Add citations" in feedback
 
     def test_extract_review_feedback_from_dimensions(self):
         from research_harness.auto_runner.tool_dispatch import _extract_review_feedback
 
-        dim_output = {"suggestions": [],
-                      "dimensions": [{"dimension": "rigor", "score": 5.0, "comment": "Weak stats"}]}
+        dim_output = {
+            "suggestions": [],
+            "dimensions": [
+                {"dimension": "rigor", "score": 5.0, "comment": "Weak stats"}
+            ],
+        }
         feedback = _extract_review_feedback(dim_output)
         assert "Weak stats" in feedback
 
     def test_extract_revise_text_real_shape(self):
         from research_harness.auto_runner.tool_dispatch import _extract_revise_text
 
-        real_output = {"revised_content": "Revised text here", "changes_made": ["Added refs"]}
+        real_output = {
+            "revised_content": "Revised text here",
+            "changes_made": ["Added refs"],
+        }
         assert _extract_revise_text(real_output) == "Revised text here"
 
     def test_extract_revise_text_legacy_shape(self):
@@ -1189,13 +1411,25 @@ class TestExperimentRunsInsertion:
 
         db, svc = _setup_integration_db(tmp_path)
         results = [
-            ToolResult(tool="code_generate", success=True,
-                       output={"files": {"main.py": "print('hi')"}, "entry_point": "main.py"}),
-            ToolResult(tool="experiment_run", success=True,
-                       output={"metrics": {"accuracy": 0.92}, "primary_metric_name": "accuracy",
-                               "primary_metric_value": 0.92}),
-            ToolResult(tool="verified_registry_build", success=True,
-                       output={"whitelist_size": 5}),
+            ToolResult(
+                tool="code_generate",
+                success=True,
+                output={"files": {"main.py": "print('hi')"}, "entry_point": "main.py"},
+            ),
+            ToolResult(
+                tool="experiment_run",
+                success=True,
+                output={
+                    "metrics": {"accuracy": 0.92},
+                    "primary_metric_name": "accuracy",
+                    "primary_metric_value": 0.92,
+                },
+            ),
+            ToolResult(
+                tool="verified_registry_build",
+                success=True,
+                output={"whitelist_size": 5},
+            ),
         ]
         context = {
             "_output_code_generate": results[0].output,
@@ -1206,8 +1440,13 @@ class TestExperimentRunsInsertion:
         errors: list[str] = []
 
         _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="experiment", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         # Verify experiment_runs row exists with kept=1
@@ -1232,13 +1471,25 @@ class TestExperimentRunsInsertion:
 
         db, svc = _setup_integration_db(tmp_path)
         results = [
-            ToolResult(tool="code_generate", success=True,
-                       output={"files": {"main.py": "x"}, "entry_point": "main.py"}),
-            ToolResult(tool="experiment_run", success=True,
-                       output={"metrics": {"f1": 0.85}, "primary_metric_name": "f1",
-                               "primary_metric_value": 0.85}),
-            ToolResult(tool="verified_registry_build", success=True,
-                       output={"whitelist_size": 3}),
+            ToolResult(
+                tool="code_generate",
+                success=True,
+                output={"files": {"main.py": "x"}, "entry_point": "main.py"},
+            ),
+            ToolResult(
+                tool="experiment_run",
+                success=True,
+                output={
+                    "metrics": {"f1": 0.85},
+                    "primary_metric_name": "f1",
+                    "primary_metric_value": 0.85,
+                },
+            ),
+            ToolResult(
+                tool="verified_registry_build",
+                success=True,
+                output={"whitelist_size": 3},
+            ),
         ]
         context = {
             "_output_code_generate": results[0].output,
@@ -1249,8 +1500,13 @@ class TestExperimentRunsInsertion:
         errors: list[str] = []
 
         _record_auto_artifacts(
-            svc=svc, project_id=1, topic_id=1,
-            stage="experiment", context=context, results=results, errors=errors,
+            svc=svc,
+            project_id=1,
+            topic_id=1,
+            stage="experiment",
+            context=context,
+            results=results,
+            errors=errors,
         )
 
         evaluator = GateEvaluator(db)
@@ -1267,14 +1523,16 @@ class TestProposeDirectionFallback:
     """P0-3: _plan_propose falls back to direction_proposal when direction_ranking missing."""
 
     def test_propose_uses_direction_proposal_fallback(self, tmp_path):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         db, svc = _setup_integration_db(tmp_path)
 
         # Record a direction_proposal in analyze (which auto-artifacts create),
         # but NO direction_ranking.
         svc.record_artifact(
-            project_id=1, topic_id=1, stage="analyze",
+            project_id=1,
+            topic_id=1,
+            stage="analyze",
             artifact_type="direction_proposal",
             title="Direction from gaps",
             payload={"gaps": ["gap1"], "research_question": "How to improve?"},
@@ -1282,16 +1540,25 @@ class TestProposeDirectionFallback:
 
         from research_harness.auto_runner.llm_planner import _plan_propose
 
-        with patch("research_harness.auto_runner.llm_planner._call_planner_llm") as mock_llm:
+        with patch(
+            "research_harness.auto_runner.llm_planner._call_planner_llm"
+        ) as mock_llm:
             mock_llm.return_value = {
                 "artifact_type": "direction_proposal",
                 "artifact_title": "Test direction",
-                "artifact_payload": {"direction": "novel approach", "research_question": "RQ1"},
+                "artifact_payload": {
+                    "direction": "novel approach",
+                    "research_question": "RQ1",
+                },
                 "focus": "test focus",
                 "study_spec": "spec from LLM",
             }
             result = _plan_propose(
-                db=db, svc=svc, project_id=1, topic_id=1, checkpoint_data={},
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                checkpoint_data={},
             )
         assert result.get("study_spec") == "spec from LLM"
         assert result.get("artifact_type") == "direction_proposal"
@@ -1312,16 +1579,24 @@ class TestStudySpecNonEmpty:
 
         from research_harness.auto_runner.llm_planner import _plan_propose
 
-        with patch("research_harness.auto_runner.llm_planner._call_planner_llm") as mock_llm:
+        with patch(
+            "research_harness.auto_runner.llm_planner._call_planner_llm"
+        ) as mock_llm:
             mock_llm.return_value = {
                 "artifact_type": "direction_proposal",
-                "artifact_payload": {"direction": "Novel gating mechanism",
-                                     "research_question": "How to gate modalities?"},
+                "artifact_payload": {
+                    "direction": "Novel gating mechanism",
+                    "research_question": "How to gate modalities?",
+                },
                 "focus": "modality gating",
                 # study_spec deliberately missing
             }
             result = _plan_propose(
-                db=db, svc=svc, project_id=1, topic_id=1, checkpoint_data={},
+                db=db,
+                svc=svc,
+                project_id=1,
+                topic_id=1,
+                checkpoint_data={},
             )
 
         assert result.get("study_spec"), "study_spec must not be empty"
@@ -1337,10 +1612,15 @@ class TestAutonomyAllStages:
     """All 6 stages proceed without pause in autonomous mode."""
 
     def test_all_stages_no_pause_in_autonomous(self):
-        from research_harness.auto_runner.stage_policy import STAGE_POLICIES, should_pause_human
+        from research_harness.auto_runner.stage_policy import (
+            STAGE_POLICIES,
+            should_pause_human,
+        )
 
         for stage_name in STAGE_POLICIES:
-            result = should_pause_human(stage_name, mode="standard", autonomy="autonomous")
+            result = should_pause_human(
+                stage_name, mode="standard", autonomy="autonomous"
+            )
             assert result is False, (
                 f"Stage '{stage_name}' pauses in autonomous mode but shouldn't"
             )
@@ -1349,8 +1629,13 @@ class TestAutonomyAllStages:
         from research_harness.auto_runner.stage_policy import should_pause_human
 
         # propose and write are human_checkpoint="always"
-        assert should_pause_human("propose", mode="standard", autonomy="supervised") is True
-        assert should_pause_human("write", mode="standard", autonomy="supervised") is True
+        assert (
+            should_pause_human("propose", mode="standard", autonomy="supervised")
+            is True
+        )
+        assert (
+            should_pause_human("write", mode="standard", autonomy="supervised") is True
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1379,18 +1664,30 @@ class TestWriteTerminalGateCheck:
 
         def mock_execute_stage(**kwargs):
             return {
-                "status": "complete", "stage": "write",
-                "summary": "write done", "tool_results": [], "auto_artifacts": [],
+                "status": "complete",
+                "stage": "write",
+                "summary": "write done",
+                "tool_results": [],
+                "auto_artifacts": [],
             }
 
-        with _patch("research_harness.auto_runner.runner.execute_stage",
-                     side_effect=mock_execute_stage), \
-             _patch("research_harness.auto_runner.runner.Database") as mock_db_cls, \
-             _patch("research_harness.auto_runner.runner.OrchestratorService") as mock_svc_cls, \
-             _patch("research_harness.auto_runner.runner.find_workspace_root",
-                    return_value=tmp_path), \
-             _patch("research_harness.auto_runner.runner.load_runtime_config") as mock_config:
-
+        with (
+            _patch(
+                "research_harness.auto_runner.runner.execute_stage",
+                side_effect=mock_execute_stage,
+            ),
+            _patch("research_harness.auto_runner.runner.Database") as mock_db_cls,
+            _patch(
+                "research_harness.auto_runner.runner.OrchestratorService"
+            ) as mock_svc_cls,
+            _patch(
+                "research_harness.auto_runner.runner.find_workspace_root",
+                return_value=tmp_path,
+            ),
+            _patch(
+                "research_harness.auto_runner.runner.load_runtime_config"
+            ) as mock_config,
+        ):
             mock_config.return_value = MagicMock(db_path=tmp_path / "test.db")
             db, svc = _setup_integration_db(tmp_path)
             mock_db_cls.return_value = db
@@ -1404,13 +1701,16 @@ class TestWriteTerminalGateCheck:
             mock_svc.check_gate.return_value = "needs_review"
 
             result = run_project(
-                project_id=1, topic_id=1,
-                base_dir=tmp_path, auto_approve=False,
+                project_id=1,
+                topic_id=1,
+                base_dir=tmp_path,
+                auto_approve=False,
             )
 
         assert result["status"] == "paused"
-        assert "needs_review" in result.get("gate_decision", "") or \
-               "needs_review" in result.get("summary", "")
+        assert "needs_review" in result.get(
+            "gate_decision", ""
+        ) or "needs_review" in result.get("summary", "")
 
     def test_write_completes_when_gate_passes(self, tmp_path):
         from unittest.mock import MagicMock, patch as _patch
@@ -1427,18 +1727,30 @@ class TestWriteTerminalGateCheck:
 
         def mock_execute_stage(**kwargs):
             return {
-                "status": "complete", "stage": "write",
-                "summary": "write done", "tool_results": [], "auto_artifacts": [],
+                "status": "complete",
+                "stage": "write",
+                "summary": "write done",
+                "tool_results": [],
+                "auto_artifacts": [],
             }
 
-        with _patch("research_harness.auto_runner.runner.execute_stage",
-                     side_effect=mock_execute_stage), \
-             _patch("research_harness.auto_runner.runner.Database") as mock_db_cls, \
-             _patch("research_harness.auto_runner.runner.OrchestratorService") as mock_svc_cls, \
-             _patch("research_harness.auto_runner.runner.find_workspace_root",
-                    return_value=tmp_path), \
-             _patch("research_harness.auto_runner.runner.load_runtime_config") as mock_config:
-
+        with (
+            _patch(
+                "research_harness.auto_runner.runner.execute_stage",
+                side_effect=mock_execute_stage,
+            ),
+            _patch("research_harness.auto_runner.runner.Database") as mock_db_cls,
+            _patch(
+                "research_harness.auto_runner.runner.OrchestratorService"
+            ) as mock_svc_cls,
+            _patch(
+                "research_harness.auto_runner.runner.find_workspace_root",
+                return_value=tmp_path,
+            ),
+            _patch(
+                "research_harness.auto_runner.runner.load_runtime_config"
+            ) as mock_config,
+        ):
             mock_config.return_value = MagicMock(db_path=tmp_path / "test.db")
             db, svc = _setup_integration_db(tmp_path)
             mock_db_cls.return_value = db
@@ -1451,8 +1763,10 @@ class TestWriteTerminalGateCheck:
             mock_svc.check_gate.return_value = "pass"
 
             result = run_project(
-                project_id=1, topic_id=1,
-                base_dir=tmp_path, auto_approve=True,
+                project_id=1,
+                topic_id=1,
+                base_dir=tmp_path,
+                auto_approve=True,
             )
 
         assert result["status"] == "completed"
@@ -1488,19 +1802,31 @@ class TestCodexBridgeFallback:
     """Codex timeout falls back to joycode."""
 
     def test_timeout_falls_back_to_joycode(self, tmp_path):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
 
-        with patch("research_harness.auto_runner.codex_bridge._find_codex",
-                   return_value="/usr/bin/codex"), \
-             patch("research_harness.auto_runner.codex_bridge.subprocess.run",
-                   side_effect=__import__("subprocess").TimeoutExpired("codex", 300)), \
-             patch("research_harness.auto_runner.codex_bridge._adversarial_via_joycode") as mock_joy:
+        with (
+            patch(
+                "research_harness.auto_runner.codex_bridge._find_codex",
+                return_value="/usr/bin/codex",
+            ),
+            patch(
+                "research_harness.auto_runner.codex_bridge.subprocess.run",
+                side_effect=__import__("subprocess").TimeoutExpired("codex", 300),
+            ),
+            patch(
+                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
+            ) as mock_joy,
+        ):
             mock_joy.return_value = {
-                "success": True, "verdict": "approve",
-                "issues": [], "scores": {}, "notes": "Joycode fallback",
-                "raw_output": "", "backend": "joycode",
+                "success": True,
+                "verdict": "approve",
+                "issues": [],
+                "scores": {},
+                "notes": "Joycode fallback",
+                "raw_output": "",
+                "backend": "joycode",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1517,13 +1843,23 @@ class TestCodexBridgeFallback:
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
 
-        with patch("research_harness.auto_runner.codex_bridge._find_codex",
-                   return_value=None), \
-             patch("research_harness.auto_runner.codex_bridge._adversarial_via_joycode") as mock_joy:
+        with (
+            patch(
+                "research_harness.auto_runner.codex_bridge._find_codex",
+                return_value=None,
+            ),
+            patch(
+                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
+            ) as mock_joy,
+        ):
             mock_joy.return_value = {
-                "success": True, "verdict": "approve",
-                "issues": [], "scores": {}, "notes": "",
-                "raw_output": "", "backend": "joycode",
+                "success": True,
+                "verdict": "approve",
+                "issues": [],
+                "scores": {},
+                "notes": "",
+                "raw_output": "",
+                "backend": "joycode",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1539,15 +1875,27 @@ class TestCodexBridgeFallback:
 
         from research_harness.auto_runner.codex_bridge import run_codex_review
 
-        with patch("research_harness.auto_runner.codex_bridge._find_codex",
-                   return_value="/usr/bin/codex"), \
-             patch("research_harness.auto_runner.codex_bridge.subprocess.run",
-                   side_effect=OSError("Permission denied")), \
-             patch("research_harness.auto_runner.codex_bridge._adversarial_via_joycode") as mock_joy:
+        with (
+            patch(
+                "research_harness.auto_runner.codex_bridge._find_codex",
+                return_value="/usr/bin/codex",
+            ),
+            patch(
+                "research_harness.auto_runner.codex_bridge.subprocess.run",
+                side_effect=OSError("Permission denied"),
+            ),
+            patch(
+                "research_harness.auto_runner.codex_bridge._adversarial_via_joycode"
+            ) as mock_joy,
+        ):
             mock_joy.return_value = {
-                "success": True, "verdict": "approve",
-                "issues": [], "scores": {}, "notes": "",
-                "raw_output": "", "backend": "joycode",
+                "success": True,
+                "verdict": "approve",
+                "issues": [],
+                "scores": {},
+                "notes": "",
+                "raw_output": "",
+                "backend": "joycode",
             }
             result = run_codex_review(
                 artifact_path=tmp_path / "test.json",
@@ -1587,18 +1935,30 @@ class TestBudgetHalt:
             nonlocal call_count
             call_count += 1
             return {
-                "status": "complete", "stage": "build",
-                "summary": "done", "tool_results": [], "auto_artifacts": [],
+                "status": "complete",
+                "stage": "build",
+                "summary": "done",
+                "tool_results": [],
+                "auto_artifacts": [],
             }
 
-        with _patch("research_harness.auto_runner.runner.execute_stage",
-                     side_effect=mock_execute_stage), \
-             _patch("research_harness.auto_runner.runner.Database") as mock_db_cls, \
-             _patch("research_harness.auto_runner.runner.OrchestratorService") as mock_svc_cls, \
-             _patch("research_harness.auto_runner.runner.find_workspace_root",
-                    return_value=tmp_path), \
-             _patch("research_harness.auto_runner.runner.load_runtime_config") as mock_config:
-
+        with (
+            _patch(
+                "research_harness.auto_runner.runner.execute_stage",
+                side_effect=mock_execute_stage,
+            ),
+            _patch("research_harness.auto_runner.runner.Database") as mock_db_cls,
+            _patch(
+                "research_harness.auto_runner.runner.OrchestratorService"
+            ) as mock_svc_cls,
+            _patch(
+                "research_harness.auto_runner.runner.find_workspace_root",
+                return_value=tmp_path,
+            ),
+            _patch(
+                "research_harness.auto_runner.runner.load_runtime_config"
+            ) as mock_config,
+        ):
             mock_config.return_value = MagicMock(db_path=tmp_path / "test.db")
             db, svc = _setup_integration_db(tmp_path)
             mock_db_cls.return_value = db
@@ -1611,15 +1971,21 @@ class TestBudgetHalt:
 
             from research_harness.auto_runner.budget import BudgetCheckResult
 
-            with _patch("research_harness.auto_runner.budget.BudgetMonitor.check",
-                        return_value=BudgetCheckResult(action="halt", message="Over budget")):
+            with _patch(
+                "research_harness.auto_runner.budget.BudgetMonitor.check",
+                return_value=BudgetCheckResult(action="halt", message="Over budget"),
+            ):
                 result = run_project(
-                    project_id=1, topic_id=1,
-                    base_dir=tmp_path, auto_approve=True,
+                    project_id=1,
+                    topic_id=1,
+                    base_dir=tmp_path,
+                    auto_approve=True,
                 )
 
         assert result["status"] == "paused"
-        assert "Budget" in result.get("summary", "") or "budget" in result.get("summary", "")
+        assert "Budget" in result.get("summary", "") or "budget" in result.get(
+            "summary", ""
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1649,11 +2015,19 @@ class TestLoopbackPath:
             stage = kwargs["stage"]
             call_stages.append(stage)
             if stage == "build" and call_stages.count("build") > 0:
-                return {"status": "needs_human", "stage": stage,
-                        "summary": "stopping", "tool_results": [], "auto_artifacts": []}
+                return {
+                    "status": "needs_human",
+                    "stage": stage,
+                    "summary": "stopping",
+                    "tool_results": [],
+                    "auto_artifacts": [],
+                }
             return {
-                "status": "complete", "stage": stage,
-                "summary": "done", "tool_results": [], "auto_artifacts": [],
+                "status": "complete",
+                "stage": stage,
+                "summary": "done",
+                "tool_results": [],
+                "auto_artifacts": [],
             }
 
         advance_calls = [0]
@@ -1664,14 +2038,23 @@ class TestLoopbackPath:
                 return {"success": False, "loopback": True, "to_stage": "build"}
             return {"success": True}
 
-        with _patch("research_harness.auto_runner.runner.execute_stage",
-                     side_effect=mock_execute_stage), \
-             _patch("research_harness.auto_runner.runner.Database") as mock_db_cls, \
-             _patch("research_harness.auto_runner.runner.OrchestratorService") as mock_svc_cls, \
-             _patch("research_harness.auto_runner.runner.find_workspace_root",
-                    return_value=tmp_path), \
-             _patch("research_harness.auto_runner.runner.load_runtime_config") as mock_config:
-
+        with (
+            _patch(
+                "research_harness.auto_runner.runner.execute_stage",
+                side_effect=mock_execute_stage,
+            ),
+            _patch("research_harness.auto_runner.runner.Database") as mock_db_cls,
+            _patch(
+                "research_harness.auto_runner.runner.OrchestratorService"
+            ) as mock_svc_cls,
+            _patch(
+                "research_harness.auto_runner.runner.find_workspace_root",
+                return_value=tmp_path,
+            ),
+            _patch(
+                "research_harness.auto_runner.runner.load_runtime_config"
+            ) as mock_config,
+        ):
             mock_config.return_value = MagicMock(db_path=tmp_path / "test.db")
             mock_db = MagicMock()
             mock_db.migrate = MagicMock()
@@ -1686,7 +2069,8 @@ class TestLoopbackPath:
             mock_svc.check_gate.return_value = "pass"
 
             result = run_project(
-                project_id=1, topic_id=1,
+                project_id=1,
+                topic_id=1,
                 base_dir=tmp_path,
             )
 

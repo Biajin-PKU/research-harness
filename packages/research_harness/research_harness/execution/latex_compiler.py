@@ -13,7 +13,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # -- Author field parsing -----------------------------------------------------
+
 
 def parse_authors_field(raw: str | None) -> list[str]:
     """Parse the ``papers.authors`` DB field into a clean list of author names.
@@ -330,18 +330,18 @@ def _escape_latex(text: str) -> str:
 def _fix_unicode(text: str) -> str:
     """Replace common Unicode characters with LaTeX equivalents."""
     replacements = [
-        ("\u2013", "--"),    # en-dash
-        ("\u2014", "---"),   # em-dash
-        ("\u2018", "`"),     # left single quote
-        ("\u2019", "'"),     # right single quote
-        ("\u201c", "``"),    # left double quote
-        ("\u201d", "''"),    # right double quote
+        ("\u2013", "--"),  # en-dash
+        ("\u2014", "---"),  # em-dash
+        ("\u2018", "`"),  # left single quote
+        ("\u2019", "'"),  # right single quote
+        ("\u201c", "``"),  # left double quote
+        ("\u201d", "''"),  # right double quote
         ("\u2026", r"\ldots"),  # ellipsis
         ("\u00e9", r"\'e"),  # é
         ("\u00e8", r"\`e"),  # è
-        ("\u00fc", r'\"u'),  # ü
-        ("\u00f6", r'\"o'),  # ö
-        ("\u00e4", r'\"a'),  # ä
+        ("\u00fc", r"\"u"),  # ü
+        ("\u00f6", r"\"o"),  # ö
+        ("\u00e4", r"\"a"),  # ä
         ("\u03b1", r"$\alpha$"),
         ("\u03b2", r"$\beta$"),
         ("\u03b3", r"$\gamma$"),
@@ -395,7 +395,7 @@ def _strip_leading_section_header(content: str, sec_name: str) -> str:
         stripped,
     )
     if m:
-        stripped = stripped[m.end():].lstrip()
+        stripped = stripped[m.end() :].lstrip()
 
     # Remove plain-text headers like "Section 3 Method: ..." at the very start
     m = re.match(
@@ -404,7 +404,7 @@ def _strip_leading_section_header(content: str, sec_name: str) -> str:
         re.IGNORECASE,
     )
     if m:
-        stripped = stripped[m.end():].lstrip()
+        stripped = stripped[m.end() :].lstrip()
 
     return stripped
 
@@ -432,7 +432,9 @@ def assemble_latex(
         display_name = sec_name.replace("_", " ").title()
         content = _fix_unicode(content)
         content = _strip_leading_section_header(content, sec_name)
-        body_parts.append(f"\\section{{{display_name}}}\n\\label{{sec:{sec_name.lower().replace(' ', '_')}}}\n\n{content}\n")
+        body_parts.append(
+            f"\\section{{{display_name}}}\n\\label{{sec:{sec_name.lower().replace(' ', '_')}}}\n\n{content}\n"
+        )
 
     body = "\n".join(body_parts)
 
@@ -487,21 +489,23 @@ def _validate_before_compile(
             for key in m.group(1).split(","):
                 key = key.strip()
                 if key and key not in bib_keys:
-                    findings.append(ValidationFinding(
-                        level="error",
-                        category="cite_missing",
-                        message=f"\\cite{{{key}}} not found in references.bib",
-                        line_number=lineno,
-                    ))
+                    findings.append(
+                        ValidationFinding(
+                            level="error",
+                            category="cite_missing",
+                            message=f"\\cite{{{key}}} not found in references.bib",
+                            line_number=lineno,
+                        )
+                    )
 
     # --- 2. Placeholder detection ---
     # Only scan body text (between \begin{document} and \end{document})
     in_body = False
     placeholder_re = re.compile(
-        r"(?<![\\])\b(?:TODO|TBD|FIXME|XXX)\b"        # explicit markers
-        r"|(?<![\\0-9.])\b[XY]\\?%"                     # X% or Y% (not 4.5%)
-        r"|\[\?\]"                                        # [?]
-        r"|\?\?(?!\?)",                                   # ?? but not ???
+        r"(?<![\\])\b(?:TODO|TBD|FIXME|XXX)\b"  # explicit markers
+        r"|(?<![\\0-9.])\b[XY]\\?%"  # X% or Y% (not 4.5%)
+        r"|\[\?\]"  # [?]
+        r"|\?\?(?!\?)",  # ?? but not ???
         re.IGNORECASE,
     )
     for lineno, line in enumerate(lines, start=1):
@@ -518,12 +522,14 @@ def _validate_before_compile(
         if stripped.startswith("%"):
             continue
         for m in placeholder_re.finditer(line):
-            findings.append(ValidationFinding(
-                level="warning",
-                category="placeholder",
-                message=f"Possible placeholder: '{m.group()}' in body text",
-                line_number=lineno,
-            ))
+            findings.append(
+                ValidationFinding(
+                    level="warning",
+                    category="placeholder",
+                    message=f"Possible placeholder: '{m.group()}' in body text",
+                    line_number=lineno,
+                )
+            )
 
     # --- 3. Unmatched \begin/\end environments ---
     env_stack: list[tuple[str, int]] = []
@@ -541,31 +547,37 @@ def _validate_before_compile(
                     env_stack.pop()
                 elif env_stack:
                     opened = env_stack.pop()
-                    findings.append(ValidationFinding(
-                        level="error",
-                        category="env_mismatch",
-                        message=(
-                            f"\\end{{{env_name}}} at line {lineno} does not match "
-                            f"\\begin{{{opened[0]}}} at line {opened[1]}"
-                        ),
-                        line_number=lineno,
-                    ))
+                    findings.append(
+                        ValidationFinding(
+                            level="error",
+                            category="env_mismatch",
+                            message=(
+                                f"\\end{{{env_name}}} at line {lineno} does not match "
+                                f"\\begin{{{opened[0]}}} at line {opened[1]}"
+                            ),
+                            line_number=lineno,
+                        )
+                    )
                 else:
-                    findings.append(ValidationFinding(
-                        level="error",
-                        category="env_mismatch",
-                        message=f"\\end{{{env_name}}} without matching \\begin",
-                        line_number=lineno,
-                    ))
+                    findings.append(
+                        ValidationFinding(
+                            level="error",
+                            category="env_mismatch",
+                            message=f"\\end{{{env_name}}} without matching \\begin",
+                            line_number=lineno,
+                        )
+                    )
     for env_name, lineno in env_stack:
         if env_name == "document":
             continue  # sometimes \end{document} is absent in partial content
-        findings.append(ValidationFinding(
-            level="error",
-            category="env_mismatch",
-            message=f"\\begin{{{env_name}}} at line {lineno} never closed",
-            line_number=lineno,
-        ))
+        findings.append(
+            ValidationFinding(
+                level="error",
+                category="env_mismatch",
+                message=f"\\begin{{{env_name}}} at line {lineno} never closed",
+                line_number=lineno,
+            )
+        )
 
     # --- 4. Missing \includegraphics targets ---
     if output_dir:
@@ -580,12 +592,14 @@ def _validate_before_compile(
                     out / f"{fig_path}.jpg",
                 ]
                 if not any(c.exists() for c in candidates):
-                    findings.append(ValidationFinding(
-                        level="warning",
-                        category="figure_missing",
-                        message=f"\\includegraphics target '{fig_path}' not found in {output_dir}",
-                        line_number=lineno,
-                    ))
+                    findings.append(
+                        ValidationFinding(
+                            level="warning",
+                            category="figure_missing",
+                            message=f"\\includegraphics target '{fig_path}' not found in {output_dir}",
+                            line_number=lineno,
+                        )
+                    )
 
     return findings
 
@@ -638,7 +652,9 @@ def compile_latex(
         engine = "tectonic"
 
     if not engine:
-        result.log_summary = "No LaTeX engine found — .tex/.bib written but not compiled"
+        result.log_summary = (
+            "No LaTeX engine found — .tex/.bib written but not compiled"
+        )
         result.warnings.append("Neither pdflatex nor tectonic available on this system")
         result.success = True  # files written successfully
         result.pdf_path = ""
@@ -702,7 +718,12 @@ def compile_latex(
                 continue
             args = [cmd, filename]
         else:
-            args = [cmd, "-interaction=nonstopmode", "-halt-on-error", f"{filename}.tex"]
+            args = [
+                cmd,
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                f"{filename}.tex",
+            ]
 
         try:
             proc = subprocess.run(
@@ -733,7 +754,9 @@ def compile_latex(
             if proc.returncode != 0 and cmd == "pdflatex" and i == 0:
                 # Try auto-fix: switch to generic template
                 if "! LaTeX Error: File" in (proc.stdout + proc.stderr):
-                    result.auto_fixes.append("Switched to generic template (missing .sty)")
+                    result.auto_fixes.append(
+                        "Switched to generic template (missing .sty)"
+                    )
                     # Rewrite with generic template
                     tex_content_fixed = re.sub(
                         r"\\documentclass.*?\n",
@@ -777,7 +800,9 @@ def _parse_log(log_text: str, result: CompileResult) -> None:
 
     # Keep log summary short
     if result.errors:
-        result.log_summary = f"{len(result.errors)} error(s), {len(result.warnings)} warning(s)"
+        result.log_summary = (
+            f"{len(result.errors)} error(s), {len(result.warnings)} warning(s)"
+        )
     elif result.warnings:
         result.log_summary = f"No errors, {len(result.warnings)} warning(s)"
     else:

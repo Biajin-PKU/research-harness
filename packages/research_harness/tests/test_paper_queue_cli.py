@@ -11,9 +11,18 @@ from research_harness.cli import main
 def _make_pdf(path: Path) -> Path:
     doc = fitz.open()
     for title, body in [
-        ("Sample Paper Title", "Abstract\nThis paper studies budget pacing and proposes a stable control policy."),
-        ("Method", "Method\nWe optimize spend allocation with a constrained controller and staged updates."),
-        ("Experiments", "Experiments\nWe compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "Abstract\nThis paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "Method",
+            "Method\nWe optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "Experiments",
+            "Experiments\nWe compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]:
         page = doc.new_page()
         page.insert_text((72, 72), title, fontsize=18)
@@ -24,18 +33,80 @@ def _make_pdf(path: Path) -> Path:
     return path
 
 
-def test_paper_queue_prioritizes_missing_pdf_then_missing_sections_then_ready(runner, tmp_path):
+def test_paper_queue_prioritizes_missing_pdf_then_missing_sections_then_ready(
+    runner, tmp_path
+):
     pdf_a = _make_pdf(tmp_path / "a.pdf")
     pdf_b = _make_pdf(tmp_path / "b.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
 
-    assert runner.invoke(main, ["paper", "ingest", "--title", "No PDF Paper", "--topic", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Needs Sections", "--topic", "demo", "--pdf-path", str(pdf_a)]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Ready Paper", "--topic", "demo", "--pdf-path", str(pdf_b)]).exit_code == 0
+    assert (
+        runner.invoke(
+            main, ["paper", "ingest", "--title", "No PDF Paper", "--topic", "demo"]
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Needs Sections",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_a),
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Ready Paper",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_b),
+            ],
+        ).exit_code
+        == 0
+    )
 
-    assert runner.invoke(main, ["paper", "annotate", "2", "--section", "summary"]).exit_code == 0
+    assert (
+        runner.invoke(
+            main, ["paper", "annotate", "2", "--section", "summary"]
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(main, ["paper", "annotate", "3"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "note", "set", "--paper-id", "3", "--topic", "demo", "--type", "relevance", "--content", "ready", "--source", "codex"]).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "note",
+                "set",
+                "--paper-id",
+                "3",
+                "--topic",
+                "demo",
+                "--type",
+                "relevance",
+                "--content",
+                "ready",
+                "--source",
+                "codex",
+            ],
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(main, ["--json", "paper", "queue", "--topic", "demo"])
     assert result.exit_code == 0
@@ -56,11 +127,48 @@ def test_paper_queue_prioritizes_missing_pdf_then_missing_sections_then_ready(ru
 def test_paper_queue_only_actionable_filters_ready_items(runner, tmp_path):
     pdf_path = _make_pdf(tmp_path / "ready.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Ready Paper", "--topic", "demo", "--pdf-path", str(pdf_path)]).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Ready Paper",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_path),
+            ],
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(main, ["paper", "annotate", "1"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "note", "set", "--paper-id", "1", "--topic", "demo", "--type", "relevance", "--content", "ready", "--source", "codex"]).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "note",
+                "set",
+                "--paper-id",
+                "1",
+                "--topic",
+                "demo",
+                "--type",
+                "relevance",
+                "--content",
+                "ready",
+                "--source",
+                "codex",
+            ],
+        ).exit_code
+        == 0
+    )
 
-    result = runner.invoke(main, ["--json", "paper", "queue", "--topic", "demo", "--only-actionable"])
+    result = runner.invoke(
+        main, ["--json", "paper", "queue", "--topic", "demo", "--only-actionable"]
+    )
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["summary"]["total_papers"] == 0
@@ -70,7 +178,22 @@ def test_paper_queue_only_actionable_filters_ready_items(runner, tmp_path):
 def test_paper_queue_suggests_card_draft_for_missing_topic_note(runner, tmp_path):
     pdf_path = _make_pdf(tmp_path / "needs-note.pdf")
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Needs Note", "--topic", "demo", "--pdf-path", str(pdf_path)]).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Needs Note",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_path),
+            ],
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(main, ["paper", "annotate", "1"]).exit_code == 0
 
     result = runner.invoke(main, ["--json", "paper", "queue", "--topic", "demo"])

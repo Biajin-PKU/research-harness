@@ -107,9 +107,7 @@ def cache_evict_expired(db: Database) -> int:
     now = _now_iso()
     conn = db.connect()
     try:
-        cursor = conn.execute(
-            "DELETE FROM search_cache WHERE expires_at < ?", (now,)
-        )
+        cursor = conn.execute("DELETE FROM search_cache WHERE expires_at < ?", (now,))
         conn.commit()
         return cursor.rowcount
     except Exception:

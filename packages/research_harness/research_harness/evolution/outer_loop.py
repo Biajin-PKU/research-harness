@@ -28,6 +28,7 @@ DEFAULT_REFLECTION_INTERVAL = 3
 
 def _get_llm_client(tier: str) -> Any:
     from paperindex.llm.client import LLMClient, resolve_llm_config
+
     client = LLMClient(resolve_llm_config())
     client._default_tier = tier  # type: ignore[attr-defined]
     return client
@@ -102,11 +103,17 @@ class OuterLoop:
                     outcome, notes)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    project_id, topic_id, exp_num, hypothesis,
-                    study_spec_artifact_id, result_artifact_id,
-                    primary_metric_name, primary_metric_value,
+                    project_id,
+                    topic_id,
+                    exp_num,
+                    hypothesis,
+                    study_spec_artifact_id,
+                    result_artifact_id,
+                    primary_metric_name,
+                    primary_metric_value,
                     json.dumps(metrics or {}),
-                    outcome, notes,
+                    outcome,
+                    notes,
                 ),
             )
             conn.commit()
@@ -134,7 +141,11 @@ class OuterLoop:
                     "SELECT experiments_reviewed FROM meta_reflections WHERE id = ?",
                     (last_refl_id,),
                 ).fetchone()
-                reviewed = json.loads(refl_row["experiments_reviewed"] or "[]") if refl_row else []
+                reviewed = (
+                    json.loads(refl_row["experiments_reviewed"] or "[]")
+                    if refl_row
+                    else []
+                )
                 if reviewed:
                     max_reviewed = max(reviewed)
                     new_count = conn.execute(
@@ -222,7 +233,10 @@ class OuterLoop:
     # ---- History Queries ----
 
     def get_experiment_history(
-        self, project_id: int, *, limit: int = 20,
+        self,
+        project_id: int,
+        *,
+        limit: int = 20,
     ) -> list[ExperimentEntry]:
         conn = self._db.connect()
         try:
@@ -237,7 +251,10 @@ class OuterLoop:
             conn.close()
 
     def get_reflection_history(
-        self, project_id: int, *, limit: int = 10,
+        self,
+        project_id: int,
+        *,
+        limit: int = 10,
     ) -> list[MetaReflection]:
         conn = self._db.connect()
         try:
@@ -287,10 +304,17 @@ class OuterLoop:
                     reasoning, next_hypothesis, confidence, model_used)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    r.project_id, r.topic_id, r.reflection_number,
-                    r.trigger_type, json.dumps(r.experiments_reviewed),
-                    r.patterns_observed, r.decision, r.reasoning,
-                    r.next_hypothesis, r.confidence, r.model_used,
+                    r.project_id,
+                    r.topic_id,
+                    r.reflection_number,
+                    r.trigger_type,
+                    json.dumps(r.experiments_reviewed),
+                    r.patterns_observed,
+                    r.decision,
+                    r.reasoning,
+                    r.next_hypothesis,
+                    r.confidence,
+                    r.model_used,
                 ),
             )
             conn.commit()
@@ -301,6 +325,7 @@ class OuterLoop:
 
 
 # ---- Prompt ----
+
 
 def _build_reflection_prompt(
     experiments: list[ExperimentEntry],
@@ -354,6 +379,7 @@ Return JSON:
 
 
 # ---- Row converters ----
+
 
 def _row_to_experiment(row: Any) -> ExperimentEntry:
     metrics_raw = row["metrics_json"] or "{}"

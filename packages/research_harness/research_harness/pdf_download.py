@@ -5,7 +5,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Iterable
-from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,9 @@ def preferred_filename(candidate: PaperDownloadCandidate) -> str:
     return f"{candidate.paper_id}_{sanitize_filename(candidate.title)}.pdf"
 
 
-def build_candidate_urls(candidate: PaperDownloadCandidate, manual_urls: Iterable[str] | None = None) -> list[str]:
+def build_candidate_urls(
+    candidate: PaperDownloadCandidate, manual_urls: Iterable[str] | None = None
+) -> list[str]:
     """Build prioritized list of candidate download URLs.
 
     Priority order:
@@ -75,13 +77,17 @@ def build_candidate_urls(candidate: PaperDownloadCandidate, manual_urls: Iterabl
             oa_urls.append(scihub_url)
 
     # Phase 3: Publisher-specific URLs (may be paywalled)
-    publisher_urls = _publisher_urls_from_doi(doi, (candidate.venue or "").lower(), candidate.year)
+    publisher_urls = _publisher_urls_from_doi(
+        doi, (candidate.venue or "").lower(), candidate.year
+    )
 
     all_urls = oa_urls + publisher_urls
     return _dedupe(_normalize_urls(all_urls))
 
 
-def _publisher_urls_from_doi(doi: str, venue: str, year: int | None = None) -> list[str]:
+def _publisher_urls_from_doi(
+    doi: str, venue: str, year: int | None = None
+) -> list[str]:
     """Generate publisher-specific download URLs from DOI."""
     if not doi:
         return []
@@ -124,6 +130,7 @@ def _publisher_urls_from_doi(doi: str, venue: str, year: int | None = None) -> l
 # Unpaywall OA lookup
 # ---------------------------------------------------------------------------
 
+
 def _unpaywall_oa_url(doi: str) -> str | None:
     """Query Unpaywall API for best open-access PDF URL.
 
@@ -138,7 +145,9 @@ def _unpaywall_oa_url(doi: str) -> str | None:
     api_url = f"https://api.unpaywall.org/v2/{encoded_doi}?email={email}"
 
     try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "research-harness/1.0"})
+        req = urllib.request.Request(
+            api_url, headers={"User-Agent": "research-harness/1.0"}
+        )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
     except Exception:
@@ -163,6 +172,7 @@ def _unpaywall_oa_url(doi: str) -> str | None:
 # Sci-Hub fallback (opt-in via SCIHUB_MIRRORS env var)
 # ---------------------------------------------------------------------------
 
+
 def _scihub_url(doi: str) -> str | None:
     """Build a Sci-Hub URL from DOI if mirrors are configured.
 
@@ -182,6 +192,7 @@ def _scihub_url(doi: str) -> str | None:
 # ---------------------------------------------------------------------------
 # URL normalization
 # ---------------------------------------------------------------------------
+
 
 def _normalize_urls(urls: Iterable[str]) -> list[str]:
     normalized: list[str] = []

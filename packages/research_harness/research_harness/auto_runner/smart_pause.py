@@ -33,11 +33,11 @@ class PauseAction(str, Enum):
 class PauseThresholds:
     """Configurable thresholds for the three pause signals."""
 
-    max_cost_usd: float = 5.0          # warn at this cost
-    hard_cost_usd: float = 10.0        # pause at this cost
+    max_cost_usd: float = 5.0  # warn at this cost
+    hard_cost_usd: float = 10.0  # pause at this cost
     max_wall_clock_sec: float = 3600.0  # warn at 1 hour
-    hard_wall_clock_sec: float = 7200.0 # pause at 2 hours
-    max_consecutive_failures: int = 3   # warn after 3 consecutive failures
+    hard_wall_clock_sec: float = 7200.0  # pause at 2 hours
+    max_consecutive_failures: int = 3  # warn after 3 consecutive failures
     hard_consecutive_failures: int = 5  # pause after 5 consecutive failures
 
 

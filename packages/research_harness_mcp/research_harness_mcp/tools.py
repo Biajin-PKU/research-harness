@@ -5,25 +5,22 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
-import zlib
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from mcp.types import Tool
 
-from research_harness.config import find_workspace_root, load_runtime_config
-from research_harness.execution.backend import BackendInfo
+from research_harness.config import find_workspace_root
 from research_harness.execution.factory import create_backend
-from research_harness.execution.tracked import TrackedBackend
 from research_harness.execution.harness_actions import classify_error
+from research_harness.execution.tracked import TrackedBackend
 from research_harness.primitives.registry import list_primitives
 from research_harness.primitives.types import PrimitiveResult
 from research_harness.provenance.recorder import ProvenanceRecorder
 from research_harness.storage.db import Database
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # DB / backend helpers
@@ -33,7 +30,11 @@ _SESSION_ACTIVITY: dict[str, Any] = {
     "last_topic_id": None,
     "streak": 0,
 }
-_SESSION_NUDGE_MGR: dict[str, Any] = {"instance": None, "cost_usd": 0.0, "experiment_count": 0}
+_SESSION_NUDGE_MGR: dict[str, Any] = {
+    "instance": None,
+    "cost_usd": 0.0,
+    "experiment_count": 0,
+}
 _SESSION_TRIGGER_TOOLS = {
     "paper_search",
     "paper_ingest",
@@ -44,9 +45,12 @@ _SESSION_TRIGGER_TOOLS = {
     "search_query_add",
 }
 
+
 def _resolve_db() -> Database:
     """Resolve database path from env or workspace default."""
-    db_path = os.environ.get("RESEARCH_HARNESS_DB_PATH") or os.environ.get("RESEARCH_HUB_DB_PATH")
+    db_path = os.environ.get("RESEARCH_HARNESS_DB_PATH") or os.environ.get(
+        "RESEARCH_HUB_DB_PATH"
+    )
     if db_path:
         db = Database(Path(db_path))
     else:
@@ -62,7 +66,9 @@ def _resolve_db() -> Database:
 
 def _create_tracked_backend(db: Database) -> TrackedBackend:
     """Create a tracked research_harness backend."""
-    backend_name = os.environ.get("RESEARCH_HARNESS_BACKEND") or os.environ.get("RESEARCH_HUB_BACKEND", "research_harness")
+    backend_name = os.environ.get("RESEARCH_HARNESS_BACKEND") or os.environ.get(
+        "RESEARCH_HUB_BACKEND", "research_harness"
+    )
     inner = create_backend(backend_name, db=db)
     recorder = ProvenanceRecorder(db)
     return TrackedBackend(inner=inner, recorder=recorder)
@@ -72,15 +78,18 @@ def _create_tracked_backend(db: Database) -> TrackedBackend:
 # Primitive tools — auto-generated from PRIMITIVE_REGISTRY
 # ---------------------------------------------------------------------------
 
+
 def _primitive_tool_definitions() -> list[Tool]:
     """Convert registered PrimitiveSpecs into MCP Tool definitions."""
     tools = []
     for spec in list_primitives():
-        tools.append(Tool(
-            name=spec.name,
-            description=spec.description,
-            inputSchema=spec.input_schema,
-        ))
+        tools.append(
+            Tool(
+                name=spec.name,
+                description=spec.description,
+                inputSchema=spec.input_schema,
+            )
+        )
     return tools
 
 
@@ -90,6 +99,7 @@ def _try_get_orch_state(db: Database, topic_id: int | None) -> dict[str, Any] | 
         return None
     try:
         from research_harness.orchestrator import OrchestratorService
+
         svc = OrchestratorService(db)
         # Find project by topic_id
         conn = db.connect()
@@ -155,13 +165,18 @@ def _get_nudge_manager(db: Database) -> Any:
         try:
             from research_harness.evolution.nudge import NudgeManager
             import uuid
-            _SESSION_NUDGE_MGR["instance"] = NudgeManager(db, f"mcp-{uuid.uuid4().hex[:8]}")
+
+            _SESSION_NUDGE_MGR["instance"] = NudgeManager(
+                db, f"mcp-{uuid.uuid4().hex[:8]}"
+            )
         except Exception:
             pass
     return _SESSION_NUDGE_MGR["instance"]
 
 
-def _check_nudge(db: Database, name: str, arguments: dict[str, Any], result: PrimitiveResult) -> str:
+def _check_nudge(
+    db: Database, name: str, arguments: dict[str, Any], result: PrimitiveResult
+) -> str:
     """Check if a nudge should be emitted after this tool call."""
     mgr = _get_nudge_manager(db)
     if mgr is None:
@@ -213,13 +228,18 @@ def _inject_strategy_overlay(raw: dict[str, Any]) -> str:
 
         db = _resolve_db()
         from research_harness.evolution.injector import StrategyInjector
+
         injector = StrategyInjector(db)
         overlay = injector.build_strategy_overlay(
-            stage, topic_id=topic_id, max_strategies=3,
+            stage,
+            topic_id=topic_id,
+            max_strategies=3,
         )
 
         # Record injection counts
-        strategies = injector.get_active_strategies(stage, topic_id=topic_id, max_strategies=3)
+        strategies = injector.get_active_strategies(
+            stage, topic_id=topic_id, max_strategies=3
+        )
         for s in strategies:
             injector.record_injection(s.id)
 
@@ -256,7 +276,9 @@ def _record_iterative_retrieval_artifact(
         output = result.output
         if output is None:
             return
-        payload = asdict(output) if hasattr(output, "__dataclass_fields__") else dict(output)
+        payload = (
+            asdict(output) if hasattr(output, "__dataclass_fields__") else dict(output)
+        )
 
         from research_harness.orchestrator import OrchestratorService
 
@@ -319,12 +341,16 @@ def _execute_primitive(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 backend.execute("writing_pattern_extract", paper_id=int(paper_id))
                 logger.info("Auto-extracted writing patterns for paper %s", paper_id)
             except Exception as exc:
-                logger.debug("Writing pattern extract skipped for paper %s: %s", paper_id, exc)
+                logger.debug(
+                    "Writing pattern extract skipped for paper %s: %s", paper_id, exc
+                )
 
     orch_state = _try_get_orch_state(db, arguments.get("topic_id"))
     session_advisory = _maybe_session_advisory(db, name, arguments, orch_state)
     nudge_text = _check_nudge(db, name, arguments, result)
-    return _serialize_result(result, orch_state, session_advisory=session_advisory, nudge=nudge_text)
+    return _serialize_result(
+        result, orch_state, session_advisory=session_advisory, nudge=nudge_text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +389,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "topic": {"type": "string", "description": "Topic name filter"},
-                "status": {"type": "string", "description": "Status filter (pending/done/skipped)"},
+                "status": {
+                    "type": "string",
+                    "description": "Status filter (pending/done/skipped)",
+                },
             },
         },
     ),
@@ -373,7 +402,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "topic_id": {"type": "integer", "description": "Optional topic ID filter"},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Optional topic ID filter",
+                },
             },
         },
     ),
@@ -383,8 +415,15 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "topic_id": {"type": "integer", "description": "Optional topic ID filter"},
-                "format": {"type": "string", "enum": ["json"], "description": "Serialization format"},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Optional topic ID filter",
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["json"],
+                    "description": "Serialization format",
+                },
             },
         },
     ),
@@ -399,7 +438,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "topic_id": {"type": "integer", "description": "Optional topic ID filter"},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Optional topic ID filter",
+                },
             },
         },
     ),
@@ -414,9 +456,18 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "paper_id": {"type": "integer", "description": "ID of the paper to dismiss"},
-                "topic_id": {"type": "integer", "description": "Topic the paper belongs to"},
-                "reason": {"type": "string", "description": "Why the user is dismissing this paper"},
+                "paper_id": {
+                    "type": "integer",
+                    "description": "ID of the paper to dismiss",
+                },
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Topic the paper belongs to",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why the user is dismissing this paper",
+                },
             },
             "required": ["paper_id", "topic_id", "reason"],
         },
@@ -430,10 +481,19 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
                 "project_id": {"type": "integer"},
                 "topic_id": {"type": "integer"},
                 "stage": {"type": "string", "description": "Stage name (V2 or legacy)"},
-                "checkpoint": {"type": "string", "description": "Checkpoint name (e.g. direction_selection)"},
+                "checkpoint": {
+                    "type": "string",
+                    "description": "Checkpoint name (e.g. direction_selection)",
+                },
                 "choice": {"type": "string", "description": "What was decided"},
-                "reasoning": {"type": "string", "description": "Why this choice was made"},
-                "params": {"type": "object", "description": "Parameter snapshot at decision time"},
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why this choice was made",
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Parameter snapshot at decision time",
+                },
             },
             "required": ["project_id", "topic_id", "stage", "checkpoint", "choice"],
         },
@@ -469,7 +529,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
             "properties": {
                 "topic_id": {"type": "integer"},
                 "query": {"type": "string"},
-                "source": {"type": "string", "description": "user / auto_generated / method_expansion"},
+                "source": {
+                    "type": "string",
+                    "description": "user / auto_generated / method_expansion",
+                },
             },
             "required": ["topic_id", "query"],
         },
@@ -493,7 +556,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "topic_id": {"type": "integer"},
-                "level": {"type": "string", "description": "Optional level filter: info or warning"},
+                "level": {
+                    "type": "string",
+                    "description": "Optional level filter: info or warning",
+                },
             },
             "required": ["topic_id"],
         },
@@ -519,7 +585,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "paper_id": {"type": "integer", "description": "ID of the paper to permanently delete"},
+                "paper_id": {
+                    "type": "integer",
+                    "description": "ID of the paper to permanently delete",
+                },
             },
             "required": ["paper_id"],
         },
@@ -534,7 +603,10 @@ _CONVENIENCE_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "topic_id": {"type": "integer", "description": "Topic ID to refresh venues for"},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Topic ID to refresh venues for",
+                },
             },
             "required": ["topic_id"],
         },
@@ -548,7 +620,9 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
     conn = db.connect()
     try:
         if name == "topic_list":
-            rows = conn.execute("SELECT id, name, description, status FROM topics ORDER BY id").fetchall()
+            rows = conn.execute(
+                "SELECT id, name, description, status FROM topics ORDER BY id"
+            ).fetchall()
             return {"topics": [dict(r) for r in rows]}
 
         elif name == "topic_show":
@@ -563,6 +637,7 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
             last_search = result.get("last_search_at") or ""
             if last_search:
                 from datetime import datetime, timezone
+
                 try:
                     last_dt = datetime.fromisoformat(last_search.replace("Z", "+00:00"))
                     now = datetime.now(timezone.utc)
@@ -665,7 +740,9 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
             reason = str(arguments.get("reason", "")).strip()
 
             # Verify paper exists
-            paper = conn.execute("SELECT id, title FROM papers WHERE id = ?", (paper_id,)).fetchone()
+            paper = conn.execute(
+                "SELECT id, title FROM papers WHERE id = ?", (paper_id,)
+            ).fetchone()
             if paper is None:
                 return {"error": f"Paper not found: {paper_id}"}
 
@@ -701,6 +778,7 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
         elif name == "decision_log_record":
             from research_harness.orchestrator.service import OrchestratorService
+
             svc = OrchestratorService(db)
             return svc.record_decision(
                 project_id=int(arguments["project_id"]),
@@ -714,6 +792,7 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
         elif name == "decision_log_list":
             from research_harness.orchestrator.service import OrchestratorService
+
             svc = OrchestratorService(db)
             return {
                 "decisions": svc.list_decisions(
@@ -734,6 +813,7 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
                 last = q.get("last_searched_at") or ""
                 if last:
                     from datetime import datetime, timezone
+
                     try:
                         dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
                         q["days_since_search"] = (datetime.now(timezone.utc) - dt).days
@@ -756,7 +836,12 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
                 (topic_id, query_text, source, source),
             )
             conn.commit()
-            return {"success": True, "topic_id": topic_id, "query": query_text, "source": source}
+            return {
+                "success": True,
+                "topic_id": topic_id,
+                "query": query_text,
+                "source": source,
+            }
 
         elif name == "advisory_check":
             from research_harness.advisory import AdvisoryEngine
@@ -764,7 +849,9 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
             engine = AdvisoryEngine(db)
             advisories = engine.run(
                 topic_id=int(arguments["topic_id"]),
-                project_id=int(arguments["project_id"]) if arguments.get("project_id") is not None else None,
+                project_id=int(arguments["project_id"])
+                if arguments.get("project_id") is not None
+                else None,
             )
             return {
                 "advisories": [asdict(item) for item in advisories],
@@ -795,7 +882,9 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
         elif name == "paper_purge":
             paper_id = int(arguments["paper_id"])
-            paper = conn.execute("SELECT id, title FROM papers WHERE id = ?", (paper_id,)).fetchone()
+            paper = conn.execute(
+                "SELECT id, title FROM papers WHERE id = ?", (paper_id,)
+            ).fetchone()
             if paper is None:
                 return {"error": f"Paper not found: {paper_id}"}
             title = paper["title"] or f"Paper #{paper_id}"
@@ -832,15 +921,29 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
             updated = []
             skipped = 0
-            api_key = os.environ.get("S2_API_KEY") or os.environ.get("SEMANTIC_SCHOLAR_API_KEY") or ""
+            api_key = (
+                os.environ.get("S2_API_KEY")
+                or os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+                or ""
+            )
             for row in rows:
                 # Build S2 lookup ID
                 lookup_id = None
                 if row["arxiv_id"]:
-                    clean = (row["arxiv_id"] or "").strip().removeprefix("arxiv:").removeprefix("arXiv:")
+                    clean = (
+                        (row["arxiv_id"] or "")
+                        .strip()
+                        .removeprefix("arxiv:")
+                        .removeprefix("arXiv:")
+                    )
                     lookup_id = f"ARXIV:{clean}"
                 elif row["doi"]:
-                    clean = (row["doi"] or "").strip().removeprefix("doi:").removeprefix("DOI:")
+                    clean = (
+                        (row["doi"] or "")
+                        .strip()
+                        .removeprefix("doi:")
+                        .removeprefix("DOI:")
+                    )
                     lookup_id = f"DOI:{clean}"
                 elif row["s2_id"]:
                     lookup_id = (row["s2_id"] or "").strip()
@@ -858,7 +961,10 @@ def _execute_convenience(name: str, arguments: dict[str, Any]) -> dict[str, Any]
                         data = json.loads(resp.read().decode())
                     new_venue = (data.get("venue") or "").strip()
                     if new_venue and new_venue.lower() not in stale_venues:
-                        conn.execute("UPDATE papers SET venue = ? WHERE id = ?", (new_venue, row["id"]))
+                        conn.execute(
+                            "UPDATE papers SET venue = ? WHERE id = ?",
+                            (new_venue, row["id"]),
+                        )
                         updated.append({"paper_id": row["id"], "new_venue": new_venue})
                 except Exception:
                     pass  # Skip on error, don't block
@@ -901,7 +1007,10 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "actor": {"type": "string", "description": "Actor name (default: system)"},
+                "actor": {
+                    "type": "string",
+                    "description": "Actor name (default: system)",
+                },
             },
             "required": ["project_id"],
         },
@@ -917,7 +1026,10 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                 "stage": {"type": "string", "description": "Stage name"},
                 "artifact_type": {"type": "string", "description": "Artifact type"},
                 "title": {"type": "string", "description": "Artifact title"},
-                "payload": {"type": "object", "description": "Artifact payload as JSON object"},
+                "payload": {
+                    "type": "object",
+                    "description": "Artifact payload as JSON object",
+                },
                 "dependency_artifact_ids": {
                     "type": "array",
                     "items": {"type": "integer"},
@@ -937,9 +1049,18 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "from_artifact_id": {"type": "integer", "description": "Upstream artifact ID"},
-                "to_artifact_id": {"type": "integer", "description": "Downstream artifact ID"},
-                "dependency_type": {"type": "string", "description": "consumed_by or derived_from"},
+                "from_artifact_id": {
+                    "type": "integer",
+                    "description": "Upstream artifact ID",
+                },
+                "to_artifact_id": {
+                    "type": "integer",
+                    "description": "Downstream artifact ID",
+                },
+                "dependency_type": {
+                    "type": "string",
+                    "description": "consumed_by or derived_from",
+                },
             },
             "required": ["from_artifact_id", "to_artifact_id"],
         },
@@ -951,8 +1072,14 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "artifact_id": {"type": "integer", "description": "Artifact ID"},
-                "reason": {"type": "string", "description": "Why this artifact is stale"},
-                "propagate": {"type": "boolean", "description": "Propagate stale state downstream"},
+                "reason": {
+                    "type": "string",
+                    "description": "Why this artifact is stale",
+                },
+                "propagate": {
+                    "type": "boolean",
+                    "description": "Propagate stale state downstream",
+                },
             },
             "required": ["artifact_id"],
         },
@@ -992,7 +1119,10 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
                 "topic_id": {"type": "integer", "description": "Topic ID"},
-                "mode": {"type": "string", "description": "Workflow mode (default: standard)"},
+                "mode": {
+                    "type": "string",
+                    "description": "Workflow mode (default: standard)",
+                },
                 "force_stage": {
                     "type": "string",
                     "description": "Override inferred stage (optional)",
@@ -1016,7 +1146,10 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "stage": {"type": "string", "description": "Stage to check (defaults to current)"},
+                "stage": {
+                    "type": "string",
+                    "description": "Stage to check (defaults to current)",
+                },
             },
             "required": ["project_id"],
         },
@@ -1033,8 +1166,20 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "phase": {"type": "string", "enum": ["references", "citation_context", "statistical_data", "originality", "claims"]},
-                            "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                            "phase": {
+                                "type": "string",
+                                "enum": [
+                                    "references",
+                                    "citation_context",
+                                    "statistical_data",
+                                    "originality",
+                                    "claims",
+                                ],
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": ["critical", "high", "medium", "low"],
+                            },
                             "category": {"type": "string"},
                             "summary": {"type": "string"},
                             "details": {"type": "string"},
@@ -1065,8 +1210,14 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "integrity_artifact_id": {"type": "integer", "description": "Integrity report artifact ID"},
-                "scholarly_artifact_id": {"type": "integer", "description": "Scholarly report artifact ID"},
+                "integrity_artifact_id": {
+                    "type": "integer",
+                    "description": "Integrity report artifact ID",
+                },
+                "scholarly_artifact_id": {
+                    "type": "integer",
+                    "description": "Scholarly report artifact ID",
+                },
             },
             "required": ["project_id"],
         },
@@ -1078,15 +1229,38 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "review_type": {"type": "string", "enum": ["integrity", "scholarly"], "description": "Review type"},
-                "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"], "description": "Issue severity"},
-                "category": {"type": "string", "description": "Issue category (methodology, evidence, writing, etc.)"},
+                "review_type": {
+                    "type": "string",
+                    "enum": ["integrity", "scholarly"],
+                    "description": "Review type",
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low"],
+                    "description": "Issue severity",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Issue category (methodology, evidence, writing, etc.)",
+                },
                 "summary": {"type": "string", "description": "Issue summary"},
                 "details": {"type": "string", "description": "Detailed description"},
-                "recommended_action": {"type": "string", "description": "Recommended fix"},
-                "review_artifact_id": {"type": "integer", "description": "Source review artifact ID"},
+                "recommended_action": {
+                    "type": "string",
+                    "description": "Recommended fix",
+                },
+                "review_artifact_id": {
+                    "type": "integer",
+                    "description": "Source review artifact ID",
+                },
             },
-            "required": ["project_id", "review_type", "severity", "category", "summary"],
+            "required": [
+                "project_id",
+                "review_type",
+                "severity",
+                "category",
+                "summary",
+            ],
         },
     ),
     "review_issues": Tool(
@@ -1097,8 +1271,15 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
                 "stage": {"type": "string", "description": "Filter by stage"},
-                "status": {"type": "string", "enum": ["open", "in_progress", "resolved", "wontfix"], "description": "Filter by status"},
-                "blocking_only": {"type": "boolean", "description": "Show only blocking issues"},
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "in_progress", "resolved", "wontfix"],
+                    "description": "Filter by status",
+                },
+                "blocking_only": {
+                    "type": "boolean",
+                    "description": "Show only blocking issues",
+                },
             },
             "required": ["project_id"],
         },
@@ -1110,11 +1291,21 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "issue_id": {"type": "integer", "description": "Issue ID to respond to"},
-                "response_type": {"type": "string", "enum": ["change", "clarify", "dispute", "acknowledge"], "description": "Response type"},
+                "issue_id": {
+                    "type": "integer",
+                    "description": "Issue ID to respond to",
+                },
+                "response_type": {
+                    "type": "string",
+                    "enum": ["change", "clarify", "dispute", "acknowledge"],
+                    "description": "Response type",
+                },
                 "response_text": {"type": "string", "description": "Response text"},
                 "artifact_id": {"type": "integer", "description": "Linked artifact ID"},
-                "evidence": {"type": "object", "description": "Supporting evidence as JSON"},
+                "evidence": {
+                    "type": "object",
+                    "description": "Supporting evidence as JSON",
+                },
             },
             "required": ["project_id", "issue_id", "response_type", "response_text"],
         },
@@ -1126,7 +1317,11 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "issue_id": {"type": "integer", "description": "Issue ID to resolve"},
-                "status": {"type": "string", "enum": ["resolved", "wontfix"], "description": "Resolution status"},
+                "status": {
+                    "type": "string",
+                    "enum": ["resolved", "wontfix"],
+                    "description": "Resolution status",
+                },
             },
             "required": ["issue_id", "status"],
         },
@@ -1149,15 +1344,24 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "artifact_id": {"type": "integer", "description": "Target artifact ID to review"},
-                "proposal_snapshot": {"type": "object", "description": "Proposal snapshot as JSON"},
+                "artifact_id": {
+                    "type": "integer",
+                    "description": "Target artifact ID to review",
+                },
+                "proposal_snapshot": {
+                    "type": "object",
+                    "description": "Proposal snapshot as JSON",
+                },
                 "objections": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
                             "category": {"type": "string"},
-                            "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+                            "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor"],
+                            },
                             "target": {"type": "string"},
                             "reasoning": {"type": "string"},
                             "suggested_fix": {"type": "string"},
@@ -1166,10 +1370,18 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
                     },
                     "description": "List of objections",
                 },
-                "proposer_responses": {"type": "array", "description": "Proposer responses to objections"},
+                "proposer_responses": {
+                    "type": "array",
+                    "description": "Proposer responses to objections",
+                },
                 "resolver_notes": {"type": "string", "description": "Resolver notes"},
             },
-            "required": ["project_id", "artifact_id", "proposal_snapshot", "objections"],
+            "required": [
+                "project_id",
+                "artifact_id",
+                "proposal_snapshot",
+                "objections",
+            ],
         },
     ),
     "adversarial_resolve": Tool(
@@ -1179,8 +1391,14 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "round_artifact_id": {"type": "integer", "description": "Round artifact ID to resolve"},
-                "scores": {"type": "object", "description": "Dimension scores as JSON (e.g. {\"novelty\": 4.5})"},
+                "round_artifact_id": {
+                    "type": "integer",
+                    "description": "Round artifact ID to resolve",
+                },
+                "scores": {
+                    "type": "object",
+                    "description": 'Dimension scores as JSON (e.g. {"novelty": 4.5})',
+                },
                 "notes": {"type": "string", "description": "Resolution notes"},
             },
             "required": ["project_id", "round_artifact_id"],
@@ -1209,9 +1427,18 @@ _ORCHESTRATOR_TOOLS: dict[str, Tool] = {
             "type": "object",
             "properties": {
                 "project_id": {"type": "integer", "description": "Project ID"},
-                "artifact_id": {"type": "integer", "description": "Artifact ID to review"},
-                "focus": {"type": "string", "description": "Review focus (e.g. 'novelty and method soundness')"},
-                "evidence_summary": {"type": "string", "description": "Optional evidence summary to provide reviewer context"},
+                "artifact_id": {
+                    "type": "integer",
+                    "description": "Artifact ID to review",
+                },
+                "focus": {
+                    "type": "string",
+                    "description": "Review focus (e.g. 'novelty and method soundness')",
+                },
+                "evidence_summary": {
+                    "type": "string",
+                    "description": "Optional evidence summary to provide reviewer context",
+                },
             },
             "required": ["project_id", "artifact_id"],
         },
@@ -1262,7 +1489,9 @@ def _execute_adversarial_review(
 
     # Dispatch to independent reviewer (codex exec or Anthropic Opus)
     review = run_codex_review(
-        artifact_path=Path(artifact.path) if artifact.path else Path(f"artifact_{artifact_id}"),
+        artifact_path=Path(artifact.path)
+        if artifact.path
+        else Path(f"artifact_{artifact_id}"),
         stage=run.current_stage,
         focus=focus or f"Review {artifact.artifact_type} artifact",
         evidence_summary=full_evidence,
@@ -1608,8 +1837,15 @@ _ACQUISITION_TOOLS: dict[str, Tool] = {
         inputSchema={
             "type": "object",
             "properties": {
-                "topic_id": {"type": "integer", "description": "Topic ID to scope resolution (optional, resolves all if omitted)"},
-                "dry_run": {"type": "boolean", "description": "If true, report matches without writing to DB", "default": False},
+                "topic_id": {
+                    "type": "integer",
+                    "description": "Topic ID to scope resolution (optional, resolves all if omitted)",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true, report matches without writing to DB",
+                    "default": False,
+                },
             },
         },
     ),
@@ -1622,11 +1858,13 @@ def _execute_acquisition(name: str, arguments: dict[str, Any]) -> dict[str, Any]
 
     if name == "paper_ingest_manual":
         from research_harness.acquisition.pipeline import ingest_manual_downloads
+
         results = ingest_manual_downloads(db)
         return {"results": results, "count": len(results)}
 
     elif name == "paper_resolve_pdfs":
         from research_harness.acquisition.pdf_resolver import backfill_pdf_paths
+
         stats = backfill_pdf_paths(
             db,
             topic_id=arguments.get("topic_id"),
@@ -1693,6 +1931,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # Serialization
 # ---------------------------------------------------------------------------
 
+
 def _serialize_result(
     result: PrimitiveResult,
     orch_state: dict[str, Any] | None = None,
@@ -1732,7 +1971,9 @@ def _serialize_result(
     return resp
 
 
-def _wrap_convenience(name: str, raw: dict[str, Any], session_advisory: str = "") -> dict[str, Any]:
+def _wrap_convenience(
+    name: str, raw: dict[str, Any], session_advisory: str = ""
+) -> dict[str, Any]:
     """Wrap a convenience tool result in HarnessResponse envelope."""
     is_error = "error" in raw
     return {
@@ -1768,16 +2009,18 @@ def _wrap_orchestrator(name: str, raw: dict[str, Any]) -> dict[str, Any]:
                 )
             missing = raw.get("stage", {}).get("missing_artifacts", [])
             if missing:
-                next_actions.append(
-                    f"Record missing artifacts: {', '.join(missing)}"
-                )
+                next_actions.append(f"Record missing artifacts: {', '.join(missing)}")
         elif name == "orchestrator_resume":
             stage = raw.get("current_stage", "?")
             inferred = raw.get("inferred_stage", stage)
-            summary = f"Resumed run at stage: {stage} (inferred from artifacts: {inferred})"
-            next_actions.append("orchestrator_status — check current stage requirements")
+            summary = (
+                f"Resumed run at stage: {stage} (inferred from artifacts: {inferred})"
+            )
+            next_actions.append(
+                "orchestrator_status — check current stage requirements"
+            )
         elif name == "orchestrator_advance":
-            summary = f"Advanced to next stage"
+            summary = "Advanced to next stage"
             next_actions.append("orchestrator_status — check new stage requirements")
         elif name == "orchestrator_record_artifact":
             summary = f"Recorded artifact: {raw.get('type', '?')} (id={raw.get('artifact_id', '?')})"
@@ -1790,14 +2033,18 @@ def _wrap_orchestrator(name: str, raw: dict[str, Any]) -> dict[str, Any]:
         elif name == "orchestrator_mark_artifact_stale":
             count = len(raw.get("stale_ids", []))
             summary = f"Marked {count} artifact(s) stale"
-            next_actions.append("orchestrator_list_stale_artifacts — inspect affected downstream artifacts")
+            next_actions.append(
+                "orchestrator_list_stale_artifacts — inspect affected downstream artifacts"
+            )
         elif name == "orchestrator_clear_artifact_stale":
             summary = f"Cleared stale flag for artifact {raw.get('artifact_id', '?')}"
         elif name == "orchestrator_list_stale_artifacts":
             count = raw.get("count", 0)
             summary = f"{count} stale artifact(s) currently active"
             if count:
-                next_actions.append("Refresh or supersede stale artifacts, then clear flags if appropriate")
+                next_actions.append(
+                    "Refresh or supersede stale artifacts, then clear flags if appropriate"
+                )
         elif name == "orchestrator_gate_check":
             decision = raw.get("gate_decision", "?")
             summary = f"Gate decision: {decision}"
@@ -1815,9 +2062,13 @@ def _wrap_orchestrator(name: str, raw: dict[str, Any]) -> dict[str, Any]:
                 f"{issues} issues ({critical} critical)"
             )
             if verdict == "revise":
-                next_actions.append("Address critical/major issues, then re-run adversarial_review")
+                next_actions.append(
+                    "Address critical/major issues, then re-run adversarial_review"
+                )
             else:
-                next_actions.append("orchestrator_gate_check — check if ready to advance")
+                next_actions.append(
+                    "orchestrator_gate_check — check if ready to advance"
+                )
         else:
             summary = f"{name} completed"
 
@@ -1836,7 +2087,11 @@ def _wrap_orchestrator(name: str, raw: dict[str, Any]) -> dict[str, Any]:
     }
 
     # Auto-inject strategy overlay for stage-aware orchestrator tools
-    if not is_error and name in ("orchestrator_status", "orchestrator_resume", "orchestrator_advance"):
+    if not is_error and name in (
+        "orchestrator_status",
+        "orchestrator_resume",
+        "orchestrator_advance",
+    ):
         strategy_overlay = _inject_strategy_overlay(raw)
         if strategy_overlay:
             resp["strategy_overlay"] = strategy_overlay

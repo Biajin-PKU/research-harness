@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from research_harness.evolution.patcher import (
     PROBATION_INJECTION_THRESHOLD,
@@ -16,10 +14,18 @@ from research_harness.evolution.patcher import (
 from research_harness.evolution.store import DBLessonStore, Lesson
 
 
-def _insert_strategy(db, *, stage="build", key="build.test", title="Test",
-                     content="Original content", version=1,
-                     quality_score=0.85, status="active",
-                     created_at=None):
+def _insert_strategy(
+    db,
+    *,
+    stage="build",
+    key="build.test",
+    title="Test",
+    content="Original content",
+    version=1,
+    quality_score=0.85,
+    status="active",
+    created_at=None,
+):
     """Insert a test strategy and return its ID."""
     conn = db.connect()
     try:
@@ -106,7 +112,10 @@ class TestPatchStrategy:
         mock_client.chat = mock_chat
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.patcher._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.patcher._get_llm_client",
+            return_value=mock_client,
+        ):
             patcher = StrategyPatcher(db)
             result = patcher.patch_strategy(sid)
 
@@ -118,7 +127,9 @@ class TestPatchStrategy:
         # Old version should be superseded
         conn = db.connect()
         try:
-            old = conn.execute("SELECT status FROM strategies WHERE id = ?", (sid,)).fetchone()
+            old = conn.execute(
+                "SELECT status FROM strategies WHERE id = ?", (sid,)
+            ).fetchone()
             assert old["status"] == "superseded"
         finally:
             conn.close()
@@ -145,7 +156,10 @@ class TestPatchStrategy:
         mock_client.chat = mock_chat
         mock_client.model = "test"
 
-        with patch("research_harness.evolution.patcher._get_llm_client", return_value=mock_client):
+        with patch(
+            "research_harness.evolution.patcher._get_llm_client",
+            return_value=mock_client,
+        ):
             patcher = StrategyPatcher(db)
             result = patcher.patch_strategy(sid)
 
@@ -154,7 +168,9 @@ class TestPatchStrategy:
         # Old version should remain active
         conn = db.connect()
         try:
-            old = conn.execute("SELECT status FROM strategies WHERE id = ?", (sid,)).fetchone()
+            old = conn.execute(
+                "SELECT status FROM strategies WHERE id = ?", (sid,)
+            ).fetchone()
             assert old["status"] == "active"
         finally:
             conn.close()
@@ -204,7 +220,9 @@ class TestProbation:
         # Verify status changed
         conn = db.connect()
         try:
-            row = conn.execute("SELECT status FROM strategies WHERE id = ?", (sid,)).fetchone()
+            row = conn.execute(
+                "SELECT status FROM strategies WHERE id = ?", (sid,)
+            ).fetchone()
             assert row["status"] == "active"
         finally:
             conn.close()

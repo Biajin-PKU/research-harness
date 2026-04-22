@@ -8,9 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from research_harness.execution.compiled_summary import (
-    COMPILED_FIELDS,
     _compute_source_hash,
-    _build_source_text,
     ensure_compiled_summary,
     format_compiled_as_text,
     format_compiled_for_context,
@@ -22,7 +20,11 @@ SAMPLE_COMPILED = {
     "overview": "This paper proposes method X for budget pacing.",
     "methods": ["dual decomposition", "online learning"],
     "claims": [
-        {"claim": "Method X outperforms baseline by 15%", "evidence": "Table 3", "strength": "strong"}
+        {
+            "claim": "Method X outperforms baseline by 15%",
+            "evidence": "Table 3",
+            "strength": "strong",
+        }
     ],
     "limitations": ["Assumes stationary distributions"],
     "metrics": [
@@ -51,7 +53,14 @@ def _insert_paper(conn, paper_id=1, title="Test Paper", abstract="A" * 200):
     conn.execute(
         "INSERT OR IGNORE INTO papers (id, title, abstract, status, doi, arxiv_id, s2_id) "
         "VALUES (?, ?, ?, 'meta_only', ?, ?, ?)",
-        (paper_id, title, abstract, f"doi_{paper_id}", f"arxiv_{paper_id}", f"s2_{paper_id}"),
+        (
+            paper_id,
+            title,
+            abstract,
+            f"doi_{paper_id}",
+            f"arxiv_{paper_id}",
+            f"s2_{paper_id}",
+        ),
     )
     conn.commit()
 
@@ -83,6 +92,7 @@ def _insert_annotation(conn, paper_id, section, content):
 
 # --- Hash tests ---
 
+
 class TestSourceHash:
     def test_deterministic(self, db, conn):
         _insert_paper(conn)
@@ -107,10 +117,16 @@ class TestSourceHash:
 
 # --- ensure_compiled_summary tests ---
 
+
 class TestEnsureCompiledSummary:
     def test_cache_hit(self, db, conn):
         _insert_paper(conn)
-        _insert_annotation(conn, 1, "summary", "Test summary content about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches.")
+        _insert_annotation(
+            conn,
+            1,
+            "summary",
+            "Test summary content about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches.",
+        )
         source_hash = _compute_source_hash(conn, 1)
         conn.execute(
             "UPDATE papers SET compiled_summary = ?, compiled_from_hash = ? WHERE id = 1",
@@ -126,7 +142,12 @@ class TestEnsureCompiledSummary:
 
     def test_cache_miss_calls_llm(self, db, conn):
         _insert_paper(conn)
-        _insert_annotation(conn, 1, "summary", "Test summary about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches for constrained optimization.")
+        _insert_annotation(
+            conn,
+            1,
+            "summary",
+            "Test summary about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches for constrained optimization.",
+        )
 
         with patch(_P_CLIENT, return_value=MagicMock()):
             with patch(_P_CHAT, return_value=json.dumps(SAMPLE_COMPILED)):
@@ -134,14 +155,21 @@ class TestEnsureCompiledSummary:
                     result = ensure_compiled_summary(db, 1)
 
         assert result["overview"] == SAMPLE_COMPILED["overview"]
-        row = conn.execute("SELECT compiled_summary FROM papers WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT compiled_summary FROM papers WHERE id = 1"
+        ).fetchone()
         assert row["compiled_summary"]
         stored = json.loads(row["compiled_summary"])
         assert stored["overview"] == SAMPLE_COMPILED["overview"]
 
     def test_invalidation_on_hash_change(self, db, conn):
         _insert_paper(conn)
-        _insert_annotation(conn, 1, "summary", "Original summary about budget pacing methods for online advertising platforms with dual decomposition approaches.")
+        _insert_annotation(
+            conn,
+            1,
+            "summary",
+            "Original summary about budget pacing methods for online advertising platforms with dual decomposition approaches.",
+        )
         old_hash = _compute_source_hash(conn, 1)
         conn.execute(
             "UPDATE papers SET compiled_summary = ?, compiled_from_hash = ? WHERE id = 1",
@@ -149,7 +177,12 @@ class TestEnsureCompiledSummary:
         )
         conn.commit()
 
-        _insert_annotation(conn, 1, "summary", "Updated summary with new content about reinforcement learning approaches for constrained budget optimization in real-time bidding systems.")
+        _insert_annotation(
+            conn,
+            1,
+            "summary",
+            "Updated summary with new content about reinforcement learning approaches for constrained budget optimization in real-time bidding systems.",
+        )
 
         new_compiled = {**SAMPLE_COMPILED, "overview": "Updated overview"}
         with patch(_P_CLIENT, return_value=MagicMock()):
@@ -175,13 +208,20 @@ class TestEnsureCompiledSummary:
 
     def test_llm_failure_returns_empty(self, db, conn):
         _insert_paper(conn)
-        _insert_annotation(conn, 1, "summary", "Test summary content about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches.")
+        _insert_annotation(
+            conn,
+            1,
+            "summary",
+            "Test summary content about budget pacing methods for online advertising platforms with dual decomposition and reinforcement learning approaches.",
+        )
 
         with patch(_P_CLIENT, return_value=MagicMock()):
             with patch(_P_CHAT, side_effect=RuntimeError("LLM down")):
                 result = ensure_compiled_summary(db, 1)
         assert result == {}
-        row = conn.execute("SELECT compiled_summary FROM papers WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT compiled_summary FROM papers WHERE id = 1"
+        ).fetchone()
         assert row["compiled_summary"] == ""
 
     def test_nonexistent_paper(self, db):
@@ -190,6 +230,7 @@ class TestEnsureCompiledSummary:
 
 
 # --- Format tests ---
+
 
 class TestFormatCompiled:
     def test_full_format(self):
@@ -218,6 +259,7 @@ class TestFormatCompiled:
 
 
 # --- Topic summary tests ---
+
 
 class TestTopicSummaryCached:
     def _setup_topic_with_papers(self, conn, n=5):
@@ -256,7 +298,9 @@ class TestTopicSummaryCached:
             return_value=SAMPLE_COMPILED,
         ):
             with patch(_P_CLIENT, return_value=MagicMock()):
-                with patch(_P_CHAT, return_value=json.dumps({"overview": "New overview"})):
+                with patch(
+                    _P_CHAT, return_value=json.dumps({"overview": "New overview"})
+                ):
                     with patch(_P_JSON, return_value={"overview": "New overview"}):
                         summary, ids = get_topic_summary_cached(db, 1)
 
@@ -278,7 +322,12 @@ class TestTopicSummaryCached:
                 "UPDATE papers SET citation_count = ?, year = ? WHERE id = ?",
                 (100 - i, 2020, i),
             )
-        _insert_paper(conn, paper_id=30, title="Revisiting budget pacing: failures and pitfalls", abstract="A" * 200)
+        _insert_paper(
+            conn,
+            paper_id=30,
+            title="Revisiting budget pacing: failures and pitfalls",
+            abstract="A" * 200,
+        )
         _link_paper_topic(conn, 30, 1)
         conn.execute("UPDATE papers SET citation_count = 0, year = 2025 WHERE id = 30")
         conn.commit()
@@ -297,6 +346,7 @@ class TestTopicSummaryCached:
 
 # --- Integration with _get_paper_text ---
 
+
 class TestGetPaperTextIntegration:
     def test_uses_compiled_summary(self, db, conn):
         _insert_paper(conn)
@@ -307,6 +357,7 @@ class TestGetPaperTextIntegration:
         conn.commit()
 
         from research_harness.execution.llm_primitives import _get_paper_text
+
         title, text = _get_paper_text(db, 1)
         assert "[Overview]" in text
         assert "budget pacing" in text
@@ -316,5 +367,6 @@ class TestGetPaperTextIntegration:
         _insert_annotation(conn, 1, "summary", "Annotation-based summary.")
 
         from research_harness.execution.llm_primitives import _get_paper_text
+
         title, text = _get_paper_text(db, 1)
         assert "Annotation-based summary" in text

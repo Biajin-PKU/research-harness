@@ -73,17 +73,23 @@ def run_project(
                     "current_stage": "",
                     "stages_completed": [],
                     "summary": f"No orchestrator run found for project {project_id}. "
-                               "Initialize with: rhub auto-runner start --init",
+                    "Initialize with: rhub auto-runner start --init",
                 }
             topic_id = run.topic_id
         checkpoint_data = ckpt.new_checkpoint(
-            project_id, topic_id, mode=mode, session_command=cmd,
+            project_id,
+            topic_id,
+            mode=mode,
+            session_command=cmd,
         )
         # Sync initial stage from orchestrator run if it exists
         if run is not None and run.current_stage and run.current_stage != "init":
             checkpoint_data["current_stage"] = run.current_stage
-            logger.info("Resuming from orchestrator stage '%s' for project %d",
-                        run.current_stage, project_id)
+            logger.info(
+                "Resuming from orchestrator stage '%s' for project %d",
+                run.current_stage,
+                project_id,
+            )
         ckpt.save_checkpoint(ckpt_path, checkpoint_data)
         logger.info("Created new checkpoint for project %d", project_id)
 
@@ -129,8 +135,12 @@ def run_project(
         budget_result = budget_monitor.check()
         checkpoint_data["budget"] = budget_monitor.to_dict()
         if budget_result.action == "halt":
-            ckpt.record_event(checkpoint_data, stage=current_stage,
-                              event="budget_halt", detail=budget_result.message)
+            ckpt.record_event(
+                checkpoint_data,
+                stage=current_stage,
+                event="budget_halt",
+                detail=budget_result.message,
+            )
             ckpt.save_checkpoint(ckpt_path, checkpoint_data)
             return {
                 "status": "paused",
@@ -142,8 +152,12 @@ def run_project(
 
         if status == "complete":
             stages_completed.append(current_stage)
-            ckpt.record_event(checkpoint_data, stage=current_stage,
-                              event="advance", detail="gate passed")
+            ckpt.record_event(
+                checkpoint_data,
+                stage=current_stage,
+                event="advance",
+                detail="gate passed",
+            )
 
             # Terminal stage: write is the last stage, no advance needed.
             # But still verify the gate passes (review issues, artifacts).
@@ -151,8 +165,12 @@ def run_project(
                 gate_decision = svc.check_gate(project_id, stage="write")
                 if gate_decision not in ("pass", None):
                     logger.warning("Write gate not passed: %s", gate_decision)
-                    ckpt.update_stage(checkpoint_data, stage="write", state="needs_human",
-                                      summary_md=f"Write gate: {gate_decision}")
+                    ckpt.update_stage(
+                        checkpoint_data,
+                        stage="write",
+                        state="needs_human",
+                        summary_md=f"Write gate: {gate_decision}",
+                    )
                     ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                     if auto_approve:
                         logger.info("Auto-approving write gate (%s)", gate_decision)
@@ -186,20 +204,28 @@ def run_project(
                     # Loopback support: advance() may have triggered a loopback
                     if advance_result.get("loopback"):
                         loopback_to = advance_result.get("to_stage", "build")
-                        ckpt.record_event(checkpoint_data, stage=current_stage,
-                                          event="loopback",
-                                          detail=f"→ {loopback_to} (gap-triggered)")
+                        ckpt.record_event(
+                            checkpoint_data,
+                            stage=current_stage,
+                            event="loopback",
+                            detail=f"→ {loopback_to} (gap-triggered)",
+                        )
                         current_stage = loopback_to
-                        ckpt.update_stage(checkpoint_data, stage=current_stage, state="pending")
+                        ckpt.update_stage(
+                            checkpoint_data, stage=current_stage, state="pending"
+                        )
                         checkpoint_data["current_stage_attempt"] = 1
                         ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                         continue
 
                     # Stop-before or gate failure — pause for human
                     if advance_result.get("stop_before"):
-                        ckpt.update_stage(checkpoint_data, stage=current_stage,
-                                          state="needs_human",
-                                          summary_md=f"Stop-before: {error_msg}")
+                        ckpt.update_stage(
+                            checkpoint_data,
+                            stage=current_stage,
+                            state="needs_human",
+                            summary_md=f"Stop-before: {error_msg}",
+                        )
                         ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                         return {
                             "status": "paused",
@@ -209,9 +235,12 @@ def run_project(
                         }
 
                     # Other advance failure — don't move checkpoint, pause
-                    ckpt.update_stage(checkpoint_data, stage=current_stage,
-                                      state="error",
-                                      summary_md=f"Advance blocked: {error_msg}")
+                    ckpt.update_stage(
+                        checkpoint_data,
+                        stage=current_stage,
+                        state="error",
+                        summary_md=f"Advance blocked: {error_msg}",
+                    )
                     ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                     return {
                         "status": "error",
@@ -237,8 +266,12 @@ def run_project(
             continue
 
         if status == "needs_human":
-            ckpt.update_stage(checkpoint_data, stage=current_stage, state="needs_human",
-                              summary_md=result.get("summary", ""))
+            ckpt.update_stage(
+                checkpoint_data,
+                stage=current_stage,
+                state="needs_human",
+                summary_md=result.get("summary", ""),
+            )
             ckpt.save_checkpoint(ckpt_path, checkpoint_data)
 
             if auto_approve:
@@ -249,9 +282,12 @@ def run_project(
                         error_msg = advance_result.get("error", "advance failed")
                         logger.warning("Auto-approve advance blocked: %s", error_msg)
                         # Don't advance checkpoint — return error to prevent divergence
-                        ckpt.update_stage(checkpoint_data, stage=current_stage,
-                                          state="error",
-                                          summary_md=f"Auto-approve blocked: {error_msg}")
+                        ckpt.update_stage(
+                            checkpoint_data,
+                            stage=current_stage,
+                            state="error",
+                            summary_md=f"Auto-approve blocked: {error_msg}",
+                        )
                         ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                         return {
                             "status": "error",
@@ -271,7 +307,9 @@ def run_project(
                 stages_completed.append(current_stage)
                 current_stage = next_stage(current_stage)
                 if current_stage:
-                    ckpt.update_stage(checkpoint_data, stage=current_stage, state="pending")
+                    ckpt.update_stage(
+                        checkpoint_data, stage=current_stage, state="pending"
+                    )
                 ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                 continue
 
@@ -286,12 +324,17 @@ def run_project(
 
         if status == "fallback_stage":
             from ..orchestrator.stages import STAGE_REGISTRY
+
             stage_meta = STAGE_REGISTRY.get(current_stage)
             if stage_meta and stage_meta.fallback_stage:
                 fallback = stage_meta.fallback_stage
                 logger.warning("Falling back from %s to %s", current_stage, fallback)
-                ckpt.record_event(checkpoint_data, stage=current_stage,
-                                  event="fallback", detail=f"→ {fallback}")
+                ckpt.record_event(
+                    checkpoint_data,
+                    stage=current_stage,
+                    event="fallback",
+                    detail=f"→ {fallback}",
+                )
                 current_stage = fallback
                 ckpt.update_stage(checkpoint_data, stage=current_stage, state="pending")
                 checkpoint_data["current_stage_attempt"] = 1
@@ -300,8 +343,12 @@ def run_project(
                 continue
 
         if status in ("pause_human", "error"):
-            ckpt.update_stage(checkpoint_data, stage=current_stage, state="error",
-                              summary_md=result.get("summary", ""))
+            ckpt.update_stage(
+                checkpoint_data,
+                stage=current_stage,
+                state="error",
+                summary_md=result.get("summary", ""),
+            )
             ckpt.save_checkpoint(ckpt_path, checkpoint_data)
             return {
                 "status": "paused" if status == "pause_human" else "error",
@@ -319,10 +366,18 @@ def run_project(
             checkpoint_data["current_stage_attempt"] = attempt
             limit = max_retries(current_stage)
             if attempt > limit + 1:
-                logger.error("Retry limit exhausted for stage %s (attempt %d > %d)",
-                             current_stage, attempt, limit + 1)
-                ckpt.update_stage(checkpoint_data, stage=current_stage, state="error",
-                                  summary_md=f"Retry limit exhausted after {attempt - 1} attempts")
+                logger.error(
+                    "Retry limit exhausted for stage %s (attempt %d > %d)",
+                    current_stage,
+                    attempt,
+                    limit + 1,
+                )
+                ckpt.update_stage(
+                    checkpoint_data,
+                    stage=current_stage,
+                    state="error",
+                    summary_md=f"Retry limit exhausted after {attempt - 1} attempts",
+                )
                 ckpt.save_checkpoint(ckpt_path, checkpoint_data)
                 return {
                     "status": "error",
@@ -331,8 +386,12 @@ def run_project(
                     "summary": f"Retry limit exhausted for {current_stage}",
                     "checkpoint_path": str(ckpt_path),
                 }
-            ckpt.record_event(checkpoint_data, stage=current_stage,
-                              event="retry", detail=f"attempt {attempt}")
+            ckpt.record_event(
+                checkpoint_data,
+                stage=current_stage,
+                event="retry",
+                detail=f"attempt {attempt}",
+            )
             ckpt.save_checkpoint(ckpt_path, checkpoint_data)
             continue
 
@@ -427,7 +486,7 @@ def get_status(
 
 def _dry_run(current_stage: str, mode: str) -> dict[str, Any]:
     """Show what would happen without executing."""
-    from .stage_policy import STAGE_POLICIES, should_invoke_codex, should_pause_human
+    from .stage_policy import STAGE_POLICIES, should_invoke_codex
 
     plan = []
     stage = current_stage
@@ -435,12 +494,14 @@ def _dry_run(current_stage: str, mode: str) -> dict[str, Any]:
         policy = STAGE_POLICIES.get(stage)
         if policy is None:
             break
-        plan.append({
-            "stage": stage,
-            "tools": list(policy.tools),
-            "codex": should_invoke_codex(stage, mode),
-            "human_pause": should_pause_human(stage, mode),
-        })
+        plan.append(
+            {
+                "stage": stage,
+                "tools": list(policy.tools),
+                "codex": should_invoke_codex(stage, mode),
+                "human_pause": should_pause_human(stage, mode),
+            }
+        )
         stage = next_stage(stage)
 
     return {

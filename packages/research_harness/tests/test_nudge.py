@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 
-from research_harness.evolution.nudge import NudgeManager, DEFAULT_INTERVAL
+from research_harness.evolution.nudge import NudgeManager
 
 
 class TestNudgeManager:
@@ -64,6 +63,7 @@ class TestNudgeManager:
     def test_format_nudge(self, db):
         mgr = NudgeManager(db, "sess-n6")
         from research_harness.evolution.models import NudgeDecision
+
         nudge = NudgeDecision(
             nudge_type="strategy_extraction",
             message="Consider extracting strategies",
@@ -76,6 +76,7 @@ class TestNudgeManager:
     def test_format_nudge_high_priority(self, db):
         mgr = NudgeManager(db, "sess-n7")
         from research_harness.evolution.models import NudgeDecision
+
         nudge = NudgeDecision(
             nudge_type="reflection_prompt",
             message="Time to reflect",

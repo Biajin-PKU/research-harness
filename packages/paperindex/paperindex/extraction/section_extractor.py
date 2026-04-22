@@ -13,7 +13,13 @@ SECTION_KEYWORDS = {
     "experiments": ("experiment", "evaluation", "result", "benchmark", "ablation"),
     "equations": ("equation", "preliminar", "theorem", "proof", "objective"),
     "limitations": ("limitation", "discussion", "conclusion", "failure"),
-    "reproduction_notes": ("implementation", "training", "dataset", "hyperparameter", "setup"),
+    "reproduction_notes": (
+        "implementation",
+        "training",
+        "dataset",
+        "hyperparameter",
+        "setup",
+    ),
 }
 
 
@@ -41,11 +47,15 @@ def extract_section_content(
         last_match = matches[-1]
         # Include one more page after the section's end_page if available
         if last_match.end_page < len(pages_text):
-            extra_page_idx = last_match.end_page  # end_page is 1-based, so this is next page
+            extra_page_idx = (
+                last_match.end_page
+            )  # end_page is 1-based, so this is next page
             if extra_page_idx < len(pages_text):
                 extra_text = "\n\n" + pages_text[extra_page_idx]
 
-    content = "\n\n".join(node.section_text.strip() for node in matches if node.section_text.strip())
+    content = "\n\n".join(
+        node.section_text.strip() for node in matches if node.section_text.strip()
+    )
     content = (content + extra_text).strip()
     if not content:
         content = "\n\n".join(node.title for node in matches)

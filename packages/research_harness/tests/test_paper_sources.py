@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from research_harness.paper_sources import PDFCandidate, PDFResolver, PaperRecord, SearchAggregator, SearchQuery, normalize_title
+from research_harness.paper_sources import (
+    PDFCandidate,
+    PDFResolver,
+    PaperRecord,
+    SearchAggregator,
+    SearchQuery,
+    normalize_title,
+)
 
 
 class StubProvider:
@@ -14,7 +21,9 @@ class StubProvider:
 
 
 def test_normalize_title_collapses_punctuation() -> None:
-    assert normalize_title("Attention Is All You Need!!!") == "attention is all you need"
+    assert (
+        normalize_title("Attention Is All You Need!!!") == "attention is all you need"
+    )
 
 
 def test_search_aggregator_dedupes_and_prefers_stronger_metadata() -> None:
@@ -62,7 +71,9 @@ def test_search_aggregator_dedupes_and_prefers_stronger_metadata() -> None:
         ],
     )
 
-    outcome = SearchAggregator([google, openalex]).search(SearchQuery(query="attention", limit=10))
+    outcome = SearchAggregator([google, openalex]).search(
+        SearchQuery(query="attention", limit=10)
+    )
 
     assert not outcome.provider_errors
     assert len(outcome.results) == 1
@@ -70,23 +81,41 @@ def test_search_aggregator_dedupes_and_prefers_stronger_metadata() -> None:
     assert result.doi == "10.5555/3295222.3295349"
     assert result.venue == "NeurIPS"
     assert result.authors == ["Ashish Vaswani", "Noam Shazeer"]
-    assert {candidate.source_type for candidate in result.pdf_candidates} == {"doi_landing", "openalex_content"}
+    assert {candidate.source_type for candidate in result.pdf_candidates} == {
+        "doi_landing",
+        "openalex_content",
+    }
 
 
 def test_search_aggregator_keeps_recall_results_ranked() -> None:
     google = StubProvider(
         "google_scholar",
-        [PaperRecord(title="High Recall Result", provider="google_scholar", citation_count=100)],
+        [
+            PaperRecord(
+                title="High Recall Result",
+                provider="google_scholar",
+                citation_count=100,
+            )
+        ],
     )
     dblp = StubProvider(
         "dblp",
-        [PaperRecord(title="Lower Priority Result", provider="dblp", citation_count=1000)],
+        [
+            PaperRecord(
+                title="Lower Priority Result", provider="dblp", citation_count=1000
+            )
+        ],
     )
 
-    outcome = SearchAggregator([dblp, google]).search(SearchQuery(query="result", limit=10))
+    outcome = SearchAggregator([dblp, google]).search(
+        SearchQuery(query="result", limit=10)
+    )
 
     assert not outcome.provider_errors
-    assert [item.title for item in outcome.results] == ["High Recall Result", "Lower Priority Result"]
+    assert [item.title for item in outcome.results] == [
+        "High Recall Result",
+        "Lower Priority Result",
+    ]
 
 
 def test_pdf_resolver_prefers_open_access_over_browser_and_landing() -> None:
@@ -156,11 +185,12 @@ def test_search_aggregator_prefers_exact_title_match_over_extra_identifiers() ->
         ],
     )
 
-    outcome = SearchAggregator([semantic]).search(SearchQuery(query="attention is all you need", limit=10))
+    outcome = SearchAggregator([semantic]).search(
+        SearchQuery(query="attention is all you need", limit=10)
+    )
 
     assert not outcome.provider_errors
     assert outcome.results[0].title == "Attention is All you Need"
-
 
 
 def test_search_aggregator_keeps_partial_results_when_provider_fails() -> None:
@@ -173,10 +203,18 @@ def test_search_aggregator_keeps_partial_results_when_provider_fails() -> None:
 
     semantic = StubProvider(
         "semantic_scholar",
-        [PaperRecord(title="Attention is All you Need", provider="semantic_scholar", year=2017)],
+        [
+            PaperRecord(
+                title="Attention is All you Need",
+                provider="semantic_scholar",
+                year=2017,
+            )
+        ],
     )
 
-    outcome = SearchAggregator([FailingProvider(), semantic]).search(SearchQuery(query="attention", limit=10))
+    outcome = SearchAggregator([FailingProvider(), semantic]).search(
+        SearchQuery(query="attention", limit=10)
+    )
 
     assert [item.title for item in outcome.results] == ["Attention is All you Need"]
     assert len(outcome.provider_errors) == 1

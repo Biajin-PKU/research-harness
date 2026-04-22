@@ -1,8 +1,20 @@
 import json
+import os
 
+import pytest
 from click.testing import CliRunner
 
 from paperindex.cli import main
+
+pytestmark = pytest.mark.skipif(
+    not (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("CURSOR_AGENT_ENABLED")
+        or os.getenv("CODEX_ENABLED")
+    ),
+    reason="Requires an LLM provider (OPENAI_API_KEY / ANTHROPIC_API_KEY / CURSOR_AGENT_ENABLED / CODEX_ENABLED)",
+)
 
 
 def test_cli_json(sample_pdf, tmp_path):
@@ -12,7 +24,9 @@ def test_cli_json(sample_pdf, tmp_path):
     payload = json.loads(structure.output)
     assert payload["page_count"] == 3
 
-    section = runner.invoke(main, ["section", str(sample_pdf), "--section", "summary", "--json-output"])
+    section = runner.invoke(
+        main, ["section", str(sample_pdf), "--section", "summary", "--json-output"]
+    )
     assert section.exit_code == 0
     assert "budget pacing" in json.loads(section.output)["content"].lower()
 
@@ -21,19 +35,36 @@ def test_cli_json(sample_pdf, tmp_path):
     assert json.loads(card.output)["title"] == "Sample Paper Title"
 
     library_root = tmp_path / "library"
-    ingest = runner.invoke(main, ["ingest", str(sample_pdf), "--library-root", str(library_root), "--json-output"])
+    ingest = runner.invoke(
+        main,
+        [
+            "ingest",
+            str(sample_pdf),
+            "--library-root",
+            str(library_root),
+            "--json-output",
+        ],
+    )
     assert ingest.exit_code == 0
     record = json.loads(ingest.output)
     assert record["paper_id"]
 
-    catalog = runner.invoke(main, ["catalog", "--library-root", str(library_root), "--json-output"])
+    catalog = runner.invoke(
+        main, ["catalog", "--library-root", str(library_root), "--json-output"]
+    )
     assert catalog.exit_code == 0
     catalog_payload = json.loads(catalog.output)
     assert catalog_payload[0]["paper_id"] == record["paper_id"]
 
     search = runner.invoke(
         main,
-        ["search", "budget pacing", "--library-root", str(library_root), "--json-output"],
+        [
+            "search",
+            "budget pacing",
+            "--library-root",
+            str(library_root),
+            "--json-output",
+        ],
     )
     assert search.exit_code == 0
     results = json.loads(search.output)
@@ -42,7 +73,16 @@ def test_cli_json(sample_pdf, tmp_path):
     assert results[0]["structure_matches"]
     assert "summary" in record["sections"]
 
-    show = runner.invoke(main, ["show", record["paper_id"], "--library-root", str(library_root), "--json-output"])
+    show = runner.invoke(
+        main,
+        [
+            "show",
+            record["paper_id"],
+            "--library-root",
+            str(library_root),
+            "--json-output",
+        ],
+    )
     assert show.exit_code == 0
     shown = json.loads(show.output)
     assert shown["paper_id"] == record["paper_id"]
@@ -50,7 +90,13 @@ def test_cli_json(sample_pdf, tmp_path):
 
     show_structure = runner.invoke(
         main,
-        ["show-structure", record["paper_id"], "--library-root", str(library_root), "--json-output"],
+        [
+            "show-structure",
+            record["paper_id"],
+            "--library-root",
+            str(library_root),
+            "--json-output",
+        ],
     )
     assert show_structure.exit_code == 0
     structure_payload = json.loads(show_structure.output)

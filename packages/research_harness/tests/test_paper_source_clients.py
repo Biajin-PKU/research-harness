@@ -16,7 +16,9 @@ from research_harness.paper_source_clients import (
 from research_harness.paper_sources import SearchQuery
 
 
-def test_semantic_scholar_provider_uses_supported_fields_and_maps_external_ids() -> None:
+def test_semantic_scholar_provider_uses_supported_fields_and_maps_external_ids() -> (
+    None
+):
     captured: dict[str, str] = {}
 
     def fetcher(url: str, headers: dict[str, str]):
@@ -59,8 +61,11 @@ class TestFetchWithRetry:
     def test_success_on_first_try(self, mock_urlopen):
         mock_urlopen.return_value = _mock_response(b"hello")
         result = _fetch_with_retry(
-            "https://example.com", {}, lambda data: data.decode("utf-8"),
-            max_retries=0, base_backoff=0,
+            "https://example.com",
+            {},
+            lambda data: data.decode("utf-8"),
+            max_retries=0,
+            base_backoff=0,
         )
         assert result == "hello"
         assert mock_urlopen.call_count == 1
@@ -72,12 +77,18 @@ class TestFetchWithRetry:
         resp_ok = BytesIO(b'{"ok": true}')
         resp_ok.read = resp_ok.read
         mock_urlopen.side_effect = [
-            urllib.error.HTTPError("http://x", 429, "rate limited", http.client.HTTPMessage(), BytesIO(b"")),
+            urllib.error.HTTPError(
+                "http://x", 429, "rate limited", http.client.HTTPMessage(), BytesIO(b"")
+            ),
             _mock_response(b'{"ok": true}'),
         ]
 
         result = _fetch_with_retry(
-            "http://x", {}, lambda d: d.decode(), max_retries=2, base_backoff=0.01,
+            "http://x",
+            {},
+            lambda d: d.decode(),
+            max_retries=2,
+            base_backoff=0.01,
         )
         assert result == '{"ok": true}'
         assert mock_sleep.call_count == 1
@@ -85,21 +96,31 @@ class TestFetchWithRetry:
     @patch("research_harness.paper_source_clients.urllib.request.urlopen")
     def test_raises_on_non_retryable_http_error(self, mock_urlopen):
         mock_urlopen.side_effect = urllib.error.HTTPError(
-            "http://x", 404, "not found", http.client.HTTPMessage(), BytesIO(b""),
+            "http://x",
+            404,
+            "not found",
+            http.client.HTTPMessage(),
+            BytesIO(b""),
         )
         with pytest.raises(urllib.error.HTTPError) as exc_info:
-            _fetch_with_retry("http://x", {}, lambda d: d, max_retries=2, base_backoff=0.01)
+            _fetch_with_retry(
+                "http://x", {}, lambda d: d, max_retries=2, base_backoff=0.01
+            )
         assert exc_info.value.code == 404
 
     @patch("research_harness.paper_source_clients.urllib.request.urlopen")
     @patch("research_harness.paper_source_clients.time.sleep")
     def test_raises_after_max_retries(self, mock_sleep, mock_urlopen):
         mock_urlopen.side_effect = [
-            urllib.error.HTTPError("http://x", 503, "unavailable", http.client.HTTPMessage(), BytesIO(b""))
+            urllib.error.HTTPError(
+                "http://x", 503, "unavailable", http.client.HTTPMessage(), BytesIO(b"")
+            )
             for _ in range(4)
         ]
         with pytest.raises(urllib.error.HTTPError) as exc_info:
-            _fetch_with_retry("http://x", {}, lambda d: d, max_retries=3, base_backoff=0.01)
+            _fetch_with_retry(
+                "http://x", {}, lambda d: d, max_retries=3, base_backoff=0.01
+            )
         assert exc_info.value.code == 503
         assert mock_sleep.call_count == 3
 
@@ -108,8 +129,11 @@ class TestFetchWithRetry:
     def test_post_request_with_data(self, mock_sleep, mock_urlopen):
         mock_urlopen.return_value = _mock_response(b'{"result": "ok"}')
         result = _fetch_with_retry(
-            "http://x", {"Content-Type": "application/json"},
-            lambda d: d.decode(), data=b'{"q": "test"}', method="POST",
+            "http://x",
+            {"Content-Type": "application/json"},
+            lambda d: d.decode(),
+            data=b'{"q": "test"}',
+            method="POST",
         )
         assert result == '{"result": "ok"}'
         req = mock_urlopen.call_args[0][0]
@@ -137,17 +161,23 @@ class TestParseRetryAfter:
 
 def _mock_response(data: bytes):
     """Create a mock HTTP response context manager."""
+
     class _Resp:
         def read(self):
             return data
+
         def __enter__(self):
             return self
+
         def __exit__(self, *a):
             pass
+
     return _Resp()
 
 
-def _make_http_error(code: int, retry_after: str | None = None) -> urllib.error.HTTPError:
+def _make_http_error(
+    code: int, retry_after: str | None = None
+) -> urllib.error.HTTPError:
     headers = http.client.HTTPMessage()
     if retry_after is not None:
         headers["Retry-After"] = retry_after

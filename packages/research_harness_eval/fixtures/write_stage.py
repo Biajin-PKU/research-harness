@@ -17,7 +17,9 @@ WRITE_CASES = [
         stage="write",
         description="Section review scores all 10 dimensions",
         input_data={"section": "method", "content": "Test content for review."},
-        expected={"required_fields": ["section", "overall_score", "dimensions", "suggestions"]},
+        expected={
+            "required_fields": ["section", "overall_score", "dimensions", "suggestions"]
+        },
         grader_type="deterministic",
         tags=["write", "review"],
     ),
@@ -43,7 +45,11 @@ WRITE_CASES = [
         id="write-005",
         stage="write",
         description="Section revise produces different content than input",
-        input_data={"section": "method", "content": "Original text.", "review_feedback": "Add more detail."},
+        input_data={
+            "section": "method",
+            "content": "Original text.",
+            "review_feedback": "Add more detail.",
+        },
         expected={"required_fields": ["section", "revised_content", "changes_made"]},
         grader_type="deterministic",
         tags=["write", "revision"],

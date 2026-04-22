@@ -12,7 +12,9 @@ from ..types import SectionNode
 from ..utils import assign_node_ids, first_nonempty_line
 
 
-def extract_structure_tree(pdf_path: str | Path, llm_config: dict[str, Any] | None = None) -> tuple[list[SectionNode], dict]:
+def extract_structure_tree(
+    pdf_path: str | Path, llm_config: dict[str, Any] | None = None
+) -> tuple[list[SectionNode], dict]:
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
     try:
@@ -39,7 +41,6 @@ def extract_structure_tree(pdf_path: str | Path, llm_config: dict[str, Any] | No
         doc.close()
 
 
-
 def _build_tree_from_toc(toc: list[list], page_count: int) -> list[SectionNode]:
     roots: list[SectionNode] = []
     stack: list[tuple[int, SectionNode]] = []
@@ -60,7 +61,6 @@ def _build_tree_from_toc(toc: list[list], page_count: int) -> list[SectionNode]:
     return roots
 
 
-
 def _build_tree_with_llm(
     pdf_path: Path,
     pages_text: list[str],
@@ -70,7 +70,9 @@ def _build_tree_with_llm(
     config = resolve_llm_config(llm_config)
     # CLI providers (cursor_agent, codex) authenticate out-of-band; no api_key in env.
     _cli_llm_providers = frozenset({"cursor_agent", "codex"})
-    if config.provider not in _cli_llm_providers and (not config.api_key or not config.model):
+    if config.provider not in _cli_llm_providers and (
+        not config.api_key or not config.model
+    ):
         raise RuntimeError(
             "PDF has no embedded table of contents; LLM-backed section structure extraction requires a configured LLM provider "
             "(API key for OpenAI/Anthropic/Kimi, or set CURSOR_AGENT_ENABLED=1 / CODEX_ENABLED=1 for CLI providers)"
@@ -110,10 +112,14 @@ Page snippets:
         start_page = _coerce_page(item.get("start_page"), page_count)
         if not title or start_page is None:
             continue
-        nodes.append(SectionNode(title=title, start_page=start_page, end_page=start_page))
+        nodes.append(
+            SectionNode(title=title, start_page=start_page, end_page=start_page)
+        )
 
     if not nodes:
-        raise RuntimeError("LLM section structure response did not contain usable sections")
+        raise RuntimeError(
+            "LLM section structure response did not contain usable sections"
+        )
 
     nodes.sort(key=lambda node: (node.start_page, node.title.lower()))
     deduped: list[SectionNode] = []
@@ -129,14 +135,14 @@ Page snippets:
     return deduped
 
 
-
 def _page_preview(text: str, max_lines: int = 16, max_chars: int = 2200) -> str:
-    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+    lines = [
+        re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()
+    ]
     preview = "\n".join(lines[:max_lines]).strip()
     if len(preview) > max_chars:
         return preview[:max_chars].rsplit(" ", 1)[0].strip() + "..."
     return preview
-
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
@@ -169,6 +175,7 @@ def _parse_json_object(text: str) -> dict[str, Any]:
         # Try json_repair as last resort for LLM-generated malformed JSON
         try:
             import json_repair  # type: ignore[import]
+
             repaired = json_repair.repair_json(raw_json)
             parsed = json.loads(repaired)
             if isinstance(parsed, dict):
@@ -176,8 +183,9 @@ def _parse_json_object(text: str) -> dict[str, Any]:
         except Exception:
             pass
 
-    raise RuntimeError("LLM response was not valid JSON for section structure extraction")
-
+    raise RuntimeError(
+        "LLM response was not valid JSON for section structure extraction"
+    )
 
 
 def _coerce_page(value: Any, page_count: int) -> int | None:
@@ -188,10 +196,11 @@ def _coerce_page(value: Any, page_count: int) -> int | None:
     return min(max(page, 1), max(page_count, 1))
 
 
-
 def _fill_page_ranges(nodes: list[SectionNode], parent_end: int) -> None:
     for index, node in enumerate(nodes):
-        sibling_end = nodes[index + 1].start_page - 1 if index + 1 < len(nodes) else parent_end
+        sibling_end = (
+            nodes[index + 1].start_page - 1 if index + 1 < len(nodes) else parent_end
+        )
         sibling_end = max(node.start_page, sibling_end)
         if node.children:
             _fill_page_ranges(node.children, sibling_end)

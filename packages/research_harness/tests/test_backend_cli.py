@@ -18,7 +18,9 @@ def test_backend_info_json_default_local(runner):
 
 
 def test_backend_info_json_with_backend_override(runner):
-    result = runner.invoke(main, ["--backend", "claude_code", "--json", "backend", "info"])
+    result = runner.invoke(
+        main, ["--backend", "claude_code", "--json", "backend", "info"]
+    )
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["name"] == "claude_code"

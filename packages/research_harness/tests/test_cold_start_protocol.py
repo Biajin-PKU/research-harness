@@ -44,7 +44,13 @@ def _insert_papers(db, topic_id, count):
         for i in range(count):
             cur = conn.execute(
                 "INSERT INTO papers (title, year, doi, arxiv_id, s2_id) VALUES (?, ?, ?, ?, ?)",
-                (f"Paper {i}", 2024, f"10.test/cs-{topic_id}-{i}", f"cs.{topic_id}.{i}", f"s2-cs-{topic_id}-{i}"),
+                (
+                    f"Paper {i}",
+                    2024,
+                    f"10.test/cs-{topic_id}-{i}",
+                    f"cs.{topic_id}.{i}",
+                    f"s2-cs-{topic_id}-{i}",
+                ),
             )
             paper_id = int(cur.lastrowid)
             conn.execute(
@@ -87,7 +93,13 @@ def _insert_writing_observations(db, count):
                 """INSERT INTO writing_observations
                    (paper_id, dimension, section, observation, example_text)
                    VALUES (?, ?, ?, ?, ?)""",
-                (1, f"dim_{i}", "abstract", f'{{"pattern": "pattern_{i}"}}', f"example_{i}"),
+                (
+                    1,
+                    f"dim_{i}",
+                    "abstract",
+                    f'{{"pattern": "pattern_{i}"}}',
+                    f"example_{i}",
+                ),
             )
         conn.commit()
     finally:
@@ -102,7 +114,9 @@ def _insert_gap_artifact(db, topic_id, gap_count):
             "INSERT INTO projects (topic_id, name, description) VALUES (?, ?, ?)",
             (topic_id, "test-proj", "test"),
         )
-        gaps = [{"gap": f"Gap {i}", "description": f"Desc {i}"} for i in range(gap_count)]
+        gaps = [
+            {"gap": f"Gap {i}", "description": f"Desc {i}"} for i in range(gap_count)
+        ]
         payload = json.dumps({"gaps": gaps})
         conn.execute(
             """INSERT INTO project_artifacts
@@ -292,12 +306,13 @@ class TestRunSeedPhase:
         assert progress.complete
 
     def test_gold_papers_ingested(self, db, topic_id):
-        proto = ColdStartProtocol(
-            db=db, topic_id=topic_id, gold_papers=["2401.99999"]
-        )
+        proto = ColdStartProtocol(db=db, topic_id=topic_id, gold_papers=["2401.99999"])
         progress = proto.run_seed_phase()
         assert not progress.complete
-        assert any("gold paper" in n.lower() or "paper_search" in n.lower() for n in progress.notes)
+        assert any(
+            "gold paper" in n.lower() or "paper_search" in n.lower()
+            for n in progress.notes
+        )
 
     def test_generates_search_queries(self, db, topic_id):
         proto = ColdStartProtocol(db=db, topic_id=topic_id)

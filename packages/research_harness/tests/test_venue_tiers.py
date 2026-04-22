@@ -5,7 +5,6 @@ from __future__ import annotations
 from research_harness.primitives.venue_tiers import (
     CCFTier,
     CASQuartile,
-    VenueTier,
     get_venue_tier,
     meets_tier_threshold,
     normalize_venue_name,
@@ -112,7 +111,9 @@ def test_venue_tier_label_empty_for_unknown() -> None:
 
 
 def test_full_name_lookup() -> None:
-    tier = get_venue_tier("IEEE/CVF Conference on Computer Vision and Pattern Recognition")
+    tier = get_venue_tier(
+        "IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+    )
     assert tier.ccf == CCFTier.A
     assert tier.score == 90
 

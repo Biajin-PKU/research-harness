@@ -1,4 +1,5 @@
 """Paper acquisition pipeline: download → annotate → triage."""
+
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +19,9 @@ DEFAULT_DOWNLOAD_DIR = ".research-harness/downloads"
 DEFAULT_MANUAL_DIR = ".research-harness/manual_downloads"
 
 
-def _record_event(db: Database, paper_id: int, event_type: str, detail: str = "", provider: str = "") -> None:
+def _record_event(
+    db: Database, paper_id: int, event_type: str, detail: str = "", provider: str = ""
+) -> None:
     """Append a pipeline event to the event log."""
     try:
         conn = db.connect()
@@ -29,7 +32,12 @@ def _record_event(db: Database, paper_id: int, event_type: str, detail: str = ""
         conn.commit()
         conn.close()
     except Exception:
-        logger.debug("Failed to record pipeline event %s for paper %d", event_type, paper_id, exc_info=True)
+        logger.debug(
+            "Failed to record pipeline event %s for paper %d",
+            event_type,
+            paper_id,
+            exc_info=True,
+        )
 
 
 @dataclass
@@ -73,23 +81,29 @@ def _build_candidates(db: Database, topic_id: int) -> list[PaperDownloadCandidat
 
     candidates = []
     for row in rows:
-        candidates.append(PaperDownloadCandidate(
-            paper_id=int(row["id"]),
-            title=row["title"] or "",
-            year=row["year"],
-            venue=row["venue"] or "",
-            doi=row["doi"] or "",
-            arxiv_id=row["arxiv_id"] or "",
-            url=row["url"] or "",
-        ))
+        candidates.append(
+            PaperDownloadCandidate(
+                paper_id=int(row["id"]),
+                title=row["title"] or "",
+                year=row["year"],
+                venue=row["venue"] or "",
+                doi=row["doi"] or "",
+                arxiv_id=row["arxiv_id"] or "",
+                url=row["url"] or "",
+            )
+        )
     return candidates
 
 
-def _annotate_paper(db: Database, paper_id: int, pdf_path: Path, artifacts_root: Path) -> bool:
+def _annotate_paper(
+    db: Database, paper_id: int, pdf_path: Path, artifacts_root: Path
+) -> bool:
     try:
         from ..integrations.paperindex_adapter import PaperIndexAdapter
     except ImportError:
-        logger.warning("paperindex not installed, skipping annotation for paper %d", paper_id)
+        logger.warning(
+            "paperindex not installed, skipping annotation for paper %d", paper_id
+        )
         return False
 
     conn = db.connect()
@@ -134,7 +148,9 @@ def _process_results(
         }
 
         if result.status == "success" and result.path:
-            _record_event(db, result.paper_id, "download_ok", provider=result.provider or "")
+            _record_event(
+                db, result.paper_id, "download_ok", provider=result.provider or ""
+            )
             report.downloaded += 1
             _record_event(db, result.paper_id, "annotate_start")
             if _annotate_paper(db, result.paper_id, result.path, artifacts_root):
@@ -144,31 +160,46 @@ def _process_results(
                 # Eagerly compile structured summary while annotations are fresh
                 try:
                     from ..execution.compiled_summary import ensure_compiled_summary
+
                     ensure_compiled_summary(db, result.paper_id)
                 except Exception:
                     logging.getLogger(__name__).debug(
                         "Eager compilation failed for paper %d",
-                        result.paper_id, exc_info=True,
+                        result.paper_id,
+                        exc_info=True,
                     )
             else:
                 _record_event(db, result.paper_id, "annotate_fail")
                 entry["annotated"] = False
         elif result.status == "needs_manual":
-            _record_event(db, result.paper_id, "download_fail", detail=result.failure_reason or "needs manual", provider="paywall")
+            _record_event(
+                db,
+                result.paper_id,
+                "download_fail",
+                detail=result.failure_reason or "needs manual",
+                provider="paywall",
+            )
             report.needs_manual += 1
             cand = candidate_map.get(result.paper_id)
             if cand:
-                report.manual_list.append({
-                    "paper_id": cand.paper_id,
-                    "title": cand.title,
-                    "year": cand.year,
-                    "venue": cand.venue,
-                    "doi": cand.doi,
-                    "arxiv_id": cand.arxiv_id,
-                    "failure_reason": result.failure_reason,
-                })
+                report.manual_list.append(
+                    {
+                        "paper_id": cand.paper_id,
+                        "title": cand.title,
+                        "year": cand.year,
+                        "venue": cand.venue,
+                        "doi": cand.doi,
+                        "arxiv_id": cand.arxiv_id,
+                        "failure_reason": result.failure_reason,
+                    }
+                )
         else:
-            _record_event(db, result.paper_id, "download_fail", detail=result.failure_reason or "all URLs failed")
+            _record_event(
+                db,
+                result.paper_id,
+                "download_fail",
+                detail=result.failure_reason or "all URLs failed",
+            )
             report.failed += 1
 
         report.results.append(entry)
@@ -231,7 +262,9 @@ def _write_manual_list(manual_list: list[dict[str, Any]], manual_dir: Path) -> N
             "After placing files, run: `rhub paper ingest-manual`\n"
         )
 
-    logger.info("Wrote %d papers to manual download list: %s", len(manual_list), json_path)
+    logger.info(
+        "Wrote %d papers to manual download list: %s", len(manual_list), json_path
+    )
 
 
 def ingest_manual_downloads(
@@ -252,14 +285,30 @@ def ingest_manual_downloads(
         try:
             paper_id = int(parts[0])
         except (ValueError, IndexError):
-            logger.warning("Skipping %s: filename must start with paper_id", pdf_file.name)
-            results.append({"file": pdf_file.name, "status": "skipped", "reason": "invalid filename"})
+            logger.warning(
+                "Skipping %s: filename must start with paper_id", pdf_file.name
+            )
+            results.append(
+                {
+                    "file": pdf_file.name,
+                    "status": "skipped",
+                    "reason": "invalid filename",
+                }
+            )
             continue
 
         if _annotate_paper(db, paper_id, pdf_file, artifacts_path):
-            results.append({"file": pdf_file.name, "paper_id": paper_id, "status": "annotated"})
+            results.append(
+                {"file": pdf_file.name, "paper_id": paper_id, "status": "annotated"}
+            )
         else:
-            results.append({"file": pdf_file.name, "paper_id": paper_id, "status": "downloaded_only"})
+            results.append(
+                {
+                    "file": pdf_file.name,
+                    "paper_id": paper_id,
+                    "status": "downloaded_only",
+                }
+            )
 
     if results:
         pending_path = manual_path / "pending_manual.json"
@@ -268,7 +317,9 @@ def ingest_manual_downloads(
                 pending = json.loads(pending_path.read_text())
                 ingested_ids = {r["paper_id"] for r in results if "paper_id" in r}
                 remaining = [p for p in pending if p["paper_id"] not in ingested_ids]
-                pending_path.write_text(json.dumps(remaining, ensure_ascii=False, indent=2))
+                pending_path.write_text(
+                    json.dumps(remaining, ensure_ascii=False, indent=2)
+                )
             except (json.JSONDecodeError, OSError):
                 pass
 

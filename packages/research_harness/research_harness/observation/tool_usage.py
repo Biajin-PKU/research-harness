@@ -65,18 +65,23 @@ class ToolUsageTracker:
         for r in rows:
             name = r["tool_name"]
             used_names.add(name)
-            tools.append(ToolStats(
-                name=name,
-                call_count=r["calls"],
-                success_rate=round(r["successes"] / r["calls"], 3) if r["calls"] else 1.0,
-                avg_latency_ms=int(r["avg_latency"] or 0),
-                avg_cost_usd=round(r["avg_cost"] or 0, 4),
-                stages=(r["stages"] or "").split(","),
-            ))
+            tools.append(
+                ToolStats(
+                    name=name,
+                    call_count=r["calls"],
+                    success_rate=round(r["successes"] / r["calls"], 3)
+                    if r["calls"]
+                    else 1.0,
+                    avg_latency_ms=int(r["avg_latency"] or 0),
+                    avg_cost_usd=round(r["avg_cost"] or 0, 4),
+                    stages=(r["stages"] or "").split(","),
+                )
+            )
 
         # Find never-used tools from the primitive registry
         try:
             from ..primitives.registry import PRIMITIVE_REGISTRY
+
             all_tools = set(PRIMITIVE_REGISTRY.keys())
             never_used = sorted(all_tools - used_names)
         except Exception:
@@ -86,11 +91,13 @@ class ToolUsageTracker:
         candidates = []
         for t in tools:
             if t.call_count <= 2:
-                candidates.append({
-                    "tool": t.name,
-                    "calls": t.call_count,
-                    "suggestion": "Consider hiding or merging — rarely used",
-                })
+                candidates.append(
+                    {
+                        "tool": t.name,
+                        "calls": t.call_count,
+                        "suggestion": "Consider hiding or merging — rarely used",
+                    }
+                )
 
         total_calls = sum(t.call_count for t in tools)
         return ToolUsageReport(

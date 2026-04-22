@@ -6,8 +6,9 @@ from paperindex import PaperIndexer
 from paperindex.library import PaperLibrary
 
 
-
-def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: float = 0.0) -> str:
+def _fake_llm_chat(
+    self, prompt: str, model: str | None = None, temperature: float = 0.0
+) -> str:
     del self, model, temperature
     if "section structure of a paper PDF" in prompt:
         return json.dumps(
@@ -39,7 +40,9 @@ def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: flo
             "baselines": ["baseline A"],
             "reproduction_notes": "Needs logs.",
             "reproducibility_score": "medium",
-            "evidence": [{"section": "summary", "confidence": 0.9, "snippet": "budget pacing"}],
+            "evidence": [
+                {"section": "summary", "confidence": 0.9, "snippet": "budget pacing"}
+            ],
             "structured_results": [],
             "artifact_links": [],
             "domain_tags": [],
@@ -61,11 +64,15 @@ def _fake_llm_chat(self, prompt: str, model: str | None = None, temperature: flo
     )
 
 
-
 def _indexer_with_llm(monkeypatch) -> PaperIndexer:
     monkeypatch.setattr("paperindex.llm.client.LLMClient.chat", _fake_llm_chat)
-    return PaperIndexer(llm_config={"provider": "kimi", "api_key": "test-key", "model": "kimi-k2-turbo-preview"})
-
+    return PaperIndexer(
+        llm_config={
+            "provider": "kimi",
+            "api_key": "test-key",
+            "model": "kimi-k2-turbo-preview",
+        }
+    )
 
 
 def test_extract_structure_from_toc(sample_pdf):
@@ -81,22 +88,33 @@ def test_extract_structure_from_toc(sample_pdf):
     assert result.tree[0].summary
 
 
-
 def test_extract_structure_without_toc_uses_llm(no_toc_pdf, monkeypatch):
     indexer = _indexer_with_llm(monkeypatch)
     result = indexer.extract_structure(no_toc_pdf)
     assert result.raw["source"] == "llm"
-    assert [node.title for node in result.tree] == ["Abstract", "Introduction", "Method"]
+    assert [node.title for node in result.tree] == [
+        "Abstract",
+        "Introduction",
+        "Method",
+    ]
     assert result.tree[1].start_page == 2
 
 
-
 def test_extract_structure_without_toc_requires_llm(no_toc_pdf, monkeypatch):
-    for name in ("KIMI_API_KEY", "KIMI_MODEL", "KIMI_BASE_URL", "OPENAI_API_KEY", "PAPERINDEX_LLM_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
+    for name in (
+        "KIMI_API_KEY",
+        "KIMI_MODEL",
+        "KIMI_BASE_URL",
+        "OPENAI_API_KEY",
+        "PAPERINDEX_LLM_MODEL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_AUTH_TOKEN",
+    ):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(RuntimeError, match="LLM-backed section structure extraction"):
         PaperIndexer().extract_structure(no_toc_pdf)
-
 
 
 def test_build_record_persists_sections(sample_pdf, monkeypatch):
@@ -107,7 +125,6 @@ def test_build_record_persists_sections(sample_pdf, monkeypatch):
     assert "budget pacing" in record.sections["summary"].content.lower()
     assert record.card.paper_id == record.paper_id
     assert record.card.method_family == "optimization_based"
-
 
 
 def test_ingest_and_load_from_library(sample_pdf, tmp_path, monkeypatch):
@@ -121,23 +138,25 @@ def test_ingest_and_load_from_library(sample_pdf, tmp_path, monkeypatch):
     assert loaded.sections["experiments"].content
 
 
-
 def test_get_structure_returns_text_free_tree(sample_pdf, tmp_path, monkeypatch):
     library_root = tmp_path / "library"
     record = _indexer_with_llm(monkeypatch).ingest(sample_pdf, library_root)
 
-    payload = PaperIndexer().get_structure(record.paper_id, library_root, include_text=False)
+    payload = PaperIndexer().get_structure(
+        record.paper_id, library_root, include_text=False
+    )
     assert payload["structure"][0]["title"] == "Abstract"
     assert "section_text" not in payload["structure"][0]
     assert payload["structure"][0]["summary"]
-
 
 
 def test_get_section_content_by_title_query(sample_pdf, tmp_path, monkeypatch):
     library_root = tmp_path / "library"
     record = _indexer_with_llm(monkeypatch).ingest(sample_pdf, library_root)
 
-    payload = PaperIndexer().get_section_content(record.paper_id, library_root, title_query="method")
+    payload = PaperIndexer().get_section_content(
+        record.paper_id, library_root, title_query="method"
+    )
     assert payload["mode"] == "node"
     assert payload["node"]["title"] == "Method"
     assert payload["node"]["summary"]

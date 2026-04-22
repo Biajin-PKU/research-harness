@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
-import pytest
 
 from research_harness.evolution.preference import (
     PreferenceLearner,
@@ -70,12 +67,16 @@ class TestELOUpdate:
         learner.update_elo(winner_id=ids[0], loser_id=ids[1])
 
         conn = db.connect()
-        w = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)).fetchone()
-        l = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)).fetchone()
+        w = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
+        loser = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)
+        ).fetchone()
         conn.close()
 
         assert w["elo_rating"] > 1500.0
-        assert l["elo_rating"] < 1500.0
+        assert loser["elo_rating"] < 1500.0
 
     def test_elo_is_zero_sum(self, db):
         conn = db.connect()
@@ -86,11 +87,15 @@ class TestELOUpdate:
         learner.update_elo(winner_id=ids[0], loser_id=ids[1])
 
         conn = db.connect()
-        w = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)).fetchone()
-        l = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)).fetchone()
+        w = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
+        loser = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)
+        ).fetchone()
         conn.close()
 
-        assert abs((w["elo_rating"] + l["elo_rating"]) - 3000.0) < 0.01
+        assert abs((w["elo_rating"] + loser["elo_rating"]) - 3000.0) < 0.01
 
     def test_elo_with_custom_k(self, db):
         conn = db.connect()
@@ -101,10 +106,14 @@ class TestELOUpdate:
         learner.update_elo(winner_id=ids[0], loser_id=ids[1], k=64)
 
         conn = db.connect()
-        w = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        w = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
-        assert w["elo_rating"] > 1500.0 + 16  # k=64 means larger swing than default k=32
+        assert (
+            w["elo_rating"] > 1500.0 + 16
+        )  # k=64 means larger swing than default k=32
 
     def test_elo_with_source_weight(self, db):
         conn = db.connect()
@@ -112,24 +121,33 @@ class TestELOUpdate:
         conn.close()
 
         learner = PreferenceLearner(db)
-        learner.update_elo(winner_id=ids[0], loser_id=ids[1], source_kind="auto_extracted")
+        learner.update_elo(
+            winner_id=ids[0], loser_id=ids[1], source_kind="auto_extracted"
+        )
 
         conn = db.connect()
-        w = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        w = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         gain_weighted = w["elo_rating"] - 1500.0
 
         # Reset
         conn = db.connect()
-        conn.execute("UPDATE strategies SET elo_rating = 1500.0 WHERE id IN (?, ?)", (ids[0], ids[1]))
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1500.0 WHERE id IN (?, ?)",
+            (ids[0], ids[1]),
+        )
         conn.commit()
         conn.close()
 
         learner.update_elo(winner_id=ids[0], loser_id=ids[1], source_kind="human_edit")
 
         conn = db.connect()
-        w2 = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        w2 = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         gain_full = w2["elo_rating"] - 1500.0
@@ -139,8 +157,12 @@ class TestELOUpdate:
     def test_upset_gives_larger_swing(self, db):
         conn = db.connect()
         ids = _seed_strategies(conn)
-        conn.execute("UPDATE strategies SET elo_rating = 1700.0 WHERE id = ?", (ids[0],))
-        conn.execute("UPDATE strategies SET elo_rating = 1300.0 WHERE id = ?", (ids[1],))
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1700.0 WHERE id = ?", (ids[0],)
+        )
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1300.0 WHERE id = ?", (ids[1],)
+        )
         conn.commit()
         conn.close()
 
@@ -149,7 +171,9 @@ class TestELOUpdate:
         learner.update_elo(winner_id=ids[1], loser_id=ids[0])
 
         conn = db.connect()
-        underdog = conn.execute("SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)).fetchone()
+        underdog = conn.execute(
+            "SELECT elo_rating FROM strategies WHERE id = ?", (ids[1],)
+        ).fetchone()
         conn.close()
 
         # Underdog should gain more than 16 (the equal-rating gain)
@@ -166,7 +190,9 @@ class TestBetaUpdate:
         learner.update_beta(strategy_id=ids[0], outcome=True)
 
         conn = db.connect()
-        row = conn.execute("SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        row = conn.execute(
+            "SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         assert row["beta_alpha"] > 1.0
@@ -181,7 +207,9 @@ class TestBetaUpdate:
         learner.update_beta(strategy_id=ids[0], outcome=False)
 
         conn = db.connect()
-        row = conn.execute("SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        row = conn.execute(
+            "SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         assert row["beta_alpha"] == 1.0
@@ -193,10 +221,14 @@ class TestBetaUpdate:
         conn.close()
 
         learner = PreferenceLearner(db)
-        learner.update_beta(strategy_id=ids[0], outcome=True, source_kind="auto_extracted")
+        learner.update_beta(
+            strategy_id=ids[0], outcome=True, source_kind="auto_extracted"
+        )
 
         conn = db.connect()
-        row = conn.execute("SELECT beta_alpha FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        row = conn.execute(
+            "SELECT beta_alpha FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         alpha_auto = row["beta_alpha"]
@@ -210,7 +242,9 @@ class TestBetaUpdate:
         learner.update_beta(strategy_id=ids[0], outcome=True, source_kind="human_edit")
 
         conn = db.connect()
-        row2 = conn.execute("SELECT beta_alpha FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        row2 = conn.execute(
+            "SELECT beta_alpha FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         alpha_human = row2["beta_alpha"]
@@ -229,7 +263,9 @@ class TestBetaUpdate:
             learner.update_beta(strategy_id=ids[0], outcome=False)
 
         conn = db.connect()
-        row = conn.execute("SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)).fetchone()
+        row = conn.execute(
+            "SELECT beta_alpha, beta_beta FROM strategies WHERE id = ?", (ids[0],)
+        ).fetchone()
         conn.close()
 
         mean = row["beta_alpha"] / (row["beta_alpha"] + row["beta_beta"])
@@ -241,9 +277,18 @@ class TestRankStrategies:
         conn = db.connect()
         ids = _seed_strategies(conn, count=3)
         # Set varied ratings
-        conn.execute("UPDATE strategies SET elo_rating = 1600.0, beta_alpha = 9.0, beta_beta = 1.0 WHERE id = ?", (ids[0],))
-        conn.execute("UPDATE strategies SET elo_rating = 1400.0, beta_alpha = 1.0, beta_beta = 9.0 WHERE id = ?", (ids[1],))
-        conn.execute("UPDATE strategies SET elo_rating = 1500.0, beta_alpha = 5.0, beta_beta = 5.0 WHERE id = ?", (ids[2],))
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1600.0, beta_alpha = 9.0, beta_beta = 1.0 WHERE id = ?",
+            (ids[0],),
+        )
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1400.0, beta_alpha = 1.0, beta_beta = 9.0 WHERE id = ?",
+            (ids[1],),
+        )
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1500.0, beta_alpha = 5.0, beta_beta = 5.0 WHERE id = ?",
+            (ids[2],),
+        )
         conn.commit()
         conn.close()
 
@@ -264,7 +309,9 @@ class TestRankStrategies:
     def test_rank_only_active(self, db):
         conn = db.connect()
         ids = _seed_strategies(conn, count=2)
-        conn.execute("UPDATE strategies SET status = 'superseded' WHERE id = ?", (ids[1],))
+        conn.execute(
+            "UPDATE strategies SET status = 'superseded' WHERE id = ?", (ids[1],)
+        )
         conn.commit()
         conn.close()
 
@@ -276,7 +323,10 @@ class TestRankStrategies:
     def test_rank_returns_composite_score(self, db):
         conn = db.connect()
         ids = _seed_strategies(conn, count=1)
-        conn.execute("UPDATE strategies SET elo_rating = 1600.0, beta_alpha = 8.0, beta_beta = 2.0 WHERE id = ?", (ids[0],))
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1600.0, beta_alpha = 8.0, beta_beta = 2.0 WHERE id = ?",
+            (ids[0],),
+        )
         conn.commit()
         conn.close()
 
@@ -292,12 +342,19 @@ class TestInjectorELOFallback:
     def test_sort_by_elo_when_available(self, db):
         conn = db.connect()
         ids = _seed_strategies(conn, count=2)
-        conn.execute("UPDATE strategies SET elo_rating = 1600.0, quality_score = 0.5 WHERE id = ?", (ids[0],))
-        conn.execute("UPDATE strategies SET elo_rating = 1400.0, quality_score = 0.9 WHERE id = ?", (ids[1],))
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1600.0, quality_score = 0.5 WHERE id = ?",
+            (ids[0],),
+        )
+        conn.execute(
+            "UPDATE strategies SET elo_rating = 1400.0, quality_score = 0.9 WHERE id = ?",
+            (ids[1],),
+        )
         conn.commit()
         conn.close()
 
         from research_harness.evolution.injector import StrategyInjector
+
         injector = StrategyInjector(db)
         strategies = injector.get_active_strategies("section_draft")
 

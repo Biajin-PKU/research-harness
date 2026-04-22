@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..orchestrator.service import OrchestratorService
 from ..storage.db import Database
 from . import checkpoint as ckpt
 from .codex_bridge import (
-    codex_issues_to_objections,
     load_handoff_response,
     run_codex_review,
     save_handoff_request,
@@ -28,14 +27,23 @@ from .stage_policy import (
     should_pause_human,
 )
 
+if TYPE_CHECKING:
+    from .budget import BudgetMonitor
+
 logger = logging.getLogger(__name__)
 
 # Tools that require LLM-constructed arguments and always return success=False
 # from tool_dispatch. These are excluded from "all tools failed" detection.
-_DEFERRED_TOOLS = frozenset({
-    "adversarial_run", "adversarial_resolve", "adversarial_review",
-    "integrity_check", "review_add_issue", "review_respond",
-})
+_DEFERRED_TOOLS = frozenset(
+    {
+        "adversarial_run",
+        "adversarial_resolve",
+        "adversarial_review",
+        "integrity_check",
+        "review_add_issue",
+        "review_respond",
+    }
+)
 
 
 def execute_stage(
@@ -67,8 +75,9 @@ def execute_stage(
         return {"status": "error", "stage": stage, "summary": f"Unknown stage: {stage}"}
 
     ckpt.update_stage(checkpoint_data, stage=stage, state="running")
-    ckpt.record_event(checkpoint_data, stage=stage, event="stage_start",
-                      detail=policy.description)
+    ckpt.record_event(
+        checkpoint_data, stage=stage, event="stage_start", detail=policy.description
+    )
 
     # Reset stage_context to prevent stale key leakage between stages.
     # Preserve only cross-stage keys that are explicitly carried forward.
@@ -84,18 +93,26 @@ def execute_stage(
 
     try:
         planned = plan_stage(
-            db=db, svc=svc,
-            project_id=project_id, topic_id=topic_id,
-            stage=stage, checkpoint_data=checkpoint_data,
+            db=db,
+            svc=svc,
+            project_id=project_id,
+            topic_id=topic_id,
+            stage=stage,
+            checkpoint_data=checkpoint_data,
         )
         if planned:
             checkpoint_data["stage_context"].update(planned)
-            ckpt.record_event(checkpoint_data, stage=stage, event="planner_ok",
-                              detail=f"keys={sorted(planned.keys())[:8]}")
+            ckpt.record_event(
+                checkpoint_data,
+                stage=stage,
+                event="planner_ok",
+                detail=f"keys={sorted(planned.keys())[:8]}",
+            )
     except Exception as exc:
         logger.warning("LLM planner failed for stage %s: %s", stage, exc, exc_info=True)
-        ckpt.record_event(checkpoint_data, stage=stage, event="planner_error",
-                          detail=str(exc)[:200])
+        ckpt.record_event(
+            checkpoint_data, stage=stage, event="planner_error", detail=str(exc)[:200]
+        )
 
     # Execute stage tools via orchestrator service
     try:
@@ -111,8 +128,9 @@ def execute_stage(
     except Exception as exc:
         error_msg = str(exc)
         ckpt.record_error(checkpoint_data, kind="exception", message=error_msg)
-        ckpt.record_event(checkpoint_data, stage=stage, event="tool_error",
-                          detail=error_msg[:200])
+        ckpt.record_event(
+            checkpoint_data, stage=stage, event="tool_error", detail=error_msg[:200]
+        )
 
         retry_count = checkpoint_data.get("last_error", {}).get("retry_count", 0)
         recovery = decide_recovery(stage, "exception", retry_count)
@@ -126,8 +144,14 @@ def execute_stage(
     # Record tool errors in checkpoint for visibility
     tool_errors = result.get("errors", [])
     if tool_errors:
-        ckpt.record_event(checkpoint_data, stage=stage, event="tool_errors",
-                          detail=f"{len(tool_errors)} tool(s) failed: {'; '.join(tool_errors[:3])}"[:200])
+        ckpt.record_event(
+            checkpoint_data,
+            stage=stage,
+            event="tool_errors",
+            detail=f"{len(tool_errors)} tool(s) failed: {'; '.join(tool_errors[:3])}"[
+                :200
+            ],
+        )
 
     # Track artifact IDs from orchestrator_record_artifact results
     for tr in result.get("tool_results", []):
@@ -136,24 +160,30 @@ def execute_stage(
             art_type = output.get("artifact_type", "")
             art_id = output.get("artifact_id", 0)
             if art_type and art_id:
-                ckpt.record_artifact(checkpoint_data, stage=stage,
-                                     artifact_type=art_type, artifact_id=art_id)
+                ckpt.record_artifact(
+                    checkpoint_data,
+                    stage=stage,
+                    artifact_type=art_type,
+                    artifact_id=art_id,
+                )
 
     # Track auto-recorded artifacts (gate-required artifacts from _record_auto_artifacts)
     for art_type, art_id in result.get("auto_artifacts", []):
         if art_type and art_id:
-            ckpt.record_artifact(checkpoint_data, stage=stage,
-                                 artifact_type=art_type, artifact_id=art_id)
+            ckpt.record_artifact(
+                checkpoint_data, stage=stage, artifact_type=art_type, artifact_id=art_id
+            )
 
     # If ALL tools failed, trigger recovery
     tool_results = result.get("tool_results", [])
-    all_failed = tool_results and all(not tr.get("success") for tr in tool_results)
     # Exclude deferred tools (LLM-constructed args) from "all failed" detection
     non_deferred = [tr for tr in tool_results if tr.get("tool") not in _DEFERRED_TOOLS]
     all_real_failed = non_deferred and all(not tr.get("success") for tr in non_deferred)
 
     if all_real_failed:
-        error_msg = f"All {len(non_deferred)} tools failed: {'; '.join(tool_errors[:3])}"
+        error_msg = (
+            f"All {len(non_deferred)} tools failed: {'; '.join(tool_errors[:3])}"
+        )
         ckpt.record_error(checkpoint_data, kind="all_tools_failed", message=error_msg)
         retry_count = checkpoint_data.get("last_error", {}).get("retry_count", 0)
         recovery = decide_recovery(stage, "all_tools_failed", retry_count)
@@ -183,16 +213,26 @@ def execute_stage(
     # Gate checking is handled by runner.py via advance().
     autonomy = "autonomous" if mode in ("demo", "autonomous") else "supervised"
     if should_pause_human(stage, mode, autonomy=autonomy):
-        ckpt.update_stage(checkpoint_data, stage=stage, state="needs_human",
-                          summary_md=result.get("summary", ""))
+        ckpt.update_stage(
+            checkpoint_data,
+            stage=stage,
+            state="needs_human",
+            summary_md=result.get("summary", ""),
+        )
         return {
             "status": "needs_human",
             "stage": stage,
-            "summary": result.get("summary", f"Stage {stage} complete, awaiting approval"),
+            "summary": result.get(
+                "summary", f"Stage {stage} complete, awaiting approval"
+            ),
         }
 
-    ckpt.update_stage(checkpoint_data, stage=stage, state="complete",
-                      summary_md=result.get("summary", ""))
+    ckpt.update_stage(
+        checkpoint_data,
+        stage=stage,
+        state="complete",
+        summary_md=result.get("summary", ""),
+    )
     ckpt.clear_error(checkpoint_data)
     ckpt.record_event(checkpoint_data, stage=stage, event="stage_complete")
     return {
@@ -261,8 +301,12 @@ def _maybe_run_codex(
     existing = load_handoff_response(h_dir)
     if existing and existing.get("success"):
         ckpt.clear_codex_handoff(checkpoint_data, verdict=existing.get("verdict", ""))
-        ckpt.record_event(checkpoint_data, stage=stage, event="codex_complete",
-                          detail=f"verdict={existing.get('verdict', '?')}")
+        ckpt.record_event(
+            checkpoint_data,
+            stage=stage,
+            event="codex_complete",
+            detail=f"verdict={existing.get('verdict', '?')}",
+        )
         return None  # Continue
 
     # Find the artifact to review — handles both V2 and legacy stage names
@@ -327,8 +371,12 @@ def _maybe_run_codex(
     if not review.get("success"):
         # Codex failed — policy says required stages must pause
         if policy.codex == "required":
-            ckpt.record_event(checkpoint_data, stage=stage, event="codex_error",
-                              detail=review.get("error", "unknown"))
+            ckpt.record_event(
+                checkpoint_data,
+                stage=stage,
+                event="codex_error",
+                detail=review.get("error", "unknown"),
+            )
             return {
                 "status": "pause_human",
                 "stage": stage,
@@ -336,14 +384,22 @@ def _maybe_run_codex(
                 "error": review.get("error", ""),
             }
         # Optional/recommended — continue without codex
-        ckpt.record_event(checkpoint_data, stage=stage, event="codex_skipped",
-                          detail="codex failed, continuing without review")
+        ckpt.record_event(
+            checkpoint_data,
+            stage=stage,
+            event="codex_skipped",
+            detail="codex failed, continuing without review",
+        )
         return None
 
     verdict = review.get("verdict", "")
     ckpt.clear_codex_handoff(checkpoint_data, verdict=verdict)
-    ckpt.record_event(checkpoint_data, stage=stage, event="codex_complete",
-                      detail=f"verdict={verdict}, issues={len(review.get('issues', []))}")
+    ckpt.record_event(
+        checkpoint_data,
+        stage=stage,
+        event="codex_complete",
+        detail=f"verdict={verdict}, issues={len(review.get('issues', []))}",
+    )
 
     # "revise" verdict from a required codex gate should block advancement
     if verdict == "revise" and policy.codex == "required":

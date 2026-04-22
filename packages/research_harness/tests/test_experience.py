@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 
@@ -119,18 +118,30 @@ class TestExperienceStore:
 
     def test_query_by_topic(self, db):
         store = ExperienceStore(db)
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=2))
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="build", topic_id=1))
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=2)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="build", topic_id=1)
+        )
 
         results = store.query(topic_id=1)
         assert len(results) == 2
 
     def test_query_by_source_kind(self, db):
         store = ExperienceStore(db)
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="analyze", topic_id=1))
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="analyze", topic_id=1)
+        )
 
         results = store.query(source_kind="self_review")
         assert len(results) == 2
@@ -153,10 +164,18 @@ class TestExperienceStore:
 
     def test_query_combined_filters(self, db):
         store = ExperienceStore(db)
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="analyze", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="self_review", stage="build", topic_id=2))
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="analyze", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="self_review", stage="build", topic_id=2)
+        )
 
         results = store.query(topic_id=1, source_kind="self_review", stage="build")
         assert len(results) == 1
@@ -178,13 +197,19 @@ class TestExperienceStore:
 
     def test_count_by_topic(self, db):
         store = ExperienceStore(db)
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1))
-        store.ingest(ExperienceRecord(source_kind="human_edit", stage="build", topic_id=2))
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=1)
+        )
+        store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build", topic_id=2)
+        )
         assert store.count(topic_id=1) == 1
 
     def test_update_gate_verdict(self, db):
         store = ExperienceStore(db)
-        record_id = store.ingest(ExperienceRecord(source_kind="human_edit", stage="build"))
+        record_id = store.ingest(
+            ExperienceRecord(source_kind="human_edit", stage="build")
+        )
         store.update_gate(record_id, verdict="accepted", score=0.85)
 
         retrieved = store.get(record_id)

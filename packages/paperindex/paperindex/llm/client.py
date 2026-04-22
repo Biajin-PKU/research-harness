@@ -19,7 +19,7 @@ import os
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Literal
 from urllib import error, request
 
@@ -87,14 +87,19 @@ def _usage_from_openai_dict(payload: Any) -> tuple[int | None, int | None]:
     if not isinstance(usage, dict):
         return (None, None)
     prompt = _coerce_int(usage.get("prompt_tokens") or usage.get("input_tokens"))
-    completion = _coerce_int(usage.get("completion_tokens") or usage.get("output_tokens"))
+    completion = _coerce_int(
+        usage.get("completion_tokens") or usage.get("output_tokens")
+    )
     return (prompt, completion)
+
 
 # ---------------------------------------------------------------------------
 # Types
 # ---------------------------------------------------------------------------
 
-Provider = Literal["anthropic", "openai", "kimi", "cursor_agent", "codex", "joy_kimi", "joy_gpt"]
+Provider = Literal[
+    "anthropic", "openai", "kimi", "cursor_agent", "codex", "joy_kimi", "joy_gpt"
+]
 TaskTier = Literal["light", "medium", "heavy"]
 ProviderFn = Callable[..., str]  # (prompt, model, **kwargs) -> response
 
@@ -174,7 +179,10 @@ def resolve_route(tier: TaskTier) -> tuple[str, str]:
                 "RED LINE: provider '%s' is blocked for tier '%s' "
                 "(paper-reading tasks must not use expensive APIs). "
                 "Falling back to %s:%s",
-                provider_name, tier, fallback[0], fallback[1],
+                provider_name,
+                tier,
+                fallback[0],
+                fallback[1],
             )
             return fallback
         return (provider_name, model)
@@ -198,9 +206,13 @@ def _chat_cursor_agent(prompt: str, model: str, **_: Any) -> str:
     """Call Cursor Agent CLI in headless print mode."""
     cmd = ["agent", "--print", "--trust", "--model", model, prompt]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_CLI_TIMEOUT)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_CLI_TIMEOUT
+        )
     except FileNotFoundError:
-        raise RuntimeError("Cursor Agent CLI not found. Install from https://docs.cursor.com/agent")
+        raise RuntimeError(
+            "Cursor Agent CLI not found. Install from https://docs.cursor.com/agent"
+        )
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Cursor Agent timed out after {_CLI_TIMEOUT}s")
     if result.returncode != 0:
@@ -216,9 +228,13 @@ def _chat_codex(prompt: str, model: str, **_: Any) -> str:
         cmd.extend(["--model", model])
     cmd.append(prompt)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_CLI_TIMEOUT)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_CLI_TIMEOUT
+        )
     except FileNotFoundError:
-        raise RuntimeError("Codex CLI not found. Install with: npm install -g @openai/codex")
+        raise RuntimeError(
+            "Codex CLI not found. Install with: npm install -g @openai/codex"
+        )
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Codex timed out after {_CLI_TIMEOUT}s")
     if result.returncode != 0:
@@ -262,7 +278,9 @@ def _chat_codex(prompt: str, model: str, **_: Any) -> str:
                 completion_tokens = c
     if prompt_tokens is not None or completion_tokens is not None:
         _record_usage(prompt_tokens, completion_tokens)
-    return "\n".join(text_parts).strip() if text_parts else (result.stdout or "").strip()
+    return (
+        "\n".join(text_parts).strip() if text_parts else (result.stdout or "").strip()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +290,9 @@ def _chat_codex(prompt: str, model: str, **_: Any) -> str:
 _LLM_TIMEOUT_SECONDS = 300.0
 
 
-def _build_anthropic_client(api_key: str, base_url: str, timeout: float = _LLM_TIMEOUT_SECONDS):
+def _build_anthropic_client(
+    api_key: str, base_url: str, timeout: float = _LLM_TIMEOUT_SECONDS
+):
     try:
         import anthropic
     except ImportError as exc:
@@ -285,13 +305,22 @@ def _build_anthropic_client(api_key: str, base_url: str, timeout: float = _LLM_T
     return anthropic.Anthropic(**kwargs)
 
 
-def _chat_anthropic(prompt: str, model: str, *, api_key: str = "", base_url: str = "",
-                     temperature: float = 0.0, **_: Any) -> str:
+def _chat_anthropic(
+    prompt: str,
+    model: str,
+    *,
+    api_key: str = "",
+    base_url: str = "",
+    temperature: float = 0.0,
+    **_: Any,
+) -> str:
     if not api_key:
         raise ValueError("Anthropic provider requires api_key")
     client = _build_anthropic_client(api_key, base_url)
     response = client.messages.create(
-        model=model, max_tokens=2048, temperature=temperature,
+        model=model,
+        max_tokens=2048,
+        temperature=temperature,
         messages=[{"role": "user", "content": prompt}],
     )
     usage = getattr(response, "usage", None)
@@ -316,14 +345,23 @@ def _resolve_kimi_base_url(base_url: str) -> str:
     return normalized + "/"
 
 
-def _chat_kimi(prompt: str, model: str, *, api_key: str = "", base_url: str = "",
-               temperature: float = 0.0, **_: Any) -> str:
+def _chat_kimi(
+    prompt: str,
+    model: str,
+    *,
+    api_key: str = "",
+    base_url: str = "",
+    temperature: float = 0.0,
+    **_: Any,
+) -> str:
     if not api_key:
         raise ValueError("Kimi provider requires api_key")
     resolved_url = _resolve_kimi_base_url(base_url)
     client = _build_anthropic_client(api_key, resolved_url)
     with client.messages.stream(
-        model=model, max_tokens=_KIMI_MAX_TOKENS, temperature=temperature,
+        model=model,
+        max_tokens=_KIMI_MAX_TOKENS,
+        temperature=temperature,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         text = stream.get_final_text()
@@ -345,7 +383,9 @@ _resolve_kimi_anthropic_base_url = _resolve_kimi_base_url
 
 
 def _resolve_kimi_messages_url(base_url: str) -> str:
-    normalized = (base_url or "https://api.kimi.com/coding/v1/messages").strip().rstrip("/")
+    normalized = (
+        (base_url or "https://api.kimi.com/coding/v1/messages").strip().rstrip("/")
+    )
     if normalized.endswith("/messages"):
         return normalized
     if normalized.endswith("/coding"):
@@ -353,8 +393,15 @@ def _resolve_kimi_messages_url(base_url: str) -> str:
     return f"{normalized}/messages"
 
 
-def _chat_openai(prompt: str, model: str, *, api_key: str = "", base_url: str = "",
-                 temperature: float = 0.0, **_: Any) -> str:
+def _chat_openai(
+    prompt: str,
+    model: str,
+    *,
+    api_key: str = "",
+    base_url: str = "",
+    temperature: float = 0.0,
+    **_: Any,
+) -> str:
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -363,7 +410,8 @@ def _chat_openai(prompt: str, model: str, *, api_key: str = "", base_url: str = 
         ) from exc
     client = OpenAI(api_key=api_key, base_url=base_url or None)
     response = client.chat.completions.create(
-        model=model, messages=[{"role": "user", "content": prompt}],
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
         temperature=temperature,
     )
     usage = getattr(response, "usage", None)
@@ -398,23 +446,25 @@ _JOY_KIMI_MAX_RPS = _JOYCODE_MAX_RPS
 # Tasks that should use joy_kimi when enabled (single-paper reading + light analysis).
 # Kimi handles all basic paper comprehension; joy_gpt / cross-paper synthesis
 # handle heavy analysis that needs broader context.
-_JOY_KIMI_TASKS: frozenset[str] = frozenset({
-    # Core reading
-    "paper_summarize",
-    "deep_read_pass1",
-    "build_paper_card",
-    # Light-tier extraction (single-paper scope)
-    "compiled_summary",
-    "claim_extract",
-    "paper_coverage_check",
-    "query_refine",
-    # Quantitative extraction (single-paper scope)
-    "table_extract",
-    "figure_interpret",
-    # Evolution (lightweight)
-    "lesson_extract",
-    "strategy_distill",
-})
+_JOY_KIMI_TASKS: frozenset[str] = frozenset(
+    {
+        # Core reading
+        "paper_summarize",
+        "deep_read_pass1",
+        "build_paper_card",
+        # Light-tier extraction (single-paper scope)
+        "compiled_summary",
+        "claim_extract",
+        "paper_coverage_check",
+        "query_refine",
+        # Quantitative extraction (single-paper scope)
+        "table_extract",
+        "figure_interpret",
+        # Evolution (lightweight)
+        "lesson_extract",
+        "strategy_distill",
+    }
+)
 
 # Shared token-bucket rate limiter for all joycode-backend providers.
 _joycode_timestamps: list[float] = []
@@ -450,8 +500,13 @@ def _joycode_rate_limit() -> None:
 _joy_kimi_rate_limit = _joycode_rate_limit
 
 
-def _call_joycode_chat(prompt: str, model: str, *, temperature: float = 0.0,
-                        max_tokens: int = _JOYCODE_MAX_TOKENS) -> str:
+def _call_joycode_chat(
+    prompt: str,
+    model: str,
+    *,
+    temperature: float = 0.0,
+    max_tokens: int = _JOYCODE_MAX_TOKENS,
+) -> str:
     """Shared transport for JoyCode-backed providers.
 
     NOTE: JoyCode is an internal provider that depends on a private library
@@ -467,9 +522,7 @@ def _call_joycode_chat(prompt: str, model: str, *, temperature: float = 0.0,
 
     import sys as _sys
 
-    _joycode_path = os.path.expanduser(
-        os.environ.get("JOYCODE_PATH", "~/code/joycode")
-    )
+    _joycode_path = os.path.expanduser(os.environ.get("JOYCODE_PATH", "~/code/joycode"))
     if not os.path.isdir(_joycode_path):
         raise RuntimeError(
             "JoyCode provider is not available in the open-source build. "
@@ -524,12 +577,18 @@ def _call_joycode_chat(prompt: str, model: str, *, temperature: float = 0.0,
     return json.dumps(resp, ensure_ascii=False)
 
 
-def _chat_joy_kimi(prompt: str, model: str, *, temperature: float = 0.0, **_: Any) -> str:
+def _chat_joy_kimi(
+    prompt: str, model: str, *, temperature: float = 0.0, **_: Any
+) -> str:
     """Call JoyCode Kimi K2.5 via the shared joycode transport."""
-    return _call_joycode_chat(prompt, model or _JOY_KIMI_DEFAULT_MODEL, temperature=temperature)
+    return _call_joycode_chat(
+        prompt, model or _JOY_KIMI_DEFAULT_MODEL, temperature=temperature
+    )
 
 
-def _chat_joy_gpt(prompt: str, model: str, *, temperature: float = 0.0, **_: Any) -> str:
+def _chat_joy_gpt(
+    prompt: str, model: str, *, temperature: float = 0.0, **_: Any
+) -> str:
     """Call JoyCode GPT (default: gpt-5) via the shared joycode transport.
 
     Replaces the Cursor Agent worker for light/medium tiers: the JoyCode
@@ -537,34 +596,46 @@ def _chat_joy_gpt(prompt: str, model: str, *, temperature: float = 0.0, **_: Any
     more than sufficient for paper reading / summarization / gap detection
     and far cheaper than the Anthropic API path.
     """
-    return _call_joycode_chat(prompt, model or _JOY_GPT_DEFAULT_MODEL, temperature=temperature)
+    return _call_joycode_chat(
+        prompt, model or _JOY_GPT_DEFAULT_MODEL, temperature=temperature
+    )
 
 
-_JOY_GPT_TASKS: frozenset[str] = frozenset({
-    # Heavy-tier paper reading (cross-paper synthesis, critical analysis)
-    "deep_read_pass2",
-    "gap_detect",
-    "baseline_identify",
-    "method_taxonomy",
-    "evidence_matrix",
-    "contradiction_detect",
-    "direction_ranking",
-    "consistency_check",
-    # Auto-runner stage planner
-    "stage_planner",
-})
+_JOY_GPT_TASKS: frozenset[str] = frozenset(
+    {
+        # Heavy-tier paper reading (cross-paper synthesis, critical analysis)
+        "deep_read_pass2",
+        "gap_detect",
+        "baseline_identify",
+        "method_taxonomy",
+        "evidence_matrix",
+        "contradiction_detect",
+        "direction_ranking",
+        "consistency_check",
+        # Auto-runner stage planner
+        "stage_planner",
+    }
+)
 
 
 def is_joy_kimi_task(task_name: str) -> bool:
     """Check if *task_name* should be routed to joy_kimi (when enabled via env)."""
-    if os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() not in ("1", "true", "yes"):
+    if os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
         return False
     return task_name in _JOY_KIMI_TASKS
 
 
 def is_joy_gpt_task(task_name: str) -> bool:
     """Check if *task_name* should be routed to joy_gpt (when enabled via env)."""
-    if os.environ.get("JOY_GPT_ENABLED", "").strip().lower() not in ("1", "true", "yes"):
+    if os.environ.get("JOY_GPT_ENABLED", "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
         return False
     return task_name in _JOY_GPT_TASKS
 
@@ -598,6 +669,7 @@ register_provider("joy_gpt", _chat_joy_gpt)
 # Config Resolution (backwards-compatible)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ResolvedLLMConfig:
     provider: str = "openai"
@@ -606,10 +678,16 @@ class ResolvedLLMConfig:
     base_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {k: v for k, v in {
-            "provider": self.provider, "model": self.model,
-            "api_key": self.api_key, "base_url": self.base_url,
-        }.items() if v}
+        return {
+            k: v
+            for k, v in {
+                "provider": self.provider,
+                "model": self.model,
+                "api_key": self.api_key,
+                "base_url": self.base_url,
+            }.items()
+            if v
+        }
 
 
 def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMConfig:
@@ -621,12 +699,34 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
     provider_override = str(overrides.get("provider", "")).strip().lower()
 
     # Env detection
-    joy_kimi_enabled = os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() in ("1", "true", "yes")
-    joy_gpt_enabled = os.environ.get("JOY_GPT_ENABLED", "").strip().lower() in ("1", "true", "yes")
-    cursor_enabled = os.environ.get("CURSOR_AGENT_ENABLED", "").strip().lower() in ("1", "true", "yes")
-    codex_enabled = os.environ.get("CODEX_ENABLED", "").strip().lower() in ("1", "true", "yes")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN") or ""
-    openai_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("CHATGPT_API_KEY") or ""
+    joy_kimi_enabled = os.environ.get("JOY_KIMI_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    joy_gpt_enabled = os.environ.get("JOY_GPT_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    cursor_enabled = os.environ.get("CURSOR_AGENT_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    codex_enabled = os.environ.get("CODEX_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    anthropic_key = (
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        or ""
+    )
+    openai_key = (
+        os.environ.get("OPENAI_API_KEY") or os.environ.get("CHATGPT_API_KEY") or ""
+    )
     kimi_key = os.environ.get("KIMI_API_KEY", "")
 
     valid_providers = set(_PROVIDER_REGISTRY)
@@ -657,15 +757,27 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
     base_url: str
 
     if provider == "joy_kimi":
-        model = str(overrides.get("model") or os.environ.get("JOY_KIMI_MODEL") or _JOY_KIMI_DEFAULT_MODEL)
+        model = str(
+            overrides.get("model")
+            or os.environ.get("JOY_KIMI_MODEL")
+            or _JOY_KIMI_DEFAULT_MODEL
+        )
         api_key = ""
         base_url = ""
     elif provider == "joy_gpt":
-        model = str(overrides.get("model") or os.environ.get("JOY_GPT_MODEL") or _JOY_GPT_DEFAULT_MODEL)
+        model = str(
+            overrides.get("model")
+            or os.environ.get("JOY_GPT_MODEL")
+            or _JOY_GPT_DEFAULT_MODEL
+        )
         api_key = ""
         base_url = ""
     elif provider == "cursor_agent":
-        model = str(overrides.get("model") or os.environ.get("CURSOR_AGENT_MODEL") or "composer-2-fast")
+        model = str(
+            overrides.get("model")
+            or os.environ.get("CURSOR_AGENT_MODEL")
+            or "composer-2-fast"
+        )
         api_key = ""
         base_url = ""
     elif provider == "codex":
@@ -673,15 +785,27 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
         api_key = ""
         base_url = ""
     elif provider == "kimi":
-        model = str(overrides.get("model") or os.environ.get("KIMI_MODEL") or "kimi-for-coding")
+        model = str(
+            overrides.get("model") or os.environ.get("KIMI_MODEL") or "kimi-for-coding"
+        )
         api_key = str(overrides.get("api_key") or kimi_key)
         base_url = _resolve_kimi_base_url(
-            str(overrides.get("base_url") or os.environ.get("KIMI_BASE_URL") or _KIMI_DEFAULT_BASE_URL)
+            str(
+                overrides.get("base_url")
+                or os.environ.get("KIMI_BASE_URL")
+                or _KIMI_DEFAULT_BASE_URL
+            )
         )
     elif provider == "anthropic":
-        model = str(overrides.get("model") or os.environ.get("ANTHROPIC_MODEL") or "claude-sonnet-4-6")
+        model = str(
+            overrides.get("model")
+            or os.environ.get("ANTHROPIC_MODEL")
+            or "claude-sonnet-4-6"
+        )
         api_key = str(overrides.get("api_key") or anthropic_key)
-        base_url = str(overrides.get("base_url") or os.environ.get("ANTHROPIC_BASE_URL") or "")
+        base_url = str(
+            overrides.get("base_url") or os.environ.get("ANTHROPIC_BASE_URL") or ""
+        )
     else:  # openai
         model = str(
             overrides.get("model")
@@ -698,12 +822,15 @@ def resolve_llm_config(overrides: dict[str, Any] | None = None) -> ResolvedLLMCo
             or ""
         )
 
-    return ResolvedLLMConfig(provider=provider, model=model, api_key=api_key, base_url=base_url)
+    return ResolvedLLMConfig(
+        provider=provider, model=model, api_key=api_key, base_url=base_url
+    )
 
 
 # ---------------------------------------------------------------------------
 # LLMClient — unified interface
 # ---------------------------------------------------------------------------
+
 
 class LLMClient:
     """Unified LLM client with provider registry and task-tier routing.
@@ -756,8 +883,13 @@ class LLMClient:
             prov_name, route_model = resolve_route(tier)
             logger.debug("tier=%s → provider=%s model=%s", tier, prov_name, route_model)
             fn = get_provider(prov_name)
-            return fn(prompt, route_model, api_key=self._config.api_key,
-                      base_url=self._config.base_url, temperature=temperature)
+            return fn(
+                prompt,
+                route_model,
+                api_key=self._config.api_key,
+                base_url=self._config.base_url,
+                temperature=temperature,
+            )
 
         # Explicit provider override
         prov_name = provider or self._config.provider
@@ -766,8 +898,13 @@ class LLMClient:
             raise ValueError("No model specified in config or call")
 
         fn = get_provider(prov_name)
-        return fn(prompt, use_model, api_key=self._config.api_key,
-                  base_url=self._config.base_url, temperature=temperature)
+        return fn(
+            prompt,
+            use_model,
+            api_key=self._config.api_key,
+            base_url=self._config.base_url,
+            temperature=temperature,
+        )
 
     def chat_with_usage(
         self,
@@ -798,7 +935,10 @@ OpenAICompatibleClient = LLMClient
 # Utility helpers (kept for backward compat, used by paperindex internals)
 # ---------------------------------------------------------------------------
 
-def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float = 60.0) -> Any:
+
+def _post_json(
+    url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float = 60.0
+) -> Any:
     data = json.dumps(payload).encode("utf-8")
     req = request.Request(url, data=data, headers=headers, method="POST")
     last_error: Exception | None = None
@@ -825,7 +965,11 @@ def _extract_kimi_text(response_payload: Any) -> str:
         return ""
     content = response_payload.get("content")
     if isinstance(content, list):
-        parts = [str(b.get("text", "")).strip() for b in content if isinstance(b, dict) and b.get("text")]
+        parts = [
+            str(b.get("text", "")).strip()
+            for b in content
+            if isinstance(b, dict) and b.get("text")
+        ]
         if parts:
             return "\n".join(parts)
     if isinstance(content, str):
@@ -840,7 +984,11 @@ def _extract_kimi_text(response_payload: Any) -> str:
             if isinstance(mc, str) and mc.strip():
                 parts.append(mc.strip())
             elif isinstance(mc, list):
-                parts.extend(str(b.get("text", "")).strip() for b in mc if isinstance(b, dict) and b.get("text"))
+                parts.extend(
+                    str(b.get("text", "")).strip()
+                    for b in mc
+                    if isinstance(b, dict) and b.get("text")
+                )
         if parts:
             return "\n".join(p for p in parts if p)
     return json.dumps(response_payload, ensure_ascii=False)

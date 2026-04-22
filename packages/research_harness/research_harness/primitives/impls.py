@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 # paper_search — multi-provider with venue tier ranking
 # ---------------------------------------------------------------------------
 
+
 @register_primitive(PAPER_SEARCH_SPEC)
 def paper_search(
     *,
@@ -113,8 +114,13 @@ def paper_search(
                 for record in outcome.results:
                     external_refs.append(_record_to_ref(record, query))
                 # Cache the results
-                cache_put(db, query, "aggregated",
-                          [_ref_to_dict(r) for r in external_refs], cache_params)
+                cache_put(
+                    db,
+                    query,
+                    "aggregated",
+                    [_ref_to_dict(r) for r in external_refs],
+                    cache_params,
+                )
         except Exception as exc:
             logger.warning("External provider fan-out failed: %s", exc)
             provider_errors.append(f"fan-out: {exc}")
@@ -192,7 +198,9 @@ def _local_db_search(
         params: list[Any] = []
 
         if topic_id is not None:
-            clauses.append("id IN (SELECT paper_id FROM paper_topics WHERE topic_id = ?)")
+            clauses.append(
+                "id IN (SELECT paper_id FROM paper_topics WHERE topic_id = ?)"
+            )
             params.append(topic_id)
         if year_from is not None:
             clauses.append("year >= ?")
@@ -211,14 +219,20 @@ def _local_db_search(
         results: list[PaperRef] = []
         for row in rows:
             title = (row["title"] or "").lower()
-            score = 0.0 if not tokens else sum(1 for token in tokens if token in title) / len(tokens)
+            score = (
+                0.0
+                if not tokens
+                else sum(1 for token in tokens if token in title) / len(tokens)
+            )
             if score <= 0:
                 continue
             results.append(
                 PaperRef(
                     title=row["title"] or "",
                     authors=_parse_authors(row["authors"]),
-                    affiliations=_parse_authors(row["affiliations"]) if row["affiliations"] else [],
+                    affiliations=_parse_authors(row["affiliations"])
+                    if row["affiliations"]
+                    else [],
                     year=row["year"],
                     venue=row["venue"] or "",
                     doi=row["doi"] or "",
@@ -261,10 +275,18 @@ def _record_to_ref(record: PaperRecord, query: str) -> PaperRef:
 def _ref_to_dict(ref: PaperRef) -> dict[str, Any]:
     """Serialize PaperRef to a JSON-safe dict for caching."""
     return {
-        "title": ref.title, "authors": ref.authors, "affiliations": ref.affiliations,
-        "year": ref.year, "venue": ref.venue, "doi": ref.doi, "arxiv_id": ref.arxiv_id,
-        "s2_id": ref.s2_id, "url": ref.url, "relevance_score": ref.relevance_score,
-        "snippet": ref.snippet, "venue_tier": ref.venue_tier,
+        "title": ref.title,
+        "authors": ref.authors,
+        "affiliations": ref.affiliations,
+        "year": ref.year,
+        "venue": ref.venue,
+        "doi": ref.doi,
+        "arxiv_id": ref.arxiv_id,
+        "s2_id": ref.s2_id,
+        "url": ref.url,
+        "relevance_score": ref.relevance_score,
+        "snippet": ref.snippet,
+        "venue_tier": ref.venue_tier,
         "citation_count": ref.citation_count,
     }
 
@@ -272,12 +294,18 @@ def _ref_to_dict(ref: PaperRef) -> dict[str, Any]:
 def _dict_to_ref(d: dict[str, Any]) -> PaperRef:
     """Deserialize a cached dict back to PaperRef."""
     return PaperRef(
-        title=d.get("title", ""), authors=d.get("authors", []),
+        title=d.get("title", ""),
+        authors=d.get("authors", []),
         affiliations=d.get("affiliations", []),
-        year=d.get("year"), venue=d.get("venue", ""), doi=d.get("doi", ""),
-        arxiv_id=d.get("arxiv_id", ""), s2_id=d.get("s2_id", ""),
-        url=d.get("url", ""), relevance_score=d.get("relevance_score", 0.0),
-        snippet=d.get("snippet", ""), venue_tier=d.get("venue_tier", ""),
+        year=d.get("year"),
+        venue=d.get("venue", ""),
+        doi=d.get("doi", ""),
+        arxiv_id=d.get("arxiv_id", ""),
+        s2_id=d.get("s2_id", ""),
+        url=d.get("url", ""),
+        relevance_score=d.get("relevance_score", 0.0),
+        snippet=d.get("snippet", ""),
+        venue_tier=d.get("venue_tier", ""),
         citation_count=d.get("citation_count"),
     )
 
@@ -311,6 +339,7 @@ def _merge_and_dedup(local: list[PaperRef], external: list[PaperRef]) -> list[Pa
 
 def _pick_richer(a: PaperRef, b: PaperRef) -> PaperRef:
     """Pick the PaperRef with richer metadata, merging missing fields."""
+
     # Prefer the one with more filled fields
     def _richness(r: PaperRef) -> int:
         count = 0
@@ -345,7 +374,9 @@ def _pick_richer(a: PaperRef, b: PaperRef) -> PaperRef:
         relevance_score=max(base.relevance_score, other.relevance_score),
         snippet=base.snippet or other.snippet,
         venue_tier=base.venue_tier or other.venue_tier,
-        citation_count=base.citation_count if base.citation_count is not None else other.citation_count,
+        citation_count=base.citation_count
+        if base.citation_count is not None
+        else other.citation_count,
     )
 
 
@@ -370,7 +401,9 @@ def _enrich_venue_tier(ref: PaperRef) -> PaperRef:
     )
 
 
-def _composite_rank(ref: PaperRef, query: str, current_year: int) -> tuple[float, float, float, float]:
+def _composite_rank(
+    ref: PaperRef, query: str, current_year: int
+) -> tuple[float, float, float, float]:
     """Produce a ranking tuple (higher is better)."""
     # 1. Venue tier score (0.0 - 1.0)
     tier_score = venue_tier_score(ref.venue) / 100.0
@@ -416,7 +449,11 @@ def _auto_ingest_refs(db: Database, refs: list[PaperRef], topic_id: int | None) 
                 pool.ingest(paper, topic_id=topic_id, relevance="medium")
                 count += 1
             except Exception as exc:
-                logger.debug("Ingest failed for ref '%s': %s", ref.title[:60] if ref.title else "?", exc)
+                logger.debug(
+                    "Ingest failed for ref '%s': %s",
+                    ref.title[:60] if ref.title else "?",
+                    exc,
+                )
                 continue
         return count
     finally:
@@ -471,19 +508,21 @@ def select_seeds(
 
         composite = tier_score * 0.4 + citation_score * 0.3 + relevance_score * 0.3
 
-        candidates.append(SeedPaper(
-            paper_id=row["id"],
-            title=row["title"] or "",
-            venue=venue,
-            venue_tier=tier,
-            year=row["year"],
-            citation_count=citations,
-            relevance=relevance,
-            seed_score=round(composite, 4),
-            s2_id=row["s2_id"] or "",
-            arxiv_id=row["arxiv_id"] or "",
-            doi=row["doi"] or "",
-        ))
+        candidates.append(
+            SeedPaper(
+                paper_id=row["id"],
+                title=row["title"] or "",
+                venue=venue,
+                venue_tier=tier,
+                year=row["year"],
+                citation_count=citations,
+                relevance=relevance,
+                seed_score=round(composite, 4),
+                s2_id=row["s2_id"] or "",
+                arxiv_id=row["arxiv_id"] or "",
+                doi=row["doi"] or "",
+            )
+        )
 
     candidates.sort(key=lambda s: s.seed_score, reverse=True)
     return SelectSeedsOutput(
@@ -510,7 +549,9 @@ def expand_citations(
     if seed_paper_ids:
         seeds = _load_seed_papers(db, topic_id, seed_paper_ids)
     else:
-        seeds_out = select_seeds(db=db, topic_id=topic_id, top_n=5, min_relevance="medium")
+        seeds_out = select_seeds(
+            db=db, topic_id=topic_id, top_n=5, min_relevance="medium"
+        )
         seeds = list(seeds_out.seeds)
 
     if not seeds:
@@ -537,7 +578,8 @@ def expand_citations(
             raw = seed.arxiv_id.replace("arxiv:", "").replace("ARXIV:", "")
             # Strip version suffix (e.g. 2308.09066v1 → 2308.09066)
             import re
-            raw = re.sub(r'v\d+$', '', raw)
+
+            raw = re.sub(r"v\d+$", "", raw)
             s2_id = f"ARXIV:{raw}"
         elif seed.doi:
             s2_id = seed.doi
@@ -550,23 +592,38 @@ def expand_citations(
         try:
             fwd_records = s2.get_citations(s2_id, limit=forward_limit)
             for rec in fwd_records:
-                candidates.append(_record_to_expand_candidate(rec, seed.paper_id, "forward"))
+                candidates.append(
+                    _record_to_expand_candidate(rec, seed.paper_id, "forward")
+                )
             forward_count += len(fwd_records)
         except Exception as exc:
-            logger.warning("S2 get_citations failed for seed %d (%s): %s", seed.paper_id, s2_id, exc)
+            logger.warning(
+                "S2 get_citations failed for seed %d (%s): %s",
+                seed.paper_id,
+                s2_id,
+                exc,
+            )
 
         # Backward: papers cited BY this seed (references)
         try:
             bwd_records = s2.get_references(s2_id, limit=backward_limit)
             for rec in bwd_records:
-                candidates.append(_record_to_expand_candidate(rec, seed.paper_id, "backward"))
+                candidates.append(
+                    _record_to_expand_candidate(rec, seed.paper_id, "backward")
+                )
             backward_count += len(bwd_records)
         except Exception as exc:
-            logger.warning("S2 get_references failed for seed %d (%s): %s", seed.paper_id, s2_id, exc)
+            logger.warning(
+                "S2 get_references failed for seed %d (%s): %s",
+                seed.paper_id,
+                s2_id,
+                exc,
+            )
 
     # Supplement with OpenAlex cited_by for seeds that have a DOI
     try:
         from ..paper_source_clients import OpenAlexProvider
+
         oa = OpenAlexProvider()
         for seed in seeds:
             if not seed.doi:
@@ -577,10 +634,14 @@ def expand_citations(
             try:
                 oa_records = oa.cited_by(oa_id, limit=forward_limit)
                 for rec in oa_records:
-                    candidates.append(_record_to_expand_candidate(rec, seed.paper_id, "forward"))
+                    candidates.append(
+                        _record_to_expand_candidate(rec, seed.paper_id, "forward")
+                    )
                 forward_count += len(oa_records)
             except Exception as exc:
-                logger.warning("OA cited_by failed for seed %d (%s): %s", seed.paper_id, oa_id, exc)
+                logger.warning(
+                    "OA cited_by failed for seed %d (%s): %s", seed.paper_id, oa_id, exc
+                )
     except Exception as exc:
         logger.debug("OpenAlex cited_by integration skipped: %s", exc)
 
@@ -588,7 +649,12 @@ def expand_citations(
     seen: set[str] = set()
     deduped: list[ExpandCandidatePaper] = []
     for c in candidates:
-        fp = c.doi.strip().lower() or c.arxiv_id.strip().lower() or c.s2_id.strip().lower() or f"title:{c.title.lower()}"
+        fp = (
+            c.doi.strip().lower()
+            or c.arxiv_id.strip().lower()
+            or c.s2_id.strip().lower()
+            or f"title:{c.title.lower()}"
+        )
         if fp not in seen:
             seen.add(fp)
             deduped.append(c)
@@ -608,7 +674,9 @@ def expand_citations(
     )
 
 
-def _load_seed_papers(db: Database, topic_id: int, paper_ids: list[int]) -> list[SeedPaper]:
+def _load_seed_papers(
+    db: Database, topic_id: int, paper_ids: list[int]
+) -> list[SeedPaper]:
     """Load SeedPaper objects for the given paper IDs in a topic."""
     conn = db.connect()
     try:
@@ -629,23 +697,27 @@ def _load_seed_papers(db: Database, topic_id: int, paper_ids: list[int]) -> list
     result: list[SeedPaper] = []
     for row in rows:
         venue = row["venue"] or ""
-        result.append(SeedPaper(
-            paper_id=row["id"],
-            title=row["title"] or "",
-            venue=venue,
-            venue_tier=venue_tier_label(venue),
-            year=row["year"],
-            citation_count=row["citation_count"],
-            relevance=row["relevance"] or "low",
-            seed_score=0.0,
-            s2_id=row["s2_id"] or "",
-            arxiv_id=row["arxiv_id"] or "",
-            doi=row["doi"] or "",
-        ))
+        result.append(
+            SeedPaper(
+                paper_id=row["id"],
+                title=row["title"] or "",
+                venue=venue,
+                venue_tier=venue_tier_label(venue),
+                year=row["year"],
+                citation_count=row["citation_count"],
+                relevance=row["relevance"] or "low",
+                seed_score=0.0,
+                s2_id=row["s2_id"] or "",
+                arxiv_id=row["arxiv_id"] or "",
+                doi=row["doi"] or "",
+            )
+        )
     return result
 
 
-def _record_to_expand_candidate(record: "PaperRecord", seed_paper_id: int, direction: str) -> ExpandCandidatePaper:
+def _record_to_expand_candidate(
+    record: "PaperRecord", seed_paper_id: int, direction: str
+) -> ExpandCandidatePaper:
     """Convert a PaperRecord from S2 citation graph to an ExpandCandidatePaper."""
     venue = record.venue or ""
     return ExpandCandidatePaper(
@@ -670,7 +742,9 @@ def _candidate_rank(c: ExpandCandidatePaper) -> tuple[float, float]:
     return (tier * 0.4 + cite * 0.3, c.year or 0)
 
 
-def _build_expand_guidance(candidates: list[ExpandCandidatePaper], topic_id: int) -> str:
+def _build_expand_guidance(
+    candidates: list[ExpandCandidatePaper], topic_id: int
+) -> str:
     """Build model guidance text based on candidate pool quality."""
     if not candidates:
         return (
@@ -678,7 +752,9 @@ def _build_expand_guidance(candidates: list[ExpandCandidatePaper], topic_id: int
             "Try enriching seeds via paper_ingest before retrying."
         )
 
-    top_tier = [c for c in candidates if "CCF-A" in c.venue_tier or "Q1" in c.venue_tier]
+    top_tier = [
+        c for c in candidates if "CCF-A" in c.venue_tier or "Q1" in c.venue_tier
+    ]
     high_cite = [c for c in candidates if (c.citation_count or 0) >= 50]
 
     parts = [
@@ -753,10 +829,19 @@ def paper_ingest(
             try:
                 enriched_fields = pool.enrich_metadata(paper_id)
                 if "error" in enriched_fields:
-                    logger.debug("S2 enrichment note for paper %d: %s", paper_id, enriched_fields.pop("error"))
+                    logger.debug(
+                        "S2 enrichment note for paper %d: %s",
+                        paper_id,
+                        enriched_fields.pop("error"),
+                    )
                 time.sleep(1.05)  # S2 rate limit: 1 req/s
             except Exception as exc:
-                logger.warning("S2 enrichment failed for paper %d (attempt %d): %s", paper_id, attempt + 1, exc)
+                logger.warning(
+                    "S2 enrichment failed for paper %d (attempt %d): %s",
+                    paper_id,
+                    attempt + 1,
+                    exc,
+                )
                 time.sleep(1.05)
                 continue
 
@@ -776,17 +861,24 @@ def paper_ingest(
         if title and existing is None:
             try:
                 dup_candidates = _find_duplicate_candidates(
-                    conn, title, exclude_id=paper_id, topic_id=topic_id,
+                    conn,
+                    title,
+                    exclude_id=paper_id,
+                    topic_id=topic_id,
                 )
             except Exception:
-                logger.debug("Duplicate detection failed for paper %d", paper_id, exc_info=True)
+                logger.debug(
+                    "Duplicate detection failed for paper %d", paper_id, exc_info=True
+                )
 
         # Survey detection
         if title and topic_id is not None:
             try:
                 _detect_survey_paper(conn, paper_id, title, topic_id=topic_id)
             except Exception:
-                logger.debug("Survey detection failed for paper %d", paper_id, exc_info=True)
+                logger.debug(
+                    "Survey detection failed for paper %d", paper_id, exc_info=True
+                )
 
         return PaperIngestOutput(
             paper_id=paper_id,
@@ -803,6 +895,7 @@ def paper_ingest(
 def _normalize_title(title: str) -> str:
     """Normalize a title for fuzzy comparison: lowercase, strip punctuation/whitespace."""
     import re
+
     t = title.lower().strip()
     t = re.sub(r"[^a-z0-9\s]", "", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -824,9 +917,15 @@ def _title_similarity(a: str, b: str) -> float:
 _DUPLICATE_THRESHOLD = 0.75
 
 _SURVEY_KEYWORDS = (
-    "survey", "review", "meta-analysis", "meta analysis",
-    "systematic review", "literature review", "overview of",
-    "a comprehensive", "tutorial",
+    "survey",
+    "review",
+    "meta-analysis",
+    "meta analysis",
+    "systematic review",
+    "literature review",
+    "overview of",
+    "a comprehensive",
+    "tutorial",
 )
 
 
@@ -866,11 +965,13 @@ def _find_duplicate_candidates(
         other_norm = _normalize_title(row["title"])
         sim = _title_similarity(norm, other_norm)
         if sim >= _DUPLICATE_THRESHOLD:
-            candidates.append({
-                "id": int(row["id"]),
-                "title": row["title"],
-                "similarity": round(sim, 3),
-            })
+            candidates.append(
+                {
+                    "id": int(row["id"]),
+                    "title": row["title"],
+                    "similarity": round(sim, 3),
+                }
+            )
 
     candidates.sort(key=lambda x: x["similarity"], reverse=True)
     return candidates[:5]
@@ -913,9 +1014,13 @@ def _find_existing_source(conn: sqlite3.Connection, source: str) -> int | None:
     if source.startswith("10."):
         row = conn.execute("SELECT id FROM papers WHERE doi = ?", (source,)).fetchone()
     elif "/" not in source and len(source) < 20:
-        row = conn.execute("SELECT id FROM papers WHERE arxiv_id = ?", (source,)).fetchone()
+        row = conn.execute(
+            "SELECT id FROM papers WHERE arxiv_id = ?", (source,)
+        ).fetchone()
     else:
-        row = conn.execute("SELECT id FROM papers WHERE title = ?", (source,)).fetchone()
+        row = conn.execute(
+            "SELECT id FROM papers WHERE title = ?", (source,)
+        ).fetchone()
     if row is None:
         return None
     return int(row["id"])
@@ -975,7 +1080,9 @@ def paper_acquire(
     db_path = db.path
     download_dir = Path(db_path).parent / "papers"
     artifacts_root = Path(db_path).parent / "artifacts"
-    report = acquire_papers(db, topic_id, download_dir=download_dir, artifacts_root=artifacts_root)
+    report = acquire_papers(
+        db, topic_id, download_dir=download_dir, artifacts_root=artifacts_root
+    )
 
     # Step 3: Build priority-sorted unable-to-acquire list
     unable = _build_unable_to_acquire_list(db, topic_id)
@@ -992,7 +1099,9 @@ def paper_acquire(
     )
 
 
-def _build_unable_to_acquire_list(db: Database, topic_id: int) -> list[UnableToAcquireItem]:
+def _build_unable_to_acquire_list(
+    db: Database, topic_id: int
+) -> list[UnableToAcquireItem]:
     """Build a priority-sorted list of papers still missing PDFs after acquisition."""
     conn = db.connect()
     try:
@@ -1117,6 +1226,7 @@ def project_get_contributions(
 # ---------------------------------------------------------------------------
 # Cold Start Protocol
 # ---------------------------------------------------------------------------
+
 
 @register_primitive(COLD_START_RUN_SPEC)
 def cold_start_run(*, db, topic_id, gold_papers=None, **_):

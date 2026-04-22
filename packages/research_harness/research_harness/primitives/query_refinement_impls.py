@@ -13,7 +13,9 @@ from .types import QueryRefineOutput
 
 
 @register_primitive(QUERY_REFINE_SPEC)
-def query_refine(*, topic_id: int, max_candidates: int = 8, **_: Any) -> QueryRefineOutput:
+def query_refine(
+    *, topic_id: int, max_candidates: int = 8, **_: Any
+) -> QueryRefineOutput:
     return QueryRefineOutput(
         topic_id=topic_id,
         candidates=[],

@@ -58,8 +58,12 @@ class ModeComparator:
         winner = "tie"
         if supervised_runs.total_runs > 0 and autonomous_runs.total_runs > 0:
             # Score: quality > cost > speed
-            s_score = supervised_runs.gate_pass_rate * 3 - supervised_runs.mean_cost_usd * 0.1
-            a_score = autonomous_runs.gate_pass_rate * 3 - autonomous_runs.mean_cost_usd * 0.1
+            s_score = (
+                supervised_runs.gate_pass_rate * 3 - supervised_runs.mean_cost_usd * 0.1
+            )
+            a_score = (
+                autonomous_runs.gate_pass_rate * 3 - autonomous_runs.mean_cost_usd * 0.1
+            )
             if s_score > a_score + 0.1:
                 winner = "supervised"
             elif a_score > s_score + 0.1:
@@ -77,14 +81,18 @@ class ModeComparator:
     def _get_mode_metrics(self, conn: Any, mode: str) -> ModeMetrics:
         """Aggregate metrics for a given autonomy mode."""
         try:
-            row = conn.execute("""
+            row = conn.execute(
+                """
                 SELECT COUNT(*) as runs,
                        COUNT(DISTINCT current_stage) as stages
                 FROM orchestrator_runs
                 WHERE autonomy_mode = ?
-            """, (mode,)).fetchone()
+            """,
+                (mode,),
+            ).fetchone()
 
-            obs_row = conn.execute("""
+            obs_row = conn.execute(
+                """
                 SELECT COUNT(*) as total_calls,
                        SUM(cost_usd) as total_cost,
                        SUM(CASE WHEN user_intervention = 1 THEN 1 ELSE 0 END) as interventions,
@@ -92,7 +100,9 @@ class ModeComparator:
                 FROM session_observations so
                 JOIN orchestrator_runs orc ON so.stage != ''
                 WHERE orc.autonomy_mode = ?
-            """, (mode,)).fetchone()
+            """,
+                (mode,),
+            ).fetchone()
 
             runs = row["runs"] if row else 0
             return ModeMetrics(

@@ -106,25 +106,29 @@ class InvariantChecker:
                 try:
                     payload = json.loads(row["payload_json"] or "{}")
                 except (json.JSONDecodeError, TypeError):
-                    violations.append(InvariantViolation(
-                        check="artifact_schema",
-                        severity="critical",
-                        message=f"Artifact {row['id']} ({artifact_type}) has invalid JSON payload",
-                        artifact_id=row["id"],
-                    ))
+                    violations.append(
+                        InvariantViolation(
+                            check="artifact_schema",
+                            severity="critical",
+                            message=f"Artifact {row['id']} ({artifact_type}) has invalid JSON payload",
+                            artifact_id=row["id"],
+                        )
+                    )
                     continue
 
                 for field in schema.get("required_fields", []):
                     if field not in payload or not payload[field]:
-                        violations.append(InvariantViolation(
-                            check="artifact_schema",
-                            severity="medium",
-                            message=(
-                                f"Artifact {row['id']} ({artifact_type}) missing "
-                                f"required field '{field}'"
-                            ),
-                            artifact_id=row["id"],
-                        ))
+                        violations.append(
+                            InvariantViolation(
+                                check="artifact_schema",
+                                severity="medium",
+                                message=(
+                                    f"Artifact {row['id']} ({artifact_type}) missing "
+                                    f"required field '{field}'"
+                                ),
+                                artifact_id=row["id"],
+                            )
+                        )
         finally:
             conn.close()
 
@@ -147,15 +151,17 @@ class InvariantChecker:
             ).fetchall()
 
             for row in rows:
-                violations.append(InvariantViolation(
-                    check="stale_artifact",
-                    severity="high",
-                    message=(
-                        f"Artifact {row['id']} ({row['artifact_type']}) is stale: "
-                        f"{row['stale_reason'] or 'no reason given'}"
-                    ),
-                    artifact_id=row["id"],
-                ))
+                violations.append(
+                    InvariantViolation(
+                        check="stale_artifact",
+                        severity="high",
+                        message=(
+                            f"Artifact {row['id']} ({row['artifact_type']}) is stale: "
+                            f"{row['stale_reason'] or 'no reason given'}"
+                        ),
+                        artifact_id=row["id"],
+                    )
+                )
         finally:
             conn.close()
 
@@ -167,10 +173,15 @@ class InvariantChecker:
         """Check that critical artifacts have provenance records."""
         violations: list[InvariantViolation] = []
         # Critical artifact types that MUST have provenance
-        critical_types = frozenset({
-            "evidence_pack", "direction_proposal", "experiment_result",
-            "draft_pack", "adversarial_resolution",
-        })
+        critical_types = frozenset(
+            {
+                "evidence_pack",
+                "direction_proposal",
+                "experiment_result",
+                "draft_pack",
+                "adversarial_resolution",
+            }
+        )
 
         conn = self._db.connect()
         try:
@@ -186,15 +197,17 @@ class InvariantChecker:
 
             for row in rows:
                 if not row["provenance_record_id"]:
-                    violations.append(InvariantViolation(
-                        check="provenance_linkage",
-                        severity="medium",
-                        message=(
-                            f"Critical artifact {row['id']} ({row['artifact_type']}) "
-                            "has no provenance record"
-                        ),
-                        artifact_id=row["id"],
-                    ))
+                    violations.append(
+                        InvariantViolation(
+                            check="provenance_linkage",
+                            severity="medium",
+                            message=(
+                                f"Critical artifact {row['id']} ({row['artifact_type']}) "
+                                "has no provenance record"
+                            ),
+                            artifact_id=row["id"],
+                        )
+                    )
         finally:
             conn.close()
 
@@ -234,19 +247,24 @@ class InvariantChecker:
                     if isinstance(content, str) and len(content) > 200:
                         # Check for citation markers: \cite{}, [N], (Author, Year)
                         import re
-                        has_cite = bool(re.search(
-                            r'\\cite\{|[\[\(]\d+[\]\)]|\(\w+,\s*\d{4}\)', content
-                        ))
+
+                        has_cite = bool(
+                            re.search(
+                                r"\\cite\{|[\[\(]\d+[\]\)]|\(\w+,\s*\d{4}\)", content
+                            )
+                        )
                         if not has_cite:
-                            violations.append(InvariantViolation(
-                                check="section_citations",
-                                severity="medium",
-                                message=(
-                                    f"Section '{section_name}' in draft_pack "
-                                    f"({len(content)} chars) has no citation markers"
-                                ),
-                                artifact_id=row["id"],
-                            ))
+                            violations.append(
+                                InvariantViolation(
+                                    check="section_citations",
+                                    severity="medium",
+                                    message=(
+                                        f"Section '{section_name}' in draft_pack "
+                                        f"({len(content)} chars) has no citation markers"
+                                    ),
+                                    artifact_id=row["id"],
+                                )
+                            )
         finally:
             conn.close()
 

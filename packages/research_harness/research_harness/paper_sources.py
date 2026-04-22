@@ -100,7 +100,13 @@ class PaperRecord:
     source_rank: int = 0
 
     def fingerprint(self) -> str:
-        for value in (self.doi, self.arxiv_id, self.openreview_id, self.s2_id, self.openalex_id):
+        for value in (
+            self.doi,
+            self.arxiv_id,
+            self.openreview_id,
+            self.s2_id,
+            self.openalex_id,
+        ):
             cleaned = (value or "").strip().lower()
             if cleaned:
                 return cleaned
@@ -112,8 +118,7 @@ class PaperRecord:
 class SearchProvider(Protocol):
     name: str
 
-    def search(self, query: SearchQuery) -> list[PaperRecord]:
-        ...
+    def search(self, query: SearchQuery) -> list[PaperRecord]: ...
 
 
 def normalize_title(value: str) -> str:
@@ -134,7 +139,9 @@ class SearchAggregator:
     def __init__(self, providers: Iterable[SearchProvider]):
         self.providers = list(providers)
 
-    def search(self, query: SearchQuery, *, output_limit: int | None = None) -> SearchOutcome:
+    def search(
+        self, query: SearchQuery, *, output_limit: int | None = None
+    ) -> SearchOutcome:
         """Search all providers and merge results.
 
         Each provider is queried with ``query.limit`` (per-provider cap).
@@ -159,7 +166,9 @@ class SearchAggregator:
             for record in records:
                 provider_name = record.provider or provider.name
                 record.provider = provider_name
-                record.source_rank = provider_priority(provider_name, SEARCH_PROVIDER_PRIORITY)
+                record.source_rank = provider_priority(
+                    provider_name, SEARCH_PROVIDER_PRIORITY
+                )
                 key = record.fingerprint()
                 title_key = title_year_key(record)
                 existing_key = key if key in merged else title_index.get(title_key)
@@ -173,7 +182,11 @@ class SearchAggregator:
                 else:
                     merged[key] = clone_record(record)
                     title_index[title_key] = key
-        ranked = sorted(merged.values(), key=lambda record: rank_record(record, query.query), reverse=True)
+        ranked = sorted(
+            merged.values(),
+            key=lambda record: rank_record(record, query.query),
+            reverse=True,
+        )
         cap = output_limit if output_limit is not None else len(ranked)
         return SearchOutcome(results=ranked[:cap], provider_errors=provider_errors)
 
@@ -186,24 +199,43 @@ class PDFResolver:
             if not key[0]:
                 continue
             current = merged.get(key)
-            if current is None or rank_pdf_candidate(candidate) > rank_pdf_candidate(current):
+            if current is None or rank_pdf_candidate(candidate) > rank_pdf_candidate(
+                current
+            ):
                 merged[key] = candidate
 
         if record.arxiv_id:
-            arxiv_url = f"https://arxiv.org/pdf/{record.arxiv_id.removeprefix('arXiv:')}.pdf"
-            candidate = PDFCandidate(url=arxiv_url, source_type="arxiv_pdf", provider="arxiv", confidence=0.98)
+            arxiv_url = (
+                f"https://arxiv.org/pdf/{record.arxiv_id.removeprefix('arXiv:')}.pdf"
+            )
+            candidate = PDFCandidate(
+                url=arxiv_url,
+                source_type="arxiv_pdf",
+                provider="arxiv",
+                confidence=0.98,
+            )
             key = (candidate.url, candidate.source_type)
             merged.setdefault(key, candidate)
 
         if record.openreview_id:
             openreview_url = f"https://openreview.net/pdf?id={record.openreview_id}"
-            candidate = PDFCandidate(url=openreview_url, source_type="openreview_pdf", provider="openreview", confidence=0.9)
+            candidate = PDFCandidate(
+                url=openreview_url,
+                source_type="openreview_pdf",
+                provider="openreview",
+                confidence=0.9,
+            )
             key = (candidate.url, candidate.source_type)
             merged.setdefault(key, candidate)
 
         if record.doi:
             doi_url = f"https://doi.org/{record.doi}"
-            candidate = PDFCandidate(url=doi_url, source_type="doi_landing", provider="crossref", confidence=0.6)
+            candidate = PDFCandidate(
+                url=doi_url,
+                source_type="doi_landing",
+                provider="crossref",
+                confidence=0.6,
+            )
             key = (candidate.url, candidate.source_type)
             merged.setdefault(key, candidate)
 
@@ -227,10 +259,18 @@ def merge_records(base: PaperRecord, incoming: PaperRecord) -> PaperRecord:
     _merge_numeric(result, incoming, "year")
     _merge_numeric(result, incoming, "citation_count")
 
-    if incoming.authors and (not result.authors or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY) >= provider_priority(base.provider, METADATA_FIELD_PRIORITY)):
+    if incoming.authors and (
+        not result.authors
+        or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY)
+        >= provider_priority(base.provider, METADATA_FIELD_PRIORITY)
+    ):
         result.authors = list(dict.fromkeys(incoming.authors))
 
-    if incoming.affiliations and (not result.affiliations or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY) >= provider_priority(base.provider, METADATA_FIELD_PRIORITY)):
+    if incoming.affiliations and (
+        not result.affiliations
+        or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY)
+        >= provider_priority(base.provider, METADATA_FIELD_PRIORITY)
+    ):
         result.affiliations = list(dict.fromkeys(incoming.affiliations))
 
     existing_urls = {(item.url, item.source_type) for item in result.pdf_candidates}
@@ -269,7 +309,9 @@ def _merge_scalar(result: PaperRecord, incoming: PaperRecord, field_name: str) -
     incoming_value = getattr(incoming, field_name)
     if not incoming_value:
         return
-    if not existing_value or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY) >= provider_priority(result.provider, METADATA_FIELD_PRIORITY):
+    if not existing_value or provider_priority(
+        incoming.provider, METADATA_FIELD_PRIORITY
+    ) >= provider_priority(result.provider, METADATA_FIELD_PRIORITY):
         setattr(result, field_name, incoming_value)
         if field_name != "title":
             result.provider = incoming.provider
@@ -280,16 +322,39 @@ def _merge_numeric(result: PaperRecord, incoming: PaperRecord, field_name: str) 
     if incoming_value is None:
         return
     existing_value = getattr(result, field_name)
-    if existing_value is None or provider_priority(incoming.provider, METADATA_FIELD_PRIORITY) >= provider_priority(result.provider, METADATA_FIELD_PRIORITY):
+    if existing_value is None or provider_priority(
+        incoming.provider, METADATA_FIELD_PRIORITY
+    ) >= provider_priority(result.provider, METADATA_FIELD_PRIORITY):
         setattr(result, field_name, incoming_value)
 
 
-def rank_record(record: PaperRecord, query_text: str = "") -> tuple[int, int, int, int, int, str]:
+def rank_record(
+    record: PaperRecord, query_text: str = ""
+) -> tuple[int, int, int, int, int, str]:
     title_match = query_title_match_score(record, query_text)
-    pdf_bonus = 1 if record.pdf_candidates or record.arxiv_id or record.openreview_id else 0
+    pdf_bonus = (
+        1 if record.pdf_candidates or record.arxiv_id or record.openreview_id else 0
+    )
     citation_score = record.citation_count or 0
-    id_bonus = sum(1 for item in (record.doi, record.arxiv_id, record.s2_id, record.openalex_id, record.openreview_id) if item)
-    return (record.source_rank, title_match, pdf_bonus, citation_score, id_bonus, normalize_title(record.title))
+    id_bonus = sum(
+        1
+        for item in (
+            record.doi,
+            record.arxiv_id,
+            record.s2_id,
+            record.openalex_id,
+            record.openreview_id,
+        )
+        if item
+    )
+    return (
+        record.source_rank,
+        title_match,
+        pdf_bonus,
+        citation_score,
+        id_bonus,
+        normalize_title(record.title),
+    )
 
 
 def query_title_match_score(record: PaperRecord, query_text: str) -> int:

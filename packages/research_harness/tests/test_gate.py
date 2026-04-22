@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -107,11 +104,13 @@ class TestValidationGateTier1:
     def test_verdict_persisted_to_db(self, db):
         gate = ValidationGate(db)
         store = ExperienceStore(db)
-        rec_id = store.ingest(ExperienceRecord(
-            source_kind="self_review",
-            stage="section_draft",
-            diff_summary="Found weasel words in method",
-        ))
+        rec_id = store.ingest(
+            ExperienceRecord(
+                source_kind="self_review",
+                stage="section_draft",
+                diff_summary="Found weasel words in method",
+            )
+        )
         record = store.get(rec_id)
         verdict = gate.evaluate_tier1(record)
 
@@ -134,11 +133,13 @@ class TestValidationGateIntegration:
         """When gate is enabled, ingest should auto-evaluate and update verdict."""
         gate = ValidationGate(db)
         store = ExperienceStore(db, gate=gate)
-        rec_id = store.ingest(ExperienceRecord(
-            source_kind="self_review",
-            stage="section_draft",
-            diff_summary="Check 'word_count' failed: 800 words vs 1500 target",
-        ))
+        rec_id = store.ingest(
+            ExperienceRecord(
+                source_kind="self_review",
+                stage="section_draft",
+                diff_summary="Check 'word_count' failed: 800 words vs 1500 target",
+            )
+        )
         record = store.get(rec_id)
         assert record.gate_verdict in ("accepted", "deferred", "rejected")
         assert record.gate_verdict != "pending"
@@ -146,10 +147,12 @@ class TestValidationGateIntegration:
     def test_ingest_without_gate_stays_pending(self, db):
         """Without gate, records stay in pending state."""
         store = ExperienceStore(db)
-        rec_id = store.ingest(ExperienceRecord(
-            source_kind="self_review",
-            stage="section_draft",
-            diff_summary="Some issue",
-        ))
+        rec_id = store.ingest(
+            ExperienceRecord(
+                source_kind="self_review",
+                stage="section_draft",
+                diff_summary="Some issue",
+            )
+        )
         record = store.get(rec_id)
         assert record.gate_verdict == "pending"

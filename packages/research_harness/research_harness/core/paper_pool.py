@@ -1,11 +1,11 @@
 """Paper pool management."""
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import sqlite3
-import time
 
 from ..storage.models import Paper, PaperAnnotation, TopicPaperNote
 
@@ -49,13 +49,13 @@ class PaperPool:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
 
-    
-    
     def _optional_identifier(self, value: str) -> str | None:
         cleaned = value.strip()
         return cleaned or None
 
-    def ingest(self, paper: Paper, topic_id: int | None = None, relevance: str = "medium") -> int:
+    def ingest(
+        self, paper: Paper, topic_id: int | None = None, relevance: str = "medium"
+    ) -> int:
         existing = self._find_existing(paper)
         authors_json = json.dumps(paper.authors, ensure_ascii=False)
         affiliations_json = json.dumps(paper.affiliations, ensure_ascii=False)
@@ -132,12 +132,16 @@ class PaperPool:
         return paper_id
 
     def get(self, paper_id: int) -> Paper | None:
-        row = self._conn.execute("SELECT * FROM papers WHERE id = ?", (paper_id,)).fetchone()
+        row = self._conn.execute(
+            "SELECT * FROM papers WHERE id = ?", (paper_id,)
+        ).fetchone()
         if row is None:
             return None
         return self._row_to_paper(row)
 
-    def list_papers(self, topic_id: int | None = None, status: str | None = None) -> list[Paper]:
+    def list_papers(
+        self, topic_id: int | None = None, status: str | None = None
+    ) -> list[Paper]:
         query = "SELECT p.* FROM papers p"
         params: list[object] = []
         if topic_id is not None:
@@ -194,7 +198,9 @@ class PaperPool:
             (note.paper_id, note.topic_id),
         ).fetchone()
         if linked is None:
-            raise ValueError(f"paper {note.paper_id} is not linked to topic {note.topic_id}")
+            raise ValueError(
+                f"paper {note.paper_id} is not linked to topic {note.topic_id}"
+            )
 
         self._conn.execute(
             """
@@ -241,7 +247,9 @@ class PaperPool:
         import urllib.request
         import urllib.error
 
-        row = self._conn.execute("SELECT * FROM papers WHERE id = ?", (paper_id,)).fetchone()
+        row = self._conn.execute(
+            "SELECT * FROM papers WHERE id = ?", (paper_id,)
+        ).fetchone()
         if row is None:
             raise ValueError(f"Paper {paper_id} not found")
 
@@ -272,7 +280,11 @@ class PaperPool:
             return {"error": "no identifier to resolve"}
 
         url = f"https://api.semanticscholar.org/graph/v1/paper/{lookup_id}?fields=title,authors.name,authors.affiliations,year,venue,abstract,externalIds,citationCount,openAccessPdf"
-        api_key = os.environ.get("S2_API_KEY") or os.environ.get("SEMANTIC_SCHOLAR_API_KEY") or ""
+        api_key = (
+            os.environ.get("S2_API_KEY")
+            or os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+            or ""
+        )
         try:
             headers = {"User-Agent": "research-harness/1.0"}
             if api_key:
@@ -290,7 +302,9 @@ class PaperPool:
         new_abstract = (data.get("abstract") or "").strip()
         new_year = data.get("year")
         new_venue = (data.get("venue") or "").strip()
-        new_authors = [a.get("name", "") for a in (data.get("authors") or []) if a.get("name")]
+        new_authors = [
+            a.get("name", "") for a in (data.get("authors") or []) if a.get("name")
+        ]
         # Extract affiliations from S2 author data
         new_affiliations: list[str] = []
         _aff_seen: set[str] = set()
@@ -309,7 +323,12 @@ class PaperPool:
         params: list[object] = []
 
         old_title = (row["title"] or "").strip()
-        if new_title and (not old_title or old_title.startswith("doi:") or old_title.startswith("s2:") or old_title.startswith("pdf:")):
+        if new_title and (
+            not old_title
+            or old_title.startswith("doi:")
+            or old_title.startswith("s2:")
+            or old_title.startswith("pdf:")
+        ):
             set_clauses.append("title = ?")
             params.append(new_title)
             updates["title"] = new_title
@@ -340,8 +359,18 @@ class PaperPool:
             updates["year"] = str(new_year)
 
         old_venue = (row["venue"] or "").strip().lower()
-        venue_is_placeholder = not old_venue or old_venue in ("arxiv", "arxiv.org", "arxiv preprint")
-        if new_venue and (venue_is_placeholder or (new_venue.lower() != old_venue and old_venue in ("arxiv", "arxiv.org", "arxiv preprint"))):
+        venue_is_placeholder = not old_venue or old_venue in (
+            "arxiv",
+            "arxiv.org",
+            "arxiv preprint",
+        )
+        if new_venue and (
+            venue_is_placeholder
+            or (
+                new_venue.lower() != old_venue
+                and old_venue in ("arxiv", "arxiv.org", "arxiv preprint")
+            )
+        ):
             set_clauses.append("venue = ?")
             params.append(new_venue)
             updates["venue"] = new_venue
@@ -364,7 +393,9 @@ class PaperPool:
         # Always update citation_count from S2 (Bug: citation_count not populated)
         new_citation_count = data.get("citationCount")
         if new_citation_count is not None:
-            old_count = row["citation_count"] if "citation_count" in row.keys() else None
+            old_count = (
+                row["citation_count"] if "citation_count" in row.keys() else None
+            )
             if old_count is None or old_count == 0:
                 set_clauses.append("citation_count = ?")
                 params.append(int(new_citation_count))
@@ -391,7 +422,11 @@ class PaperPool:
         return updates
 
     def _find_existing(self, paper: Paper) -> dict[str, int] | None:
-        for field_name, value in (("doi", paper.doi), ("arxiv_id", paper.arxiv_id), ("s2_id", paper.s2_id)):
+        for field_name, value in (
+            ("doi", paper.doi),
+            ("arxiv_id", paper.arxiv_id),
+            ("s2_id", paper.s2_id),
+        ):
             if not value:
                 continue
             row = self._conn.execute(
@@ -409,7 +444,9 @@ class PaperPool:
             id=row["id"],
             title=row["title"],
             authors=json.loads(row["authors"]) if row["authors"] else [],
-            affiliations=json.loads(row["affiliations"]) if "affiliations" in keys and row["affiliations"] else [],
+            affiliations=json.loads(row["affiliations"])
+            if "affiliations" in keys and row["affiliations"]
+            else [],
             year=row["year"],
             venue=row["venue"],
             abstract=row["abstract"] if "abstract" in keys else "",

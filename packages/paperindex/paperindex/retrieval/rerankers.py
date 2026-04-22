@@ -60,12 +60,14 @@ def _llm_rerank(
     if not model:
         raise ValueError("LLM rerank requires llm_config['model']")
 
-    client = LLMClient(ResolvedLLMConfig(
-        provider=config.get("provider", "openai"),
-        model=model,
-        api_key=config.get("api_key", ""),
-        base_url=config.get("base_url", ""),
-    ))
+    client = LLMClient(
+        ResolvedLLMConfig(
+            provider=config.get("provider", "openai"),
+            model=model,
+            api_key=config.get("api_key", ""),
+            base_url=config.get("base_url", ""),
+        )
+    )
     prompt = _build_rerank_prompt(query, results)
     response = client.chat(prompt=prompt, temperature=0.0)
     ranked_items = _extract_ranked_items(response)
@@ -143,16 +145,22 @@ def _extract_ranked_items(text: str) -> list[dict[str, str]]:
             paper_id = str(item.get("paper_id", "")).strip()
             if not paper_id:
                 continue
-            items.append({
-                "paper_id": paper_id,
-                "reason": str(item.get("reason", "")).strip(),
-            })
+            items.append(
+                {
+                    "paper_id": paper_id,
+                    "reason": str(item.get("reason", "")).strip(),
+                }
+            )
         if items:
             return items
 
     ranked_ids = data.get("ranked_paper_ids")
     if isinstance(ranked_ids, list):
-        return [{"paper_id": str(item).strip(), "reason": ""} for item in ranked_ids if str(item).strip()]
+        return [
+            {"paper_id": str(item).strip(), "reason": ""}
+            for item in ranked_ids
+            if str(item).strip()
+        ]
     return []
 
 

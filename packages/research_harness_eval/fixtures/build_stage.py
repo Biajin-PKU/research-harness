@@ -7,7 +7,10 @@ BUILD_CASES = [
         id="build-001",
         stage="build",
         description="Paper search returns results for well-known topic",
-        input_data={"query": "auto-bidding advertising optimization", "max_results": 10},
+        input_data={
+            "query": "auto-bidding advertising optimization",
+            "max_results": 10,
+        },
         expected={"min_count": 3, "count_key": "papers"},
         grader_type="deterministic",
         tags=["build", "search", "smoke"],
@@ -17,7 +20,9 @@ BUILD_CASES = [
         stage="build",
         description="Coverage check identifies meta_only papers",
         input_data={"topic_id": 1},
-        expected={"required_fields": ["items", "total_meta_only", "high_necessity_count"]},
+        expected={
+            "required_fields": ["items", "total_meta_only", "high_necessity_count"]
+        },
         grader_type="deterministic",
         tags=["build", "coverage"],
     ),

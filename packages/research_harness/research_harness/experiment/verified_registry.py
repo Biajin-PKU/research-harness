@@ -89,21 +89,78 @@ class VerifiedRegistry:
 
 # -- Always-allowed numbers ---------------------------------------------------
 
-ALWAYS_ALLOWED: frozenset[float] = frozenset({
-    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0,
-    0.5, 0.01, 0.001, 0.0001, 0.1, 0.05, 0.95, 0.99,
-    # Years
-    2020.0, 2021.0, 2022.0, 2023.0, 2024.0, 2025.0, 2026.0, 2027.0,
-    # Powers of 2
-    8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 2048.0, 4096.0,
-    # Image sizes
-    224.0, 299.0, 384.0,
-    # Common hyperparameters
-    0.0003, 3e-4, 0.0005, 5e-4, 0.002, 2e-3,
-    0.2, 0.3, 0.25, 0.7, 0.6, 0.8, 0.9, 0.999, 0.9999,
-    0.02, 0.03, 1e-5, 1e-6, 1e-8,
-    300.0, 400.0, 500.0, 8192.0,
-})
+ALWAYS_ALLOWED: frozenset[float] = frozenset(
+    {
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        10.0,
+        20.0,
+        50.0,
+        100.0,
+        200.0,
+        0.5,
+        0.01,
+        0.001,
+        0.0001,
+        0.1,
+        0.05,
+        0.95,
+        0.99,
+        # Years
+        2020.0,
+        2021.0,
+        2022.0,
+        2023.0,
+        2024.0,
+        2025.0,
+        2026.0,
+        2027.0,
+        # Powers of 2
+        8.0,
+        16.0,
+        32.0,
+        64.0,
+        128.0,
+        256.0,
+        512.0,
+        1024.0,
+        2048.0,
+        4096.0,
+        # Image sizes
+        224.0,
+        299.0,
+        384.0,
+        # Common hyperparameters
+        0.0003,
+        3e-4,
+        0.0005,
+        5e-4,
+        0.002,
+        2e-3,
+        0.2,
+        0.3,
+        0.25,
+        0.7,
+        0.6,
+        0.8,
+        0.9,
+        0.999,
+        0.9999,
+        0.02,
+        0.03,
+        1e-5,
+        1e-6,
+        1e-8,
+        300.0,
+        400.0,
+        500.0,
+        8192.0,
+    }
+)
 
 
 def build_registry_from_metrics(
@@ -137,7 +194,7 @@ def build_registry_from_metrics(
     # Compute pairwise differences between conditions
     cond_names = sorted(conditions.keys())
     for i, c1 in enumerate(cond_names):
-        for c2 in cond_names[i + 1:]:
+        for c2 in cond_names[i + 1 :]:
             for metric in conditions[c1]:
                 if metric in conditions[c2]:
                     v1, v2 = conditions[c1][metric], conditions[c2][metric]

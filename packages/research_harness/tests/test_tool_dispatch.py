@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 
 from research_harness.auto_runner.tool_dispatch import (
-    ToolResult,
     dispatch,
     dispatch_stage_tools,
     _PRIMITIVE_TOOLS,
-    _ORCHESTRATOR_TOOLS,
 )
 from research_harness.storage.db import Database
 
@@ -24,6 +22,7 @@ def db(tmp_path):
 @pytest.fixture()
 def svc(db):
     from research_harness.orchestrator.service import OrchestratorService
+
     return OrchestratorService(db)
 
 
@@ -37,9 +36,12 @@ def test_primitive_tools_are_populated():
 def test_unknown_tool_returns_error(db, svc):
     result = dispatch(
         "nonexistent_tool",
-        db=db, svc=svc,
-        project_id=1, topic_id=1,
-        stage="init", context={},
+        db=db,
+        svc=svc,
+        project_id=1,
+        topic_id=1,
+        stage="init",
+        context={},
     )
     assert not result.success
     assert "Unknown tool" in result.error
@@ -58,9 +60,12 @@ def test_orchestrator_status_dispatches(db, svc):
 
     result = dispatch(
         "orchestrator_status",
-        db=db, svc=svc,
-        project_id=1, topic_id=1,
-        stage="init", context={},
+        db=db,
+        svc=svc,
+        project_id=1,
+        topic_id=1,
+        stage="init",
+        context={},
     )
     assert result.success
     assert "run" in result.output or "stage" in result.output
@@ -82,9 +87,12 @@ def test_paper_list_query(db, svc):
 
     result = dispatch(
         "paper_list",
-        db=db, svc=svc,
-        project_id=1, topic_id=1,
-        stage="build", context={},
+        db=db,
+        svc=svc,
+        project_id=1,
+        topic_id=1,
+        stage="build",
+        context={},
     )
     assert result.success
     assert result.output["count"] == 1
@@ -101,8 +109,10 @@ def test_dispatch_stage_tools_runs_multiple(db, svc):
     svc.resume_run(1, 1)
 
     result = dispatch_stage_tools(
-        db=db, svc=svc,
-        project_id=1, topic_id=1,
+        db=db,
+        svc=svc,
+        project_id=1,
+        topic_id=1,
         stage="init",
         tools=("orchestrator_status", "orchestrator_gate_check"),
         context={},

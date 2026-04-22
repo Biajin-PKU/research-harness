@@ -3,7 +3,6 @@
 import pytest
 
 from .fixtures import ALL_CASES
-from .models import EvalCase
 from .runner import EvalRunner
 
 

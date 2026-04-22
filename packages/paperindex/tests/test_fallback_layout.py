@@ -1,16 +1,37 @@
+import os
 from pathlib import Path
 
 import fitz
+import pytest
 
 from paperindex import PaperIndexer
+
+pytestmark = pytest.mark.skipif(
+    not (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("CURSOR_AGENT_ENABLED")
+        or os.getenv("CODEX_ENABLED")
+    ),
+    reason="Requires an LLM provider (OPENAI_API_KEY / ANTHROPIC_API_KEY / CURSOR_AGENT_ENABLED / CODEX_ENABLED)",
+)
 
 
 def _make_no_toc_pdf(path: Path) -> Path:
     doc = fitz.open()
     pages = [
-        ("Sample Paper Title", "This paper studies budget pacing and proposes a stable control policy."),
-        ("1 Method", "We optimize spend allocation with a constrained controller and staged updates."),
-        ("2 Experiments", "We compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "This paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "1 Method",
+            "We optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "2 Experiments",
+            "We compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]
     for title, body in pages:
         page = doc.new_page()

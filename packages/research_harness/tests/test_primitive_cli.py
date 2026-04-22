@@ -16,7 +16,14 @@ def test_primitive_list_json(runner):
 def test_primitive_exec_json_records_provenance(runner):
     result = runner.invoke(
         main,
-        ["--json", "primitive", "exec", "paper_ingest", "--args", '{"source":"10.1000/primitive"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "paper_ingest",
+            "--args",
+            '{"source":"10.1000/primitive"}',
+        ],
     )
     assert result.exit_code == 0
     payload = json.loads(result.output)

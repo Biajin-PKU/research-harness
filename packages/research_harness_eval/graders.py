@@ -21,7 +21,9 @@ def grade(case: EvalCase, actual_output: Any) -> EvalResult:
         return grade_llm(case, actual_output)
     if case.grader_type == "human":
         return grade_human_reference(case, actual_output)
-    return EvalResult(case_id=case.id, passed=False, details=f"Unknown grader: {case.grader_type}")
+    return EvalResult(
+        case_id=case.id, passed=False, details=f"Unknown grader: {case.grader_type}"
+    )
 
 
 def grade_deterministic(case: EvalCase, actual: Any) -> EvalResult:
@@ -68,7 +70,7 @@ def grade_deterministic(case: EvalCase, actual: Any) -> EvalResult:
         if all(s.lower() in text.lower() for s in expected["contains"]):
             checks_passed += 1
         else:
-            details.append(f"Missing substrings in output")
+            details.append("Missing substrings in output")
 
     # Check 5: regex match
     if "regex" in expected:
@@ -90,8 +92,13 @@ def grade_deterministic(case: EvalCase, actual: Any) -> EvalResult:
             details.append(f"Type {actual_type} != expected {expected_type}")
 
     if checks_total == 0:
-        return EvalResult(case_id=case.id, passed=True, score=1.0,
-                          grader_type="deterministic", details="No checks defined")
+        return EvalResult(
+            case_id=case.id,
+            passed=True,
+            score=1.0,
+            grader_type="deterministic",
+            details="No checks defined",
+        )
 
     score = checks_passed / checks_total
     return EvalResult(
@@ -120,8 +127,13 @@ def grade_human_reference(case: EvalCase, actual: Any) -> EvalResult:
     expected = case.expected
     reference = expected.get("reference_output")
     if reference is None:
-        return EvalResult(case_id=case.id, passed=False, score=0.0,
-                          grader_type="human", details="No reference output provided")
+        return EvalResult(
+            case_id=case.id,
+            passed=False,
+            score=0.0,
+            grader_type="human",
+            details="No reference output provided",
+        )
 
     # Simple overlap check for now
     ref_text = str(reference).lower()
@@ -131,8 +143,13 @@ def grade_human_reference(case: EvalCase, actual: Any) -> EvalResult:
     ref_tokens = set(ref_text.split())
     actual_tokens = set(actual_text.split())
     if not ref_tokens:
-        return EvalResult(case_id=case.id, passed=True, score=1.0,
-                          grader_type="human", details="Empty reference")
+        return EvalResult(
+            case_id=case.id,
+            passed=True,
+            score=1.0,
+            grader_type="human",
+            details="Empty reference",
+        )
 
     overlap = len(ref_tokens & actual_tokens) / len(ref_tokens)
     return EvalResult(

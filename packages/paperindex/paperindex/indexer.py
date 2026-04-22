@@ -49,8 +49,12 @@ class PaperIndexer:
         pdf_path: str | Path | None = None,
     ) -> SectionResult:
         if section not in EXTRACTABLE_SECTIONS:
-            raise ValueError(f"Unknown section '{section}'. Must be one of: {EXTRACTABLE_SECTIONS}")
-        return extract_section_content(structure, section, llm_config=self._llm_config, pdf_path=pdf_path)
+            raise ValueError(
+                f"Unknown section '{section}'. Must be one of: {EXTRACTABLE_SECTIONS}"
+            )
+        return extract_section_content(
+            structure, section, llm_config=self._llm_config, pdf_path=pdf_path
+        )
 
     def build_card(
         self,
@@ -58,7 +62,12 @@ class PaperIndexer:
         sections: list[SectionResult] | None = None,
         pdf_path: str | Path | None = None,
     ) -> PaperCard:
-        return build_paper_card(structure, sections or [], llm_config=self._llm_config, pdf_path=str(pdf_path) if pdf_path else None)
+        return build_paper_card(
+            structure,
+            sections or [],
+            llm_config=self._llm_config,
+            pdf_path=str(pdf_path) if pdf_path else None,
+        )
 
     def build_record(
         self,
@@ -67,7 +76,10 @@ class PaperIndexer:
     ) -> PaperRecord:
         source_path = Path(pdf_path)
         structure = self.extract_structure(source_path)
-        sections = {name: self.extract_section(structure, name, pdf_path=source_path) for name in section_names}
+        sections = {
+            name: self.extract_section(structure, name, pdf_path=source_path)
+            for name in section_names
+        }
         card = self.build_card(structure, list(sections.values()), pdf_path=source_path)
         return PaperRecord(
             paper_id=card.paper_id or "",
@@ -98,16 +110,30 @@ class PaperIndexer:
     ) -> list[SearchResult]:
         records = PaperLibrary(library_root).list()
         if records:
-            return search_records(records, query, limit=limit, rerank_mode=rerank_mode, llm_config=self._llm_config)
-        return search_catalog(PaperLibrary(library_root).list_catalog(), query, limit=limit)
+            return search_records(
+                records,
+                query,
+                limit=limit,
+                rerank_mode=rerank_mode,
+                llm_config=self._llm_config,
+            )
+        return search_catalog(
+            PaperLibrary(library_root).list_catalog(), query, limit=limit
+        )
 
-    def search_catalog_only(self, query: str, library_root: str | Path, limit: int = 5) -> list[SearchResult]:
-        return search_catalog(PaperLibrary(library_root).list_catalog(), query, limit=limit)
+    def search_catalog_only(
+        self, query: str, library_root: str | Path, limit: int = 5
+    ) -> list[SearchResult]:
+        return search_catalog(
+            PaperLibrary(library_root).list_catalog(), query, limit=limit
+        )
 
     def load_record(self, paper_id: str, library_root: str | Path) -> PaperRecord:
         return PaperLibrary(library_root).get(paper_id)
 
-    def get_structure(self, paper_id: str, library_root: str | Path, include_text: bool = False) -> dict[str, Any]:
+    def get_structure(
+        self, paper_id: str, library_root: str | Path, include_text: bool = False
+    ) -> dict[str, Any]:
         record = self.load_record(paper_id, library_root)
         return record.structure.to_dict(include_text=include_text)
 
@@ -146,7 +172,11 @@ class PaperIndexer:
             for node in nodes:
                 normalized_title = normalize_section_title(node.title)
                 score = 3 if normalized_query in normalized_title else 0
-                if score == 0 and any(token in normalized_title for token in normalized_query.split() if token):
+                if score == 0 and any(
+                    token in normalized_title
+                    for token in normalized_query.split()
+                    if token
+                ):
                     score = 1
                 if score > 0:
                     ranked.append((score, node.start_page, node))
@@ -155,9 +185,13 @@ class PaperIndexer:
             ranked.sort(key=lambda item: (-item[0], item[1]))
             return self._node_payload(record, ranked[0][2])
 
-        raise ValueError("One of section_name, node_id, or title_query must be provided")
+        raise ValueError(
+            "One of section_name, node_id, or title_query must be provided"
+        )
 
-    def get_structure_matches(self, paper_id: str, query: str, library_root: str | Path, limit: int = 5) -> list[StructureMatch]:
+    def get_structure_matches(
+        self, paper_id: str, query: str, library_root: str | Path, limit: int = 5
+    ) -> list[StructureMatch]:
         record = self.load_record(paper_id, library_root)
         return find_structure_matches(record, query, limit=limit)
 

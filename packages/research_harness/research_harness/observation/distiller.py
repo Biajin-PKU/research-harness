@@ -6,7 +6,6 @@ adapted for MCP-native observation data instead of API proxy transcripts.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
@@ -57,7 +56,11 @@ class ObservationDistiller:
         # Phase 1: Summarize sessions
         sessions = self._summarize_sessions()
         if len(sessions) < min_sessions:
-            logger.info("Not enough sessions for distillation (%d < %d)", len(sessions), min_sessions)
+            logger.info(
+                "Not enough sessions for distillation (%d < %d)",
+                len(sessions),
+                min_sessions,
+            )
             return DistillationReport(total_sessions=len(sessions))
 
         # Phase 2: Aggregate patterns
@@ -134,7 +137,9 @@ class ObservationDistiller:
         patterns.sort(key=lambda p: p.frequency, reverse=True)
         return patterns
 
-    def _find_failure_hotspots(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _find_failure_hotspots(
+        self, sessions: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Find tools that fail most frequently."""
         conn = self._db.connect()
         try:
@@ -162,7 +167,9 @@ class ObservationDistiller:
             for r in rows
         ]
 
-    def _find_intervention_points(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _find_intervention_points(
+        self, sessions: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Find where users intervened (corrected agent behavior)."""
         conn = self._db.connect()
         try:
@@ -196,30 +203,36 @@ class ObservationDistiller:
         # Candidate 1: High-failure tools need better error handling or prompts
         for f in failures[:5]:
             if f["failure_rate"] > 0.3:
-                candidates.append({
-                    "type": "prompt_improvement",
-                    "target": f["tool"],
-                    "reason": f"High failure rate ({f['failure_rate']:.0%})",
-                    "suggestion": f"Review and improve prompt for {f['tool']}",
-                })
+                candidates.append(
+                    {
+                        "type": "prompt_improvement",
+                        "target": f["tool"],
+                        "reason": f"High failure rate ({f['failure_rate']:.0%})",
+                        "suggestion": f"Review and improve prompt for {f['tool']}",
+                    }
+                )
 
         # Candidate 2: Frequent intervention points need better defaults
         for i in interventions[:5]:
-            candidates.append({
-                "type": "default_improvement",
-                "target": f"{i['tool']}@{i['stage']}",
-                "reason": f"User intervened {i['count']} times",
-                "suggestion": f"Improve defaults for {i['tool']} in {i['stage']} stage",
-            })
+            candidates.append(
+                {
+                    "type": "default_improvement",
+                    "target": f"{i['tool']}@{i['stage']}",
+                    "reason": f"User intervened {i['count']} times",
+                    "suggestion": f"Improve defaults for {i['tool']} in {i['stage']} stage",
+                }
+            )
 
         # Candidate 3: Common patterns could become stage macros
         for p in patterns[:3]:
             if p.frequency >= 5 and len(p.tools) >= 3:
-                candidates.append({
-                    "type": "stage_macro",
-                    "target": "->".join(p.tools),
-                    "reason": f"Pattern repeated {p.frequency} times",
-                    "suggestion": f"Create macro tool for sequence: {' -> '.join(p.tools)}",
-                })
+                candidates.append(
+                    {
+                        "type": "stage_macro",
+                        "target": "->".join(p.tools),
+                        "reason": f"Pattern repeated {p.frequency} times",
+                        "suggestion": f"Create macro tool for sequence: {' -> '.join(p.tools)}",
+                    }
+                )
 
         return candidates

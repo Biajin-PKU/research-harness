@@ -127,9 +127,11 @@ class TestGenerateImageMocked:
         mock_client_instance.__enter__ = MagicMock(return_value=mock_client_instance)
         mock_client_instance.__exit__ = MagicMock(return_value=False)
 
-        with patch.dict(os.environ, {"FAL_KEY": "test-key"}), \
-             patch.dict("sys.modules", {"fal_client": mock_fal}), \
-             patch("httpx.Client", return_value=mock_client_instance):
+        with (
+            patch.dict(os.environ, {"FAL_KEY": "test-key"}),
+            patch.dict("sys.modules", {"fal_client": mock_fal}),
+            patch("httpx.Client", return_value=mock_client_instance),
+        ):
             result = generate_image(
                 prompt="test diagram",
                 output_dir=str(tmp_path),
@@ -144,7 +146,9 @@ class TestGenerateImageMocked:
         try:
             with pytest.raises(EnvironmentError, match="FAL_KEY"):
                 generate_image(
-                    prompt="test", output_dir=str(tmp_path), filename="test.png",
+                    prompt="test",
+                    output_dir=str(tmp_path),
+                    filename="test.png",
                 )
         finally:
             if old_key:
@@ -157,21 +161,35 @@ class TestFigureGeneratePrimitive:
         from research_harness.storage.db import Database
 
         items = [
-            {"figure_id": "fig:arch", "kind": "figure", "title": "Arch", "purpose": "overview"},
+            {
+                "figure_id": "fig:arch",
+                "kind": "figure",
+                "title": "Arch",
+                "purpose": "overview",
+            },
             {"figure_id": "tab:main", "kind": "table", "title": "Main Results"},
         ]
 
         mock_gen = MagicMock()
         mock_gen.return_value = MagicMock(
-            success=True, local_path=str(tmp_path / "arch.png"),
-            model_id="recraft", width=1920, height=960, error="",
+            success=True,
+            local_path=str(tmp_path / "arch.png"),
+            model_id="recraft",
+            width=1920,
+            height=960,
+            error="",
         )
 
         db = Database(":memory:")
-        with patch("research_harness.execution.fal_image_client.generate_image", mock_gen):
+        with patch(
+            "research_harness.execution.fal_image_client.generate_image", mock_gen
+        ):
             result = figure_generate(
-                db=db, topic_id=1, items=items,
-                output_dir=str(tmp_path), model="recraft",
+                db=db,
+                topic_id=1,
+                items=items,
+                output_dir=str(tmp_path),
+                model="recraft",
             )
 
         assert result.total_requested == 1
@@ -183,16 +201,26 @@ class TestFigureGeneratePrimitive:
         from research_harness.storage.db import Database
 
         items = [
-            {"figure_id": "fig:fail", "kind": "figure", "title": "Failing", "purpose": "test"},
+            {
+                "figure_id": "fig:fail",
+                "kind": "figure",
+                "title": "Failing",
+                "purpose": "test",
+            },
         ]
 
         mock_gen = MagicMock(side_effect=RuntimeError("API down"))
 
         db = Database(":memory:")
-        with patch("research_harness.execution.fal_image_client.generate_image", mock_gen):
+        with patch(
+            "research_harness.execution.fal_image_client.generate_image", mock_gen
+        ):
             result = figure_generate(
-                db=db, topic_id=1, items=items,
-                output_dir=str(tmp_path), model="recraft",
+                db=db,
+                topic_id=1,
+                items=items,
+                output_dir=str(tmp_path),
+                model="recraft",
             )
 
         assert result.total_requested == 1

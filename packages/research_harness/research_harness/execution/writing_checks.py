@@ -10,6 +10,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from ..primitives.types import SECTION_REVIEW_DIMENSIONS
+
+# Re-export SECTION_REVIEW_DIMENSIONS under the name `REVIEW_DIMENSIONS` —
+# this module is the unified source of truth for the 10 scoring dimensions
+# used by writing primitives and section_review (see TestUnifiedDimensions).
+REVIEW_DIMENSIONS = SECTION_REVIEW_DIMENSIONS
+
 # -- Word count targets per section (borrowed from ARC) -----------------------
 
 SECTION_WORD_TARGETS: dict[str, tuple[int, int]] = {
@@ -47,133 +54,135 @@ SECTION_CITATION_QUOTA: dict[str, int] = {
 
 # -- AI boilerplate phrases (75 phrases) -------------------------------------
 
-AI_BOILERPLATE_PHRASES: frozenset[str] = frozenset({
-    "in this paper, we propose",
-    "in this work, we present",
-    "the proposed method",
-    "the proposed approach",
-    "the proposed framework",
-    "the proposed model",
-    "the proposed system",
-    "our proposed method",
-    "we propose a novel",
-    "a novel approach",
-    "a novel method",
-    "a novel framework",
-    "state-of-the-art results",
-    "state-of-the-art performance",
-    "achieves state-of-the-art",
-    "outperforms state-of-the-art",
-    "surpasses state-of-the-art",
-    "cutting-edge",
-    "groundbreaking",
-    "paradigm shift",
-    "it is worth noting that",
-    "it should be noted that",
-    "it is important to note",
-    "it is noteworthy that",
-    "it is interesting to note",
-    "as shown in table",
-    "as illustrated in figure",
-    "as depicted in figure",
-    "as demonstrated in",
-    "extensive experiments show",
-    "extensive experiments demonstrate",
-    "comprehensive experiments",
-    "rigorous evaluation",
-    "thorough evaluation",
-    "in summary",
-    "to summarize",
-    "to conclude",
-    "in conclusion",
-    "leveraging the power of",
-    "harnessing the power of",
-    "tapping into the potential",
-    "unlocking the potential",
-    "paving the way",
-    "delves into",
-    "delve into",
-    "shed light on",
-    "sheds light on",
-    "in the realm of",
-    "in the landscape of",
-    "the landscape of",
-    "in the context of",
-    "from the perspective of",
-    "a comprehensive overview",
-    "a comprehensive survey",
-    "a comprehensive study",
-    "plays a crucial role",
-    "plays a pivotal role",
-    "plays an important role",
-    "is of paramount importance",
-    "is of utmost importance",
-    "has gained significant attention",
-    "has attracted considerable attention",
-    "has received increasing attention",
-    "remains an open challenge",
-    "remains an open problem",
-    "poses significant challenges",
-    "aims to address",
-    "aims to bridge the gap",
-    "bridge the gap between",
-    "fill the gap",
-    "close the gap",
-    "to this end",
-    "to address this issue",
-    "to tackle this problem",
-    "to overcome this limitation",
-    "moreover",
-    "furthermore",
-    "additionally",
-    "notably",
-    "importantly",
-    "significantly",
-})
+AI_BOILERPLATE_PHRASES: frozenset[str] = frozenset(
+    {
+        "in this paper, we propose",
+        "in this work, we present",
+        "the proposed method",
+        "the proposed approach",
+        "the proposed framework",
+        "the proposed model",
+        "the proposed system",
+        "our proposed method",
+        "we propose a novel",
+        "a novel approach",
+        "a novel method",
+        "a novel framework",
+        "state-of-the-art results",
+        "state-of-the-art performance",
+        "achieves state-of-the-art",
+        "outperforms state-of-the-art",
+        "surpasses state-of-the-art",
+        "cutting-edge",
+        "groundbreaking",
+        "paradigm shift",
+        "it is worth noting that",
+        "it should be noted that",
+        "it is important to note",
+        "it is noteworthy that",
+        "it is interesting to note",
+        "as shown in table",
+        "as illustrated in figure",
+        "as depicted in figure",
+        "as demonstrated in",
+        "extensive experiments show",
+        "extensive experiments demonstrate",
+        "comprehensive experiments",
+        "rigorous evaluation",
+        "thorough evaluation",
+        "in summary",
+        "to summarize",
+        "to conclude",
+        "in conclusion",
+        "leveraging the power of",
+        "harnessing the power of",
+        "tapping into the potential",
+        "unlocking the potential",
+        "paving the way",
+        "delves into",
+        "delve into",
+        "shed light on",
+        "sheds light on",
+        "in the realm of",
+        "in the landscape of",
+        "the landscape of",
+        "in the context of",
+        "from the perspective of",
+        "a comprehensive overview",
+        "a comprehensive survey",
+        "a comprehensive study",
+        "plays a crucial role",
+        "plays a pivotal role",
+        "plays an important role",
+        "is of paramount importance",
+        "is of utmost importance",
+        "has gained significant attention",
+        "has attracted considerable attention",
+        "has received increasing attention",
+        "remains an open challenge",
+        "remains an open problem",
+        "poses significant challenges",
+        "aims to address",
+        "aims to bridge the gap",
+        "bridge the gap between",
+        "fill the gap",
+        "close the gap",
+        "to this end",
+        "to address this issue",
+        "to tackle this problem",
+        "to overcome this limitation",
+        "moreover",
+        "furthermore",
+        "additionally",
+        "notably",
+        "importantly",
+        "significantly",
+    }
+)
 
 # -- Weasel words / hedging phrases ------------------------------------------
 
-WEASEL_WORDS: frozenset[str] = frozenset({
-    "somewhat",
-    "relatively",
-    "arguably",
-    "fairly",
-    "quite",
-    "rather",
-    "slightly",
-    "marginally",
-    "moderately",
-    "approximately",
-    "roughly",
-    "essentially",
-    "basically",
-    "virtually",
-    "practically",
-    "seemingly",
-    "apparently",
-    "presumably",
-    "conceivably",
-    "perhaps",
-    "possibly",
-    "likely",
-    "might",
-    "may suggest",
-    "could potentially",
-    "tends to",
-    "appear to",
-    "seems to",
-    "it appears that",
-    "it seems that",
-    "to some extent",
-    "in some cases",
-    "in certain scenarios",
-    "under certain conditions",
-    "to a certain degree",
-})
+WEASEL_WORDS: frozenset[str] = frozenset(
+    {
+        "somewhat",
+        "relatively",
+        "arguably",
+        "fairly",
+        "quite",
+        "rather",
+        "slightly",
+        "marginally",
+        "moderately",
+        "approximately",
+        "roughly",
+        "essentially",
+        "basically",
+        "virtually",
+        "practically",
+        "seemingly",
+        "apparently",
+        "presumably",
+        "conceivably",
+        "perhaps",
+        "possibly",
+        "likely",
+        "might",
+        "may suggest",
+        "could potentially",
+        "tends to",
+        "appear to",
+        "seems to",
+        "it appears that",
+        "it seems that",
+        "to some extent",
+        "in some cases",
+        "in certain scenarios",
+        "under certain conditions",
+        "to a certain degree",
+    }
+)
 
 # -- Review dimensions (imported from authoritative source) -------------------
-
-from ..primitives.types import SECTION_REVIEW_DIMENSIONS as REVIEW_DIMENSIONS  # noqa: E402
 
 
 @dataclass
@@ -259,7 +268,9 @@ def check_repetition(content: str, threshold: int = 3) -> CheckResult:
     sentences = [s.strip().lower() for s in sentences if len(s.strip()) > 20]
 
     if len(sentences) < 2:
-        return CheckResult(check_name="repetition", passed=True, details="Too few sentences to check")
+        return CheckResult(
+            check_name="repetition", passed=True, details="Too few sentences to check"
+        )
 
     # Extract trigrams from each sentence
     all_trigrams: dict[str, int] = {}
@@ -293,8 +304,16 @@ def check_section_structure(content: str, section: str) -> CheckResult:
 
     # Check for citation presence in key sections
     section_lower = section.lower()
-    needs_citations = section_lower in {"introduction", "related work", "related_work", "method", "methodology"}
-    has_citations = bool(re.search(r"\\cite\{|\\citep\{|\\citet\{|\[[\d,\s]+\]", content))
+    needs_citations = section_lower in {
+        "introduction",
+        "related work",
+        "related_work",
+        "method",
+        "methodology",
+    }
+    has_citations = bool(
+        re.search(r"\\cite\{|\\citep\{|\\citet\{|\[[\d,\s]+\]", content)
+    )
 
     if needs_citations and not has_citations:
         issues.append(f"Section '{section}' typically needs citations but none found")
@@ -339,7 +358,9 @@ def check_citation_quota(content: str, section: str) -> CheckResult:
             f"Section '{section}' cites {distinct_citations} distinct papers "
             f"(quota {quota}, {'OK' if passed else 'BELOW QUOTA'})"
         ),
-        items_found=[] if passed else [f"need {quota - distinct_citations} more unique citations"],
+        items_found=[]
+        if passed
+        else [f"need {quota - distinct_citations} more unique citations"],
     )
 
 
@@ -350,10 +371,14 @@ def check_overclaiming(content: str) -> CheckResult:
 
     # "the first" without "to our knowledge" / "to the best of our knowledge"
     first_matches = list(re.finditer(r"\bthe first\b", lower))
-    hedged_phrases = ["to our knowledge", "to the best of our knowledge", "among the first"]
+    hedged_phrases = [
+        "to our knowledge",
+        "to the best of our knowledge",
+        "among the first",
+    ]
     for m in first_matches:
         # Check if hedged within 100 chars before
-        context_before = lower[max(0, m.start() - 100):m.start()]
+        context_before = lower[max(0, m.start() - 100) : m.start()]
         if not any(h in context_before for h in hedged_phrases):
             issues.append(f"Unhedged 'the first' at position {m.start()}")
 
@@ -365,7 +390,9 @@ def check_overclaiming(content: str) -> CheckResult:
     return CheckResult(
         check_name="overclaiming",
         passed=len(issues) == 0,
-        details=f"Found {len(issues)} overclaiming issues" if issues else "No overclaiming detected",
+        details=f"Found {len(issues)} overclaiming issues"
+        if issues
+        else "No overclaiming detected",
         items_found=issues,
     )
 
@@ -381,9 +408,9 @@ def check_post_table_analysis(content: str, section: str) -> CheckResult:
         )
 
     # Find table environments
-    table_ends = [m.end() for m in re.finditer(
-        r"\\end\{table\}|\\end\{tabular\}", content
-    )]
+    table_ends = [
+        m.end() for m in re.finditer(r"\\end\{table\}|\\end\{tabular\}", content)
+    ]
     if not table_ends:
         return CheckResult(
             check_name="post_table_analysis",
@@ -394,17 +421,19 @@ def check_post_table_analysis(content: str, section: str) -> CheckResult:
     issues: list[str] = []
     for i, end_pos in enumerate(table_ends):
         # Check what follows the table
-        after_table = content[end_pos:end_pos + 300].strip()
+        after_table = content[end_pos : end_pos + 300].strip()
         # If the next significant content is another table or subsection heading, flag it
         if re.match(r"^\\(subsection|section|begin\{table)", after_table):
-            issues.append(f"Table {i+1}: no analysis text before next section/table")
+            issues.append(f"Table {i + 1}: no analysis text before next section/table")
         elif len(after_table.split()) < 30:
-            issues.append(f"Table {i+1}: fewer than 30 words of analysis after table")
+            issues.append(f"Table {i + 1}: fewer than 30 words of analysis after table")
 
     return CheckResult(
         check_name="post_table_analysis",
         passed=len(issues) == 0,
-        details=f"{len(issues)} tables lack post-table analysis" if issues else "All tables have analysis",
+        details=f"{len(issues)} tables lack post-table analysis"
+        if issues
+        else "All tables have analysis",
         items_found=issues,
     )
 

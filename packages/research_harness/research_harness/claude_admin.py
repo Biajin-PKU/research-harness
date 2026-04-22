@@ -6,9 +6,9 @@ Uses `claude -p` with `--dangerously-skip-permissions` under the hood.
 Auto-escalation: start with a cheap model (sonnet/haiku), automatically
 escalate to a stronger model (opus) when the weak model signals it's stuck.
 """
+
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -137,7 +137,8 @@ def _run_claude(
 
     cmd = [
         claude_bin,
-        "-p", prompt,
+        "-p",
+        prompt,
         "--dangerously-skip-permissions",
     ]
 
@@ -214,7 +215,9 @@ def _run_with_escalation(
                 f"Original task:\n{prompt}"
             )
 
-        is_final = (current_model == strong_model) or (escalation_count >= max_escalations)
+        is_final = (current_model == strong_model) or (
+            escalation_count >= max_escalations
+        )
 
         # Only inject escalation system prompt for non-final models
         system = ESCALATION_SYSTEM_PROMPT_HEADLESS if not is_final else None
@@ -270,7 +273,9 @@ def _run_with_escalation(
 
 
 @click.group()
-@click.option("--cwd", default=None, help="Working directory for claude (defaults to current)")
+@click.option(
+    "--cwd", default=None, help="Working directory for claude (defaults to current)"
+)
 @click.option("--model", default=None, help="Model override (e.g. sonnet, opus, haiku)")
 @click.option("--verbose", is_flag=True, default=False)
 @click.pass_context
@@ -317,9 +322,21 @@ def run(
 @main.command()
 @click.argument("prompt")
 @click.option("--max-turns", type=int, default=0, help="Max agent turns (0=unlimited)")
-@click.option("--weak", "weak_model", default=DEFAULT_WEAK_MODEL, help=f"Starting cheap model (default: {DEFAULT_WEAK_MODEL})")
-@click.option("--strong", "strong_model", default=DEFAULT_STRONG_MODEL, help=f"Escalation target model (default: {DEFAULT_STRONG_MODEL})")
-@click.option("--max-escalations", type=int, default=1, help="Max times to escalate (default: 1)")
+@click.option(
+    "--weak",
+    "weak_model",
+    default=DEFAULT_WEAK_MODEL,
+    help=f"Starting cheap model (default: {DEFAULT_WEAK_MODEL})",
+)
+@click.option(
+    "--strong",
+    "strong_model",
+    default=DEFAULT_STRONG_MODEL,
+    help=f"Escalation target model (default: {DEFAULT_STRONG_MODEL})",
+)
+@click.option(
+    "--max-escalations", type=int, default=1, help="Max times to escalate (default: 1)"
+)
 @click.pass_context
 def smart(
     ctx: click.Context,
@@ -401,9 +418,9 @@ def run_json(ctx: click.Context, prompt: str, max_turns: int) -> None:
 def batch(ctx: click.Context, prompts: tuple[str, ...], max_turns: int) -> None:
     """Run multiple prompts sequentially, stopping on first failure."""
     for i, prompt in enumerate(prompts, 1):
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"[{i}/{len(prompts)}] {prompt[:80]}...")
-        click.echo(f"{'='*60}\n")
+        click.echo(f"{'=' * 60}\n")
 
         result = _run_claude(
             prompt,
@@ -422,8 +439,18 @@ def batch(ctx: click.Context, prompts: tuple[str, ...], max_turns: int) -> None:
 @main.command()
 @click.argument("prompts", nargs=-1, required=True)
 @click.option("--max-turns", type=int, default=0, help="Max agent turns per prompt")
-@click.option("--weak", "weak_model", default=DEFAULT_WEAK_MODEL, help=f"Starting cheap model (default: {DEFAULT_WEAK_MODEL})")
-@click.option("--strong", "strong_model", default=DEFAULT_STRONG_MODEL, help=f"Escalation target model (default: {DEFAULT_STRONG_MODEL})")
+@click.option(
+    "--weak",
+    "weak_model",
+    default=DEFAULT_WEAK_MODEL,
+    help=f"Starting cheap model (default: {DEFAULT_WEAK_MODEL})",
+)
+@click.option(
+    "--strong",
+    "strong_model",
+    default=DEFAULT_STRONG_MODEL,
+    help=f"Escalation target model (default: {DEFAULT_STRONG_MODEL})",
+)
 @click.pass_context
 def smart_batch(
     ctx: click.Context,
@@ -434,9 +461,9 @@ def smart_batch(
 ) -> None:
     """Run multiple prompts with auto-escalation, stopping on first failure."""
     for i, prompt in enumerate(prompts, 1):
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"[{i}/{len(prompts)}] {prompt[:80]}...")
-        click.echo(f"{'='*60}\n")
+        click.echo(f"{'=' * 60}\n")
 
         rc = _run_with_escalation(
             prompt,
@@ -457,9 +484,21 @@ def smart_batch(
 @click.argument("skill_name")
 @click.option("--args", "skill_args", default="", help="Arguments to pass to the skill")
 @click.option("--max-turns", type=int, default=0, help="Max agent turns")
-@click.option("--smart", "use_escalation", is_flag=True, default=False, help="Enable auto-escalation")
+@click.option(
+    "--smart",
+    "use_escalation",
+    is_flag=True,
+    default=False,
+    help="Enable auto-escalation",
+)
 @click.pass_context
-def skill(ctx: click.Context, skill_name: str, skill_args: str, max_turns: int, use_escalation: bool) -> None:
+def skill(
+    ctx: click.Context,
+    skill_name: str,
+    skill_args: str,
+    max_turns: int,
+    use_escalation: bool,
+) -> None:
     """Invoke a research-harness skill directly (e.g. literature-search)."""
     prompt = f"/{skill_name}"
     if skill_args:

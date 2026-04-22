@@ -11,19 +11,30 @@ def sample_pdf(tmp_path: Path) -> Path:
     path = tmp_path / "sample.pdf"
     doc = fitz.open()
     pages = [
-        ("Sample Paper Title", "Abstract\nThis paper studies budget pacing and proposes a stable control policy."),
-        ("Method", "Method\nWe optimize spend allocation with a constrained controller and staged updates."),
-        ("Experiments", "Experiments\nWe compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "Abstract\nThis paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "Method",
+            "Method\nWe optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "Experiments",
+            "Experiments\nWe compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]
     for title, body in pages:
         page = doc.new_page()
         page.insert_text((72, 72), title, fontsize=18)
         page.insert_text((72, 120), body, fontsize=11)
-    doc.set_toc([
-        [1, "Abstract", 1],
-        [1, "Method", 2],
-        [1, "Experiments", 3],
-    ])
+    doc.set_toc(
+        [
+            [1, "Abstract", 1],
+            [1, "Method", 2],
+            [1, "Experiments", 3],
+        ]
+    )
     doc.save(path)
     doc.close()
     return path

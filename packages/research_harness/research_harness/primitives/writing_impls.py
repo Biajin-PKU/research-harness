@@ -48,10 +48,16 @@ def outline_generate(
     """Generate paper outline. Stub — real LLM call dispatched by harness."""
     # Default outline structure with word targets
     default_sections = [
-        OutlineSectionItem(section="introduction", title="Introduction", target_words=900),
-        OutlineSectionItem(section="related_work", title="Related Work", target_words=800),
+        OutlineSectionItem(
+            section="introduction", title="Introduction", target_words=900
+        ),
+        OutlineSectionItem(
+            section="related_work", title="Related Work", target_words=800
+        ),
         OutlineSectionItem(section="method", title="Method", target_words=1500),
-        OutlineSectionItem(section="experiments", title="Experiments", target_words=1200),
+        OutlineSectionItem(
+            section="experiments", title="Experiments", target_words=1200
+        ),
         OutlineSectionItem(section="results", title="Results", target_words=800),
         OutlineSectionItem(section="discussion", title="Discussion", target_words=600),
         OutlineSectionItem(section="conclusion", title="Conclusion", target_words=300),
@@ -206,6 +212,7 @@ def paper_finalize(
     result = compile_latex(tex_content, bib_content, output_dir)
 
     from pathlib import Path as _Path
+
     tex_path = str(_Path(output_dir) / "paper.tex")
     bib_path = str(_Path(output_dir) / "references.bib") if bib_content else ""
 
@@ -221,6 +228,10 @@ def paper_finalize(
         errors=result.errors,
         auto_fixes_applied=result.auto_fixes,
         template_used=template,
-        validation_errors=sum(1 for f in result.validation_findings if f.level == "error"),
-        validation_warnings=sum(1 for f in result.validation_findings if f.level == "warning"),
+        validation_errors=sum(
+            1 for f in result.validation_findings if f.level == "error"
+        ),
+        validation_warnings=sum(
+            1 for f in result.validation_findings if f.level == "warning"
+        ),
     )

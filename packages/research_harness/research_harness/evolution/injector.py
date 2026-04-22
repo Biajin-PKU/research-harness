@@ -73,7 +73,9 @@ class StrategyInjector:
         Returns empty string if no strategies are available.
         """
         strategies = self.get_active_strategies(
-            stage, topic_id=topic_id, max_strategies=max_strategies,
+            stage,
+            topic_id=topic_id,
+            max_strategies=max_strategies,
         )
         if not strategies:
             return ""
@@ -92,7 +94,9 @@ class StrategyInjector:
         return "\n".join(lines)
 
     def get_all_strategy_overlays(
-        self, *, topic_id: int | None = None,
+        self,
+        *,
+        topic_id: int | None = None,
     ) -> dict[str, str]:
         """Build strategy overlays for all stages. Returns stage→overlay mapping."""
         conn = self._db.connect()
@@ -107,7 +111,8 @@ class StrategyInjector:
         for r in rows:
             stage = r["stage"]
             overlay = self.build_strategy_overlay(
-                stage, topic_id=topic_id,
+                stage,
+                topic_id=topic_id,
             )
             if overlay:
                 overlays[stage] = overlay

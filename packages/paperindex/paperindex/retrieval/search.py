@@ -20,7 +20,9 @@ def _score_text(terms: list[str], text: str) -> int:
     return sum(1 for term in terms if term in tokens)
 
 
-def _rank_structure_nodes(tree: list[SectionNode], query: str, limit: int = 5) -> list[StructureMatch]:
+def _rank_structure_nodes(
+    tree: list[SectionNode], query: str, limit: int = 5
+) -> list[StructureMatch]:
     terms = _tokenize(query)
     if not terms:
         return []
@@ -44,10 +46,14 @@ def _rank_structure_nodes(tree: list[SectionNode], query: str, limit: int = 5) -
                 summary=node.summary,
             )
         )
-    return sorted(matches, key=lambda item: (-item.score, item.start_page, item.title.lower()))[:limit]
+    return sorted(
+        matches, key=lambda item: (-item.score, item.start_page, item.title.lower())
+    )[:limit]
 
 
-def search_catalog(entries: list[CatalogEntry], query: str, limit: int = 5) -> list[SearchResult]:
+def search_catalog(
+    entries: list[CatalogEntry], query: str, limit: int = 5
+) -> list[SearchResult]:
     terms = _tokenize(query)
     if not terms:
         return []
@@ -115,9 +121,16 @@ def search_records(
         structure_matches = _rank_structure_nodes(record.structure.tree, query, limit=3)
         if structure_matches:
             field_hits["structure"] = int(sum(item.score for item in structure_matches))
-            snippet = snippet or structure_matches[0].summary or structure_matches[0].snippet or structure_matches[0].title
+            snippet = (
+                snippet
+                or structure_matches[0].summary
+                or structure_matches[0].snippet
+                or structure_matches[0].title
+            )
 
-        card_text = " ".join(str(getattr(record.card, field) or "") for field in CARD_SEARCH_FIELDS)
+        card_text = " ".join(
+            str(getattr(record.card, field) or "") for field in CARD_SEARCH_FIELDS
+        )
         card_hits = _score_text(terms, card_text)
         if card_hits:
             field_hits["card"] = card_hits * 2
@@ -146,8 +159,12 @@ def search_records(
             )
         )
 
-    return rerank_search_results(query, coarse_results, mode=rerank_mode, llm_config=llm_config)[:limit]
+    return rerank_search_results(
+        query, coarse_results, mode=rerank_mode, llm_config=llm_config
+    )[:limit]
 
 
-def find_structure_matches(record: PaperRecord, query: str, limit: int = 5) -> list[StructureMatch]:
+def find_structure_matches(
+    record: PaperRecord, query: str, limit: int = 5
+) -> list[StructureMatch]:
     return _rank_structure_nodes(record.structure.tree, query, limit=limit)

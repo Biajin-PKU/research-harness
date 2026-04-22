@@ -11,9 +11,18 @@ from research_harness.cli import main
 def _make_pdf(path: Path) -> Path:
     doc = fitz.open()
     for title, body in [
-        ("Sample Paper Title", "Abstract\nThis paper studies budget pacing and proposes a stable control policy."),
-        ("Method", "Method\nWe optimize spend allocation with a constrained controller and staged updates."),
-        ("Experiments", "Experiments\nWe compare against two baselines and improve efficiency by 12 percent."),
+        (
+            "Sample Paper Title",
+            "Abstract\nThis paper studies budget pacing and proposes a stable control policy.",
+        ),
+        (
+            "Method",
+            "Method\nWe optimize spend allocation with a constrained controller and staged updates.",
+        ),
+        (
+            "Experiments",
+            "Experiments\nWe compare against two baselines and improve efficiency by 12 percent.",
+        ),
     ]:
         page = doc.new_page()
         page.insert_text((72, 72), title, fontsize=18)
@@ -30,10 +39,15 @@ def test_paper_artifacts_and_annotations_commands(runner, tmp_path):
     ingest = runner.invoke(
         main,
         [
-            "--json", "paper", "ingest",
-            "--title", "Sample Paper",
-            "--topic", "demo",
-            "--pdf-path", str(pdf_path),
+            "--json",
+            "paper",
+            "ingest",
+            "--title",
+            "Sample Paper",
+            "--topic",
+            "demo",
+            "--pdf-path",
+            str(pdf_path),
         ],
     )
     assert ingest.exit_code == 0
@@ -43,9 +57,14 @@ def test_paper_artifacts_and_annotations_commands(runner, tmp_path):
     assert artifacts.exit_code == 0
     artifact_payload = json.loads(artifacts.output)
     assert len(artifact_payload) == 2
-    assert {item["artifact_type"] for item in artifact_payload} == {"paperindex_structure", "paperindex_card"}
+    assert {item["artifact_type"] for item in artifact_payload} == {
+        "paperindex_structure",
+        "paperindex_card",
+    }
 
-    annotations = runner.invoke(main, ["--json", "paper", "annotations", "1", "--section", "summary"])
+    annotations = runner.invoke(
+        main, ["--json", "paper", "annotations", "1", "--section", "summary"]
+    )
     assert annotations.exit_code == 0
     annotation_payload = json.loads(annotations.output)
     assert len(annotation_payload) == 1
@@ -61,7 +80,22 @@ def test_paper_card_command_reads_and_exports_card(runner, tmp_path):
     pdf_path = _make_pdf(tmp_path / "card.pdf")
     export_path = tmp_path / "exports" / "paper-card.json"
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "Card Paper", "--topic", "demo", "--pdf-path", str(pdf_path)]).exit_code == 0
+    assert (
+        runner.invoke(
+            main,
+            [
+                "paper",
+                "ingest",
+                "--title",
+                "Card Paper",
+                "--topic",
+                "demo",
+                "--pdf-path",
+                str(pdf_path),
+            ],
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(main, ["paper", "annotate", "1"]).exit_code == 0
 
     card = runner.invoke(main, ["--json", "paper", "card", "1"])
@@ -73,7 +107,9 @@ def test_paper_card_command_reads_and_exports_card(runner, tmp_path):
     assert payload["card"]["core_idea"]
     assert payload["card"]["evidence"]
 
-    exported = runner.invoke(main, ["--json", "paper", "card", "1", "--output", str(export_path)])
+    exported = runner.invoke(
+        main, ["--json", "paper", "card", "1", "--output", str(export_path)]
+    )
     assert exported.exit_code == 0
     export_payload = json.loads(exported.output)
     assert export_payload["exported_to"] == str(export_path)
@@ -82,7 +118,12 @@ def test_paper_card_command_reads_and_exports_card(runner, tmp_path):
 
 def test_paper_card_command_requires_existing_artifact(runner):
     assert runner.invoke(main, ["topic", "init", "demo"]).exit_code == 0
-    assert runner.invoke(main, ["paper", "ingest", "--title", "No Card Yet", "--topic", "demo"]).exit_code == 0
+    assert (
+        runner.invoke(
+            main, ["paper", "ingest", "--title", "No Card Yet", "--topic", "demo"]
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(main, ["paper", "card", "1"])
     assert result.exit_code != 0

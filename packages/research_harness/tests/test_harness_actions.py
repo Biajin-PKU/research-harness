@@ -13,7 +13,6 @@ from research_harness.primitives.types import (
     Claim,
     ClaimExtractOutput,
     CoverageCheckOutput,
-    CoverageItem,
     DraftText,
     EvidenceLink,
     EvidenceLinkOutput,
@@ -23,7 +22,6 @@ from research_harness.primitives.types import (
     PaperSearchOutput,
     PrimitiveResult,
     SectionDraftOutput,
-    SummaryOutput,
 )
 
 
@@ -163,10 +161,7 @@ def test_next_actions_claim_extract_few_claims():
 
 
 def test_next_actions_claim_extract_enough_claims():
-    claims = [
-        Claim(claim_id=f"c{i}", content=f"claim {i}")
-        for i in range(5)
-    ]
+    claims = [Claim(claim_id=f"c{i}", content=f"claim {i}") for i in range(5)]
     result = PrimitiveResult(
         primitive="claim_extract",
         success=True,
@@ -331,9 +326,15 @@ def test_artifacts_failed_result():
 
 def test_all_primitives_have_static_defaults():
     expected = {
-        "paper_search", "paper_ingest", "paper_summarize",
-        "claim_extract", "evidence_link", "gap_detect",
-        "paper_coverage_check", "baseline_identify",
-        "section_draft", "consistency_check",
+        "paper_search",
+        "paper_ingest",
+        "paper_summarize",
+        "claim_extract",
+        "evidence_link",
+        "gap_detect",
+        "paper_coverage_check",
+        "baseline_identify",
+        "section_draft",
+        "consistency_check",
     }
     assert expected.issubset(set(STATIC_NEXT_ACTIONS.keys()))

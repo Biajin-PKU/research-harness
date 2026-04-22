@@ -1,4 +1,5 @@
 """Tests for `hub topic show` CLI command."""
+
 from __future__ import annotations
 
 import json
@@ -7,8 +8,33 @@ from research_harness.cli import main
 
 
 def test_topic_show_json(runner):
-    runner.invoke(main, ["topic", "init", "t1", "-d", "My topic", "--venue", "ICML", "--deadline", "2026-06-01"])
-    runner.invoke(main, ["paper", "ingest", "--title", "P1", "--arxiv-id", "2401.50001", "--topic", "t1"])
+    runner.invoke(
+        main,
+        [
+            "topic",
+            "init",
+            "t1",
+            "-d",
+            "My topic",
+            "--venue",
+            "ICML",
+            "--deadline",
+            "2026-06-01",
+        ],
+    )
+    runner.invoke(
+        main,
+        [
+            "paper",
+            "ingest",
+            "--title",
+            "P1",
+            "--arxiv-id",
+            "2401.50001",
+            "--topic",
+            "t1",
+        ],
+    )
     result = runner.invoke(main, ["--json", "topic", "show", "t1"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)

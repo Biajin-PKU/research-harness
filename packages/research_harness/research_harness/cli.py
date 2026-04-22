@@ -1,4 +1,5 @@
 """hub CLI entrypoint."""
+
 from __future__ import annotations
 
 import csv
@@ -14,10 +15,9 @@ from pathlib import Path
 
 import click
 
-from .config import DEFAULT_BACKEND, find_workspace_root, init_project_config, load_runtime_config
+from .config import find_workspace_root, init_project_config, load_runtime_config
 from .storage.db import Database
 from .storage.models import Paper, TopicPaperNote
-from paperindex.types import EXTRACTABLE_SECTIONS
 
 REQUIRED_ANNOTATION_SECTIONS = ("summary", "methodology", "experiments", "limitations")
 NOTE_TYPES = ("relevance", "comparison", "usage_plan", "critique")
@@ -101,7 +101,12 @@ def _serialize_provenance_export(records: list[object], fmt: str) -> str:
         duration_ms = 0
         started_at = item.get("started_at")
         finished_at = item.get("finished_at")
-        if isinstance(started_at, str) and isinstance(finished_at, str) and started_at and finished_at:
+        if (
+            isinstance(started_at, str)
+            and isinstance(finished_at, str)
+            and started_at
+            and finished_at
+        ):
             try:
                 started = datetime.fromisoformat(started_at)
                 finished = datetime.fromisoformat(finished_at)
@@ -134,7 +139,9 @@ def _topic_id_or_exit(conn: sqlite3.Connection, topic_name: str) -> int:
     return int(row[0])
 
 
-def _project_id_or_exit(conn: sqlite3.Connection, topic_name: str, project_name: str) -> int:
+def _project_id_or_exit(
+    conn: sqlite3.Connection, topic_name: str, project_name: str
+) -> int:
     row = conn.execute(
         """
         SELECT p.id
@@ -145,7 +152,9 @@ def _project_id_or_exit(conn: sqlite3.Connection, topic_name: str, project_name:
         (project_name, topic_name),
     ).fetchone()
     if not row:
-        raise click.ClickException(f"project '{project_name}' not found under topic '{topic_name}'")
+        raise click.ClickException(
+            f"project '{project_name}' not found under topic '{topic_name}'"
+        )
     return int(row[0])
 
 
@@ -158,7 +167,9 @@ def _decode_artifact_metadata(metadata: object) -> object:
     return metadata
 
 
-def _paper_artifact_or_exit(conn: sqlite3.Connection, paper_id: int, artifact_type: str) -> sqlite3.Row:
+def _paper_artifact_or_exit(
+    conn: sqlite3.Connection, paper_id: int, artifact_type: str
+) -> sqlite3.Row:
     row = conn.execute(
         """
         SELECT artifact_type, path, metadata, created_at
@@ -172,18 +183,26 @@ def _paper_artifact_or_exit(conn: sqlite3.Connection, paper_id: int, artifact_ty
     if row is not None:
         return row
     if artifact_type == "paperindex_card":
-        raise click.ClickException(f"paper {paper_id} has no paper card artifact; run 'paper annotate {paper_id}' first")
-    raise click.ClickException(f"artifact '{artifact_type}' for paper {paper_id} not found")
+        raise click.ClickException(
+            f"paper {paper_id} has no paper card artifact; run 'paper annotate {paper_id}' first"
+        )
+    raise click.ClickException(
+        f"artifact '{artifact_type}' for paper {paper_id} not found"
+    )
 
 
 def _load_json_artifact_or_exit(path: str | Path, artifact_label: str) -> object:
     artifact_path = Path(path)
     if not artifact_path.exists():
-        raise click.ClickException(f"{artifact_label} artifact file not found: {artifact_path}")
+        raise click.ClickException(
+            f"{artifact_label} artifact file not found: {artifact_path}"
+        )
     try:
         return json.loads(artifact_path.read_text())
     except json.JSONDecodeError as exc:
-        raise click.ClickException(f"{artifact_label} artifact at {artifact_path} is not valid JSON") from exc
+        raise click.ClickException(
+            f"{artifact_label} artifact at {artifact_path} is not valid JSON"
+        ) from exc
 
 
 def _card_text(card: dict[str, object], key: str) -> str:
@@ -209,7 +228,11 @@ def _join_or_fallback(values: list[str], fallback: str, limit: int = 3) -> str:
 
 
 def _topic_note_next_action(artifact_status: dict[str, object]) -> str:
-    return "draft_topic_note_from_card" if artifact_status["has_card"] else "write_topic_note"
+    return (
+        "draft_topic_note_from_card"
+        if artifact_status["has_card"]
+        else "write_topic_note"
+    )
 
 
 def _draft_topic_note_from_card(
@@ -220,8 +243,13 @@ def _draft_topic_note_from_card(
     topic_relevance: str = "",
 ) -> str:
     title = paper_obj.title or _card_text(card, "title") or f"Paper {paper_obj.id}"
-    core_idea = _card_text(card, "core_idea") or "No summary extracted yet. Review the PDF and card manually."
-    method_summary = _card_text(card, "method_summary") or "Method details were not extracted yet."
+    core_idea = (
+        _card_text(card, "core_idea")
+        or "No summary extracted yet. Review the PDF and card manually."
+    )
+    method_summary = (
+        _card_text(card, "method_summary") or "Method details were not extracted yet."
+    )
     key_results = _card_items(card, "key_results")
     limitations = _card_items(card, "limitations")
     evidence_sections = [
@@ -230,8 +258,12 @@ def _draft_topic_note_from_card(
         if isinstance(item, dict) and str(item.get("section", "")).strip()
     ]
     results_line = _join_or_fallback(key_results, "No key results were extracted yet.")
-    limitations_line = _join_or_fallback(limitations, "No explicit limitations were extracted yet.")
-    evidence_line = _join_or_fallback(evidence_sections, "No evidence sections were extracted.", limit=4)
+    limitations_line = _join_or_fallback(
+        limitations, "No explicit limitations were extracted yet."
+    )
+    evidence_line = _join_or_fallback(
+        evidence_sections, "No evidence sections were extracted.", limit=4
+    )
     relevance_line = topic_relevance or "not specified"
 
     if note_type == "relevance":
@@ -274,7 +306,9 @@ def _draft_topic_note_from_card(
     return "\n".join(lines)
 
 
-def _paper_status_payload(conn: sqlite3.Connection, paper_obj: Paper) -> dict[str, object]:
+def _paper_status_payload(
+    conn: sqlite3.Connection, paper_obj: Paper
+) -> dict[str, object]:
     from .core.paper_pool import PaperPool
 
     pool = PaperPool(conn)
@@ -306,12 +340,23 @@ def _paper_status_payload(conn: sqlite3.Connection, paper_obj: Paper) -> dict[st
 
     current_hash = paper_obj.pdf_hash
     completed_sections = sorted(
-        item.section for item in annotations if item.content and (not current_hash or item.pdf_hash_at_extraction == current_hash)
+        item.section
+        for item in annotations
+        if item.content
+        and (not current_hash or item.pdf_hash_at_extraction == current_hash)
     )
     stale_sections = sorted(
-        item.section for item in annotations if current_hash and item.pdf_hash_at_extraction and item.pdf_hash_at_extraction != current_hash
+        item.section
+        for item in annotations
+        if current_hash
+        and item.pdf_hash_at_extraction
+        and item.pdf_hash_at_extraction != current_hash
     )
-    missing_sections = sorted(section for section in REQUIRED_ANNOTATION_SECTIONS if section not in completed_sections)
+    missing_sections = sorted(
+        section
+        for section in REQUIRED_ANNOTATION_SECTIONS
+        if section not in completed_sections
+    )
     artifact_rows = [dict(row) for row in artifacts]
     artifact_types = sorted({item["artifact_type"] for item in artifact_rows})
     artifact_details = [
@@ -426,11 +471,20 @@ def _paper_queue_entry(
 
 
 @click.group()
-@click.option("--db", "db_path", default=None, help="SQLite database path (explicit override)")
+@click.option(
+    "--db", "db_path", default=None, help="SQLite database path (explicit override)"
+)
 @click.option("--json", "json_output", is_flag=True, default=False, help="JSON output")
-@click.option("--backend", type=click.Choice(BACKEND_CHOICES), default=None, help="Execution backend")
+@click.option(
+    "--backend",
+    type=click.Choice(BACKEND_CHOICES),
+    default=None,
+    help="Execution backend",
+)
 @click.pass_context
-def main(ctx: click.Context, db_path: str | None, json_output: bool, backend: str | None) -> None:
+def main(
+    ctx: click.Context, db_path: str | None, json_output: bool, backend: str | None
+) -> None:
     """Research Hub - agent-first research workflow platform."""
     ctx.ensure_object(dict)
     ctx.obj["db_path"] = db_path
@@ -452,20 +506,30 @@ def config_show(ctx: click.Context) -> None:
     payload = {
         "db_path": str(runtime_config.db_path),
         "source": runtime_config.source,
-        "workspace_root": str(runtime_config.workspace_root) if runtime_config.workspace_root else None,
-        "config_path": str(runtime_config.config_path) if runtime_config.config_path else None,
+        "workspace_root": str(runtime_config.workspace_root)
+        if runtime_config.workspace_root
+        else None,
+        "config_path": str(runtime_config.config_path)
+        if runtime_config.config_path
+        else None,
         "execution_backend": runtime_config.execution_backend,
     }
     _echo(ctx, payload, f"DB: {payload['db_path']} ({payload['source']})")
 
 
 @config.command("init")
-@click.option("--db-path", default=None, help="Store a project-local DB path in .research-harness/config.json")
+@click.option(
+    "--db-path",
+    default=None,
+    help="Store a project-local DB path in .research-harness/config.json",
+)
 @click.pass_context
 def config_init(ctx: click.Context, db_path: str | None) -> None:
     workspace_root = find_workspace_root() or Path.cwd()
     config_path = init_project_config(workspace_root, db_path=db_path)
-    ctx.obj["runtime_config"] = load_runtime_config(ctx.obj.get("db_path"), cwd=workspace_root)
+    ctx.obj["runtime_config"] = load_runtime_config(
+        ctx.obj.get("db_path"), cwd=workspace_root
+    )
     payload = {
         "config_path": str(config_path),
         "workspace_root": str(workspace_root),
@@ -527,7 +591,9 @@ def topic() -> None:
 @click.option("--venue", default="")
 @click.option("--deadline", default="")
 @click.pass_context
-def topic_init(ctx: click.Context, name: str, description: str, venue: str, deadline: str) -> None:
+def topic_init(
+    ctx: click.Context, name: str, description: str, venue: str, deadline: str
+) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
@@ -536,10 +602,16 @@ def topic_init(ctx: click.Context, name: str, description: str, venue: str, dead
             (name, description, venue, deadline),
         )
         conn.commit()
-        topic_id = conn.execute("SELECT id FROM topics WHERE name = ?", (name,)).fetchone()[0]
+        topic_id = conn.execute(
+            "SELECT id FROM topics WHERE name = ?", (name,)
+        ).fetchone()[0]
     finally:
         conn.close()
-    _echo(ctx, {"id": topic_id, "name": name, "status": "created"}, f"Topic '{name}' created (id={topic_id})")
+    _echo(
+        ctx,
+        {"id": topic_id, "name": name, "status": "created"},
+        f"Topic '{name}' created (id={topic_id})",
+    )
 
 
 @topic.command("list")
@@ -547,10 +619,14 @@ def topic_init(ctx: click.Context, name: str, description: str, venue: str, dead
 def topic_list(ctx: click.Context) -> None:
     db = get_db(ctx)
     conn = db.connect()
-    rows = conn.execute("SELECT * FROM topics ORDER BY created_at DESC, id DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM topics ORDER BY created_at DESC, id DESC"
+    ).fetchall()
     conn.close()
     if ctx.obj.get("json"):
-        click.echo(json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str))
+        click.echo(
+            json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str)
+        )
         return
     for row in rows:
         click.echo(f"[{row['id']}] {row['name']} ({row['status']})")
@@ -564,7 +640,9 @@ def topic_show(ctx: click.Context, topic_name: str) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
-        row = conn.execute("SELECT * FROM topics WHERE name = ?", (topic_name,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM topics WHERE name = ?", (topic_name,)
+        ).fetchone()
         if row is None:
             raise click.ClickException(f"topic '{topic_name}' not found")
         topic_id = row["id"]
@@ -580,7 +658,9 @@ def topic_show(ctx: click.Context, topic_name: str) -> None:
         return
     click.echo(f"Topic: {row['name']} (id={topic_id})")
     click.echo(f"Description: {row['description'] or '-'}")
-    click.echo(f"Venue: {row['target_venue'] or '-'}  Deadline: {row['deadline'] or '-'}")
+    click.echo(
+        f"Venue: {row['target_venue'] or '-'}  Deadline: {row['deadline'] or '-'}"
+    )
     click.echo(f"Status: {row['status']}  Papers: {paper_count}")
 
 
@@ -608,7 +688,9 @@ def topic_update(
     db = get_db(ctx)
     conn = db.connect()
     try:
-        row = conn.execute("SELECT id, name FROM topics WHERE name = ?", (topic_name,)).fetchone()
+        row = conn.execute(
+            "SELECT id, name FROM topics WHERE name = ?", (topic_name,)
+        ).fetchone()
         if row is None:
             raise click.ClickException(f"topic '{topic_name}' not found")
 
@@ -658,11 +740,17 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
         queue_items = []
         for paper_obj in papers:
             status_payload = _paper_status_payload(conn, paper_obj)
-            queue_items.append(_paper_queue_entry(topic_name, status_payload, conn=conn, topic_id=topic_id))
+            queue_items.append(
+                _paper_queue_entry(
+                    topic_name, status_payload, conn=conn, topic_id=topic_id
+                )
+            )
 
         bucket_counts: dict[str, int] = {}
         for item in queue_items:
-            bucket_counts[item["queue_bucket"]] = bucket_counts.get(item["queue_bucket"], 0) + 1
+            bucket_counts[item["queue_bucket"]] = (
+                bucket_counts.get(item["queue_bucket"], 0) + 1
+            )
 
         tasks = conn.execute(
             "SELECT status, COUNT(*) as cnt FROM tasks WHERE topic_id = ? GROUP BY status",
@@ -712,11 +800,17 @@ def topic_overview(ctx: click.Context, topic_name: str) -> None:
         return
 
     click.echo(f"Topic: {topic_name}")
-    click.echo(f"Papers: {len(papers)} total, {payload['queue_summary']['actionable']} actionable, {payload['queue_summary']['ready']} ready")
+    click.echo(
+        f"Papers: {len(papers)} total, {payload['queue_summary']['actionable']} actionable, {payload['queue_summary']['ready']} ready"
+    )
     if bucket_counts:
         parts = [f"{k}={v}" for k, v in sorted(bucket_counts.items())]
         click.echo(f"  Queue: {', '.join(parts)}")
-    click.echo(f"Tasks: {task_total} total ({', '.join(f'{k}={v}' for k, v in sorted(task_summary.items()))})" if task_summary else "Tasks: 0")
+    click.echo(
+        f"Tasks: {task_total} total ({', '.join(f'{k}={v}' for k, v in sorted(task_summary.items()))})"
+        if task_summary
+        else "Tasks: 0"
+    )
     click.echo(f"Projects: {len(project_list)}, Reviews: {review_count}")
     if payload["review_ready"]:
         click.echo("All tasks done. Ready for gate review.")
@@ -736,13 +830,17 @@ def topic_export(ctx: click.Context, name: str, output: str | None) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
-        topic_row = conn.execute("SELECT * FROM topics WHERE name = ?", (name,)).fetchone()
+        topic_row = conn.execute(
+            "SELECT * FROM topics WHERE name = ?", (name,)
+        ).fetchone()
         if topic_row is None:
             raise click.ClickException(f"topic '{name}' not found")
         topic_id = int(topic_row["id"])
 
         pool = PaperPool(conn)
-        papers = [dataclasses.asdict(item) for item in pool.list_papers(topic_id=topic_id)]
+        papers = [
+            dataclasses.asdict(item) for item in pool.list_papers(topic_id=topic_id)
+        ]
         tasks = [
             dict(row)
             for row in conn.execute(
@@ -750,18 +848,26 @@ def topic_export(ctx: click.Context, name: str, output: str | None) -> None:
                 (topic_id,),
             ).fetchall()
         ]
-        projects = [dataclasses.asdict(item) for item in ProjectManager(conn).list_projects(topic_id)]
+        projects = [
+            dataclasses.asdict(item)
+            for item in ProjectManager(conn).list_projects(topic_id)
+        ]
 
         review_manager = ReviewManager(conn)
         reviews: list[dict[str, object]] = []
         for project in projects:
             project_id = project.get("id")
             if isinstance(project_id, int):
-                reviews.extend(dataclasses.asdict(item) for item in review_manager.list_reviews(project_id))
+                reviews.extend(
+                    dataclasses.asdict(item)
+                    for item in review_manager.list_reviews(project_id)
+                )
 
         provenance = [
             dataclasses.asdict(item)
-            for item in ProvenanceRecorder(db).list_records(topic_id=topic_id, limit=10000)
+            for item in ProvenanceRecorder(db).list_records(
+                topic_id=topic_id, limit=10000
+            )
         ]
     finally:
         conn.close()
@@ -834,7 +940,9 @@ def search_log(
 @click.option("--provider", default=None)
 @click.option("--limit", type=int, default=20, show_default=True)
 @click.pass_context
-def search_list(ctx: click.Context, topic_name: str | None, provider: str | None, limit: int) -> None:
+def search_list(
+    ctx: click.Context, topic_name: str | None, provider: str | None, limit: int
+) -> None:
     """List logged search runs."""
     db = get_db(ctx)
     conn = db.connect()
@@ -891,7 +999,12 @@ def search_providers(ctx: click.Context) -> None:
 @click.option("--limit", type=int, default=10, show_default=True)
 @click.option("--year-from", type=int, default=None)
 @click.option("--year-to", type=int, default=None)
-@click.option("--log-run", is_flag=True, default=False, help="Record this multi-source search in search_runs")
+@click.option(
+    "--log-run",
+    is_flag=True,
+    default=False,
+    help="Record this multi-source search in search_runs",
+)
 @click.pass_context
 def search_papers(
     ctx: click.Context,
@@ -911,15 +1024,25 @@ def search_papers(
 
     aggregator = SearchAggregator(providers)
     resolver = PDFResolver()
-    query = SearchQuery(query=query_text, topic=topic_name or "", year_from=year_from, year_to=year_to, limit=limit)
+    query = SearchQuery(
+        query=query_text,
+        topic=topic_name or "",
+        year_from=year_from,
+        year_to=year_to,
+        limit=limit,
+    )
     outcome = aggregator.search(query)
     results = outcome.results
 
     payload = {
         "query": query_text,
         "topic": topic_name or "",
-        "provider_specs": [dataclasses.asdict(item) for item in available_provider_specs()],
-        "provider_errors": [dataclasses.asdict(item) for item in outcome.provider_errors],
+        "provider_specs": [
+            dataclasses.asdict(item) for item in available_provider_specs()
+        ],
+        "provider_errors": [
+            dataclasses.asdict(item) for item in outcome.provider_errors
+        ],
         "result_count": len(results),
         "results": [
             {
@@ -936,7 +1059,9 @@ def search_papers(
                 "url": item.url,
                 "provider": item.provider,
                 "citation_count": item.citation_count,
-                "pdf_candidates": [dataclasses.asdict(candidate) for candidate in resolver.plan(item)],
+                "pdf_candidates": [
+                    dataclasses.asdict(candidate) for candidate in resolver.plan(item)
+                ],
             }
             for item in results
         ],
@@ -961,7 +1086,9 @@ def search_papers(
 
     click.echo(f"query={query_text} results={len(results)}")
     for row in payload["results"]:
-        best_pdf = row["pdf_candidates"][0]["source_type"] if row["pdf_candidates"] else "none"
+        best_pdf = (
+            row["pdf_candidates"][0]["source_type"] if row["pdf_candidates"] else "none"
+        )
         click.echo(f"- {row['title']} ({row['provider']}) pdf={best_pdf}")
 
 
@@ -981,7 +1108,9 @@ def paper() -> None:
 @click.option("--pdf-path", default=None, help="Path to local PDF")
 @click.option("--url", default=None, help="URL to paper PDF or landing page")
 @click.option("--topic", "topic_name", default=None)
-@click.option("--relevance", type=click.Choice(["high", "medium", "low"]), default="medium")
+@click.option(
+    "--relevance", type=click.Choice(["high", "medium", "low"]), default="medium"
+)
 @click.option("--dry-run", is_flag=True, default=False)
 @click.pass_context
 def paper_ingest(
@@ -1002,7 +1131,9 @@ def paper_ingest(
     from .core.paper_pool import PaperPool
 
     if not any([arxiv_id, doi, s2_id, title]):
-        raise click.ClickException("provide at least one of --arxiv-id, --doi, --s2-id, --title")
+        raise click.ClickException(
+            "provide at least one of --arxiv-id, --doi, --s2-id, --title"
+        )
 
     paper_obj = Paper(
         title=title or "",
@@ -1016,14 +1147,21 @@ def paper_ingest(
         s2_id=s2_id or "",
     )
     if dry_run:
-        click.echo(json.dumps({"action": "ingest", "paper": dataclasses.asdict(paper_obj)}, ensure_ascii=False))
+        click.echo(
+            json.dumps(
+                {"action": "ingest", "paper": dataclasses.asdict(paper_obj)},
+                ensure_ascii=False,
+            )
+        )
         return
 
     db = get_db(ctx)
     conn = db.connect()
     try:
         topic_id = _topic_id_or_exit(conn, topic_name) if topic_name else None
-        paper_id = PaperPool(conn).ingest(paper_obj, topic_id=topic_id, relevance=relevance)
+        paper_id = PaperPool(conn).ingest(
+            paper_obj, topic_id=topic_id, relevance=relevance
+        )
     finally:
         conn.close()
     _echo(
@@ -1048,10 +1186,16 @@ def paper_list(ctx: click.Context, topic_name: str | None, status: str | None) -
     finally:
         conn.close()
     if ctx.obj.get("json"):
-        click.echo(json.dumps([dataclasses.asdict(p) for p in papers], ensure_ascii=False, default=str))
+        click.echo(
+            json.dumps(
+                [dataclasses.asdict(p) for p in papers], ensure_ascii=False, default=str
+            )
+        )
         return
     for paper_obj in papers:
-        click.echo(f"[{paper_obj.id}] ({paper_obj.year or '?'}) [{paper_obj.status}] {paper_obj.title[:70]}")
+        click.echo(
+            f"[{paper_obj.id}] ({paper_obj.year or '?'}) [{paper_obj.status}] {paper_obj.title[:70]}"
+        )
 
 
 @paper.command("show")
@@ -1159,9 +1303,13 @@ def paper_update(
 @paper.command("enrich")
 @click.argument("paper_id", type=int, required=False)
 @click.option("--topic", "topic_name", default=None, help="Enrich all papers in topic")
-@click.option("--dry-run", is_flag=True, default=False, help="Preview changes without applying")
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Preview changes without applying"
+)
 @click.pass_context
-def paper_enrich(ctx: click.Context, paper_id: int | None, topic_name: str | None, dry_run: bool) -> None:
+def paper_enrich(
+    ctx: click.Context, paper_id: int | None, topic_name: str | None, dry_run: bool
+) -> None:
     """Auto-fill missing metadata from available identifiers.
 
     Currently supports:
@@ -1199,30 +1347,33 @@ def paper_enrich(ctx: click.Context, paper_id: int | None, topic_name: str | Non
 
         for pid, title, arxiv_id in papers_to_enrich:
             if not arxiv_id:
-                skipped.append({"paper_id": pid, "title": title, "reason": "no arxiv_id"})
+                skipped.append(
+                    {"paper_id": pid, "title": title, "reason": "no arxiv_id"}
+                )
                 continue
 
             arxiv_url = f"https://arxiv.org/abs/{arxiv_id}"
 
             if dry_run:
-                updated.append({
-                    "paper_id": pid,
-                    "title": title[:50],
-                    "arxiv_id": arxiv_id,
-                    "url": arxiv_url,
-                    "action": "would_update"
-                })
-            else:
-                conn.execute(
-                    "UPDATE papers SET url = ? WHERE id = ?",
-                    (arxiv_url, pid)
+                updated.append(
+                    {
+                        "paper_id": pid,
+                        "title": title[:50],
+                        "arxiv_id": arxiv_id,
+                        "url": arxiv_url,
+                        "action": "would_update",
+                    }
                 )
-                updated.append({
-                    "paper_id": pid,
-                    "title": title[:50],
-                    "arxiv_id": arxiv_id,
-                    "url": arxiv_url
-                })
+            else:
+                conn.execute("UPDATE papers SET url = ? WHERE id = ?", (arxiv_url, pid))
+                updated.append(
+                    {
+                        "paper_id": pid,
+                        "title": title[:50],
+                        "arxiv_id": arxiv_id,
+                        "url": arxiv_url,
+                    }
+                )
 
         if not dry_run:
             conn.commit()
@@ -1233,7 +1384,7 @@ def paper_enrich(ctx: click.Context, paper_id: int | None, topic_name: str | Non
             "updated": len(updated),
             "skipped": len(skipped),
             "updates": updated,
-            "skip_reasons": skipped
+            "skip_reasons": skipped,
         }
 
         if ctx.obj.get("json"):
@@ -1241,7 +1392,9 @@ def paper_enrich(ctx: click.Context, paper_id: int | None, topic_name: str | Non
             return
 
         action_word = "would update" if dry_run else "updated"
-        click.echo(f"Paper enrichment: {len(updated)} {action_word}, {len(skipped)} skipped")
+        click.echo(
+            f"Paper enrichment: {len(updated)} {action_word}, {len(skipped)} skipped"
+        )
         for u in updated:
             click.echo(f"  [{u['paper_id']}] {u['title'][:45]}... -> {u['url']}")
         for s in skipped:
@@ -1253,9 +1406,13 @@ def paper_enrich(ctx: click.Context, paper_id: int | None, topic_name: str | Non
 @paper.command("link")
 @click.argument("paper_id", type=int)
 @click.option("--topic", "topic_name", required=True)
-@click.option("--relevance", type=click.Choice(["high", "medium", "low"]), default="medium")
+@click.option(
+    "--relevance", type=click.Choice(["high", "medium", "low"]), default="medium"
+)
 @click.pass_context
-def paper_link(ctx: click.Context, paper_id: int, topic_name: str, relevance: str) -> None:
+def paper_link(
+    ctx: click.Context, paper_id: int, topic_name: str, relevance: str
+) -> None:
     """Link a paper to a topic (or update relevance if already linked)."""
     db = get_db(ctx)
     conn = db.connect()
@@ -1277,7 +1434,13 @@ def paper_link(ctx: click.Context, paper_id: int, topic_name: str, relevance: st
         conn.close()
     _echo(
         ctx,
-        {"paper_id": paper_id, "topic": topic_name, "topic_id": topic_id, "relevance": relevance, "linked": True},
+        {
+            "paper_id": paper_id,
+            "topic": topic_name,
+            "topic_id": topic_id,
+            "relevance": relevance,
+            "linked": True,
+        },
         f"Paper {paper_id} linked to topic '{topic_name}' (relevance={relevance})",
     )
 
@@ -1309,8 +1472,12 @@ def paper_status(ctx: click.Context, paper_id: int) -> None:
     missing_sections = payload["annotation_status"]["missing_sections"]
     artifact_types = payload["artifact_status"]["types"]
     click.echo(f"[{paper['id']}] {paper['title']}")
-    click.echo(f"status={paper['status']} pdf={'yes' if paper['pdf_path'] else 'no'} topics={len(linked_topics)} notes={note_count}")
-    click.echo(f"annotations: {len(completed_sections)}/{payload['annotation_status']['total_expected']} complete")
+    click.echo(
+        f"status={paper['status']} pdf={'yes' if paper['pdf_path'] else 'no'} topics={len(linked_topics)} notes={note_count}"
+    )
+    click.echo(
+        f"annotations: {len(completed_sections)}/{payload['annotation_status']['total_expected']} complete"
+    )
     if missing_sections:
         click.echo(f"missing: {', '.join(missing_sections)}")
     if artifact_types:
@@ -1322,7 +1489,9 @@ def paper_status(ctx: click.Context, paper_id: int) -> None:
 @click.option("--limit", type=int, default=None)
 @click.option("--only-actionable", is_flag=True, default=False)
 @click.pass_context
-def paper_queue(ctx: click.Context, topic_name: str, limit: int | None, only_actionable: bool) -> None:
+def paper_queue(
+    ctx: click.Context, topic_name: str, limit: int | None, only_actionable: bool
+) -> None:
     from .core.paper_pool import PaperPool
 
     db = get_db(ctx)
@@ -1333,7 +1502,11 @@ def paper_queue(ctx: click.Context, topic_name: str, limit: int | None, only_act
         queue_items = []
         for paper_obj in papers:
             status_payload = _paper_status_payload(conn, paper_obj)
-            queue_items.append(_paper_queue_entry(topic_name, status_payload, conn=conn, topic_id=topic_id))
+            queue_items.append(
+                _paper_queue_entry(
+                    topic_name, status_payload, conn=conn, topic_id=topic_id
+                )
+            )
     finally:
         conn.close()
 
@@ -1352,10 +1525,19 @@ def paper_queue(ctx: click.Context, topic_name: str, limit: int | None, only_act
 
     summary = {
         "total_papers": len(queue_items),
-        "actionable_papers": sum(1 for item in queue_items if item["queue_bucket"] != "ready"),
+        "actionable_papers": sum(
+            1 for item in queue_items if item["queue_bucket"] != "ready"
+        ),
         "by_bucket": {
             bucket: sum(1 for item in queue_items if item["queue_bucket"] == bucket)
-            for bucket in ["missing_pdf", "stale_annotations", "missing_sections", "missing_card", "missing_topic_note", "ready"]
+            for bucket in [
+                "missing_pdf",
+                "stale_annotations",
+                "missing_sections",
+                "missing_card",
+                "missing_topic_note",
+                "ready",
+            ]
         },
     }
     payload = {
@@ -1367,11 +1549,13 @@ def paper_queue(ctx: click.Context, topic_name: str, limit: int | None, only_act
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
     click.echo(f"Topic queue: {topic_name}")
-    click.echo(f"papers={summary['total_papers']} actionable={summary['actionable_papers']}")
+    click.echo(
+        f"papers={summary['total_papers']} actionable={summary['actionable_papers']}"
+    )
     for item in queue_items:
         click.echo(f"[{item['paper_id']}] [{item['queue_bucket']}] {item['title']}")
         click.echo(f"actions: {', '.join(item['next_actions'])}")
-        if item['missing_sections']:
+        if item["missing_sections"]:
             click.echo(f"missing: {', '.join(item['missing_sections'])}")
 
 
@@ -1380,7 +1564,9 @@ def paper_queue(ctx: click.Context, topic_name: str, limit: int | None, only_act
 @click.option("--pdf", "pdf_path", default=None, help="Override PDF path for this run")
 @click.option("--section", "sections", multiple=True, help="Section(s) to extract")
 @click.pass_context
-def paper_annotate(ctx: click.Context, paper_id: int, pdf_path: str | None, sections: tuple[str, ...]) -> None:
+def paper_annotate(
+    ctx: click.Context, paper_id: int, pdf_path: str | None, sections: tuple[str, ...]
+) -> None:
     from .core.paper_pool import PaperPool
     from .integrations.paperindex_adapter import PaperIndexAdapter
 
@@ -1393,8 +1579,12 @@ def paper_annotate(ctx: click.Context, paper_id: int, pdf_path: str | None, sect
             raise click.ClickException(f"paper {paper_id} not found")
         resolved_pdf = pdf_path or paper_obj.pdf_path
         if not resolved_pdf:
-            raise click.ClickException("paper has no pdf_path; provide --pdf or ingest with --pdf-path")
-        adapter = PaperIndexAdapter(conn, artifacts_root=db.db_path.parent / "artifacts")
+            raise click.ClickException(
+                "paper has no pdf_path; provide --pdf or ingest with --pdf-path"
+            )
+        adapter = PaperIndexAdapter(
+            conn, artifacts_root=db.db_path.parent / "artifacts"
+        )
         result = adapter.annotate_paper(paper_id, resolved_pdf, list(sections) or None)
     finally:
         conn.close()
@@ -1409,7 +1599,9 @@ def paper_annotate(ctx: click.Context, paper_id: int, pdf_path: str | None, sect
 @click.argument("paper_id", type=int)
 @click.option("--section", "section_name", default=None)
 @click.pass_context
-def paper_annotations(ctx: click.Context, paper_id: int, section_name: str | None) -> None:
+def paper_annotations(
+    ctx: click.Context, paper_id: int, section_name: str | None
+) -> None:
     from .core.paper_pool import PaperPool
 
     db = get_db(ctx)
@@ -1464,7 +1656,11 @@ def paper_note_set(
         "source": source,
     }
     if dry_run:
-        _echo(ctx, {"action": "paper.note.set", **payload}, f"Dry run: note for paper {paper_id} under topic '{topic_name}'")
+        _echo(
+            ctx,
+            {"action": "paper.note.set", **payload},
+            f"Dry run: note for paper {paper_id} under topic '{topic_name}'",
+        )
         return
 
     from .core.paper_pool import PaperPool
@@ -1491,14 +1687,23 @@ def paper_note_set(
             raise click.ClickException(str(exc)) from exc
     finally:
         conn.close()
-    _echo(ctx, {"id": note_id, "topic_id": topic_id, **payload}, f"Topic note saved: id={note_id}")
+    _echo(
+        ctx,
+        {"id": note_id, "topic_id": topic_id, **payload},
+        f"Topic note saved: id={note_id}",
+    )
 
 
 @paper_note.command("draft")
 @click.option("--paper-id", type=int, required=True)
 @click.option("--topic", "topic_name", required=True)
 @click.option("--type", "note_type", required=True, type=click.Choice(NOTE_TYPES))
-@click.option("--save", is_flag=True, default=False, help="Save the drafted note into topic_paper_notes")
+@click.option(
+    "--save",
+    is_flag=True,
+    default=False,
+    help="Save the drafted note into topic_paper_notes",
+)
 @click.option("--source", default="paperindex:card-draft")
 @click.pass_context
 def paper_note_draft(
@@ -1524,12 +1729,16 @@ def paper_note_draft(
             (paper_id, topic_id),
         ).fetchone()
         if topic_row is None:
-            raise click.ClickException(f"paper {paper_id} is not linked to topic {topic_id}")
+            raise click.ClickException(
+                f"paper {paper_id} is not linked to topic {topic_id}"
+            )
         artifact = _paper_artifact_or_exit(conn, paper_id, "paperindex_card")
         metadata = _decode_artifact_metadata(artifact["metadata"])
         card_obj = _load_json_artifact_or_exit(artifact["path"], "paper card")
         if not isinstance(card_obj, dict):
-            raise click.ClickException(f"paper card artifact at {artifact['path']} must be a JSON object")
+            raise click.ClickException(
+                f"paper card artifact at {artifact['path']} must be a JSON object"
+            )
         content = _draft_topic_note_from_card(
             paper_obj=paper_obj,
             topic_name=topic_name,
@@ -1576,7 +1785,9 @@ def paper_note_draft(
 @click.option("--topic", "topic_name", default=None)
 @click.option("--type", "note_type", default=None, type=click.Choice(NOTE_TYPES))
 @click.pass_context
-def paper_note_list(ctx: click.Context, paper_id: int, topic_name: str | None, note_type: str | None) -> None:
+def paper_note_list(
+    ctx: click.Context, paper_id: int, topic_name: str | None, note_type: str | None
+) -> None:
     from .core.paper_pool import PaperPool
 
     db = get_db(ctx)
@@ -1626,7 +1837,13 @@ def paper_artifacts(ctx: click.Context, paper_id: int) -> None:
 
 @paper.command("card")
 @click.argument("paper_id", type=int)
-@click.option("--output", "-o", type=click.Path(), default=None, help="Export the card JSON to a file")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Export the card JSON to a file",
+)
 @click.pass_context
 def paper_card(ctx: click.Context, paper_id: int, output: str | None) -> None:
     db = get_db(ctx)
@@ -1645,7 +1862,9 @@ def paper_card(ctx: click.Context, paper_id: int, output: str | None) -> None:
     if output:
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path.write_text(
+            json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     payload = {
         "paper_id": paper_id,
@@ -1670,38 +1889,57 @@ def paper_card(ctx: click.Context, paper_id: int, output: str | None) -> None:
 @paper.command("acquire")
 @click.argument("topic_id", type=int)
 @click.option("--download-dir", default=None, help="Directory to save downloaded PDFs")
-@click.option("--artifacts-root", default=None, help="Directory for paperindex artifacts")
+@click.option(
+    "--artifacts-root", default=None, help="Directory for paperindex artifacts"
+)
 @click.pass_context
-def paper_acquire(ctx: click.Context, topic_id: int, download_dir: str | None, artifacts_root: str | None) -> None:
+def paper_acquire(
+    ctx: click.Context,
+    topic_id: int,
+    download_dir: str | None,
+    artifacts_root: str | None,
+) -> None:
     """Download PDFs and build paperindex annotations for a topic."""
     from .acquisition.pipeline import acquire_papers
 
     db = get_db(ctx)
-    report = acquire_papers(db, topic_id, download_dir=download_dir, artifacts_root=artifacts_root)
+    report = acquire_papers(
+        db, topic_id, download_dir=download_dir, artifacts_root=artifacts_root
+    )
 
     if ctx.obj.get("json"):
         click.echo(json.dumps(report.to_dict(), ensure_ascii=False, default=str))
         return
 
     click.echo(f"Acquisition complete for topic {topic_id}:")
-    click.echo(f"  Total: {report.total_papers}, Downloaded: {report.downloaded}, "
-               f"Annotated: {report.annotated}, Needs manual: {report.needs_manual}, "
-               f"Failed: {report.failed}")
+    click.echo(
+        f"  Total: {report.total_papers}, Downloaded: {report.downloaded}, "
+        f"Annotated: {report.annotated}, Needs manual: {report.needs_manual}, "
+        f"Failed: {report.failed}"
+    )
     if report.manual_list:
         click.echo(f"\n  {len(report.manual_list)} papers need manual download.")
         click.echo("  See .research-harness/manual_downloads/pending_manual.json")
 
 
 @paper.command("ingest-manual")
-@click.option("--manual-dir", default=None, help="Directory containing manually downloaded PDFs")
-@click.option("--artifacts-root", default=None, help="Directory for paperindex artifacts")
+@click.option(
+    "--manual-dir", default=None, help="Directory containing manually downloaded PDFs"
+)
+@click.option(
+    "--artifacts-root", default=None, help="Directory for paperindex artifacts"
+)
 @click.pass_context
-def paper_ingest_manual(ctx: click.Context, manual_dir: str | None, artifacts_root: str | None) -> None:
+def paper_ingest_manual(
+    ctx: click.Context, manual_dir: str | None, artifacts_root: str | None
+) -> None:
     """Ingest manually downloaded PDFs from the manual_downloads directory."""
     from .acquisition.pipeline import ingest_manual_downloads
 
     db = get_db(ctx)
-    results = ingest_manual_downloads(db, manual_dir=manual_dir, artifacts_root=artifacts_root)
+    results = ingest_manual_downloads(
+        db, manual_dir=manual_dir, artifacts_root=artifacts_root
+    )
 
     if ctx.obj.get("json"):
         click.echo(json.dumps(results, ensure_ascii=False, default=str))
@@ -1761,28 +1999,45 @@ def paper_resolve_pdfs(ctx: click.Context, topic: str | None, dry_run: bool) -> 
     if stats.unmatched_papers:
         click.echo(f"\nUnmatched papers ({len(stats.unmatched_papers)}):")
         for p in stats.unmatched_papers[:20]:
-            click.echo(f"  [{p['paper_id']:>3}] {p['arxiv_id'] or p['doi'] or '?':20s} {p['title']}")
+            click.echo(
+                f"  [{p['paper_id']:>3}] {p['arxiv_id'] or p['doi'] or '?':20s} {p['title']}"
+            )
         if len(stats.unmatched_papers) > 20:
             click.echo(f"  ... and {len(stats.unmatched_papers) - 20} more")
 
 
 @paper.command("move")
 @click.argument("paper_ids", nargs=-1, type=int, required=True)
-@click.option("--from-topic", "from_topic", required=True, help="Source topic name or ID")
+@click.option(
+    "--from-topic", "from_topic", required=True, help="Source topic name or ID"
+)
 @click.option("--to-topic", "to_topic", required=True, help="Target topic name or ID")
-@click.option("--relevance", type=click.Choice(["high", "medium", "low"]), default=None, help="Override relevance in target")
+@click.option(
+    "--relevance",
+    type=click.Choice(["high", "medium", "low"]),
+    default=None,
+    help="Override relevance in target",
+)
 @click.pass_context
-def paper_move(ctx: click.Context, paper_ids: tuple[int, ...], from_topic: str, to_topic: str, relevance: str | None) -> None:
+def paper_move(
+    ctx: click.Context,
+    paper_ids: tuple[int, ...],
+    from_topic: str,
+    to_topic: str,
+    relevance: str | None,
+) -> None:
     """Move papers from one topic to another."""
     db = get_db(ctx)
     conn = db.connect()
     try:
         # Resolve topic IDs
         from_row = conn.execute(
-            "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)", (from_topic, from_topic),
+            "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)",
+            (from_topic, from_topic),
         ).fetchone()
         to_row = conn.execute(
-            "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)", (to_topic, to_topic),
+            "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)",
+            (to_topic, to_topic),
         ).fetchone()
         if not from_row:
             raise click.ClickException(f"Source topic '{from_topic}' not found")
@@ -1795,7 +2050,8 @@ def paper_move(ctx: click.Context, paper_ids: tuple[int, ...], from_topic: str, 
         for pid in paper_ids:
             # Check paper exists in source topic
             link = conn.execute(
-                "SELECT relevance FROM paper_topics WHERE paper_id = ? AND topic_id = ?", (pid, from_id),
+                "SELECT relevance FROM paper_topics WHERE paper_id = ? AND topic_id = ?",
+                (pid, from_id),
             ).fetchone()
             if not link:
                 click.echo(f"  Paper {pid}: not in source topic, skipping", err=True)
@@ -1803,7 +2059,10 @@ def paper_move(ctx: click.Context, paper_ids: tuple[int, ...], from_topic: str, 
 
             rel = relevance or link["relevance"] or "medium"
             # Remove from source
-            conn.execute("DELETE FROM paper_topics WHERE paper_id = ? AND topic_id = ?", (pid, from_id))
+            conn.execute(
+                "DELETE FROM paper_topics WHERE paper_id = ? AND topic_id = ?",
+                (pid, from_id),
+            )
             # Add to target (or update if already there)
             conn.execute(
                 "INSERT OR REPLACE INTO paper_topics (paper_id, topic_id, relevance) VALUES (?, ?, ?)",
@@ -1813,16 +2072,28 @@ def paper_move(ctx: click.Context, paper_ids: tuple[int, ...], from_topic: str, 
         conn.commit()
     finally:
         conn.close()
-    _echo(ctx, {"moved": moved, "from_topic": from_topic, "to_topic": to_topic},
-          f"Moved {moved}/{len(paper_ids)} papers from '{from_topic}' to '{to_topic}'")
+    _echo(
+        ctx,
+        {"moved": moved, "from_topic": from_topic, "to_topic": to_topic},
+        f"Moved {moved}/{len(paper_ids)} papers from '{from_topic}' to '{to_topic}'",
+    )
 
 
 @paper.command("bulk-update")
 @click.argument("paper_ids", nargs=-1, type=int, required=True)
-@click.option("--relevance", type=click.Choice(["high", "medium", "low"]), required=True)
-@click.option("--topic", "topic_name", default=None, help="Topic context for relevance update")
+@click.option(
+    "--relevance", type=click.Choice(["high", "medium", "low"]), required=True
+)
+@click.option(
+    "--topic", "topic_name", default=None, help="Topic context for relevance update"
+)
 @click.pass_context
-def paper_bulk_update(ctx: click.Context, paper_ids: tuple[int, ...], relevance: str, topic_name: str | None) -> None:
+def paper_bulk_update(
+    ctx: click.Context,
+    paper_ids: tuple[int, ...],
+    relevance: str,
+    topic_name: str | None,
+) -> None:
     """Bulk update relevance for multiple papers."""
     db = get_db(ctx)
     conn = db.connect()
@@ -1830,7 +2101,8 @@ def paper_bulk_update(ctx: click.Context, paper_ids: tuple[int, ...], relevance:
         topic_id = None
         if topic_name:
             row = conn.execute(
-                "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)", (topic_name, topic_name),
+                "SELECT id FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)",
+                (topic_name, topic_name),
             ).fetchone()
             if not row:
                 raise click.ClickException(f"Topic '{topic_name}' not found")
@@ -1853,8 +2125,11 @@ def paper_bulk_update(ctx: click.Context, paper_ids: tuple[int, ...], relevance:
         conn.commit()
     finally:
         conn.close()
-    _echo(ctx, {"updated": updated, "relevance": relevance},
-          f"Updated {updated}/{len(paper_ids)} papers to relevance='{relevance}'")
+    _echo(
+        ctx,
+        {"updated": updated, "relevance": relevance},
+        f"Updated {updated}/{len(paper_ids)} papers to relevance='{relevance}'",
+    )
 
 
 @topic.command("stats")
@@ -1866,7 +2141,8 @@ def topic_stats(ctx: click.Context, topic_name: str) -> None:
     conn = db.connect()
     try:
         row = conn.execute(
-            "SELECT id, name FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)", (topic_name, topic_name),
+            "SELECT id, name FROM topics WHERE name = ? OR id = CAST(? AS INTEGER)",
+            (topic_name, topic_name),
         ).fetchone()
         if not row:
             raise click.ClickException(f"Topic '{topic_name}' not found")
@@ -1874,7 +2150,8 @@ def topic_stats(ctx: click.Context, topic_name: str) -> None:
         tname = row["name"]
 
         total = conn.execute(
-            "SELECT COUNT(*) as cnt FROM paper_topics WHERE topic_id = ?", (tid,),
+            "SELECT COUNT(*) as cnt FROM paper_topics WHERE topic_id = ?",
+            (tid,),
         ).fetchone()["cnt"]
 
         venue_dist = conn.execute(
@@ -2007,7 +2284,9 @@ def bib_set(
             (paper_id, bibtex_key, bibtex, source, verified_by),
         )
         conn.commit()
-        entry = conn.execute("SELECT * FROM bib_entries WHERE paper_id = ?", (paper_id,)).fetchone()
+        entry = conn.execute(
+            "SELECT * FROM bib_entries WHERE paper_id = ?", (paper_id,)
+        ).fetchone()
     finally:
         conn.close()
     payload = dict(entry)
@@ -2021,7 +2300,9 @@ def bib_show(ctx: click.Context, paper_id: int) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
-        entry = conn.execute("SELECT * FROM bib_entries WHERE paper_id = ?", (paper_id,)).fetchone()
+        entry = conn.execute(
+            "SELECT * FROM bib_entries WHERE paper_id = ?", (paper_id,)
+        ).fetchone()
     finally:
         conn.close()
     if entry is None:
@@ -2030,7 +2311,9 @@ def bib_show(ctx: click.Context, paper_id: int) -> None:
     if ctx.obj.get("json"):
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
-    click.echo(f"[{payload['bibtex_key']}] source={payload['source']} verified_by={payload['verified_by']}")
+    click.echo(
+        f"[{payload['bibtex_key']}] source={payload['source']} verified_by={payload['verified_by']}"
+    )
     click.echo(payload["bibtex"])
 
 
@@ -2073,10 +2356,20 @@ def task() -> None:
 
 @task.command("list")
 @click.option("--topic", "topic_name", default=None)
-@click.option("--project", "project_name", default=None, help="Filter by project name (use with --topic for unambiguous scoping)")
+@click.option(
+    "--project",
+    "project_name",
+    default=None,
+    help="Filter by project name (use with --topic for unambiguous scoping)",
+)
 @click.option("--status", default=None)
 @click.pass_context
-def task_list(ctx: click.Context, topic_name: str | None, project_name: str | None, status: str | None) -> None:
+def task_list(
+    ctx: click.Context,
+    topic_name: str | None,
+    project_name: str | None,
+    status: str | None,
+) -> None:
     db = get_db(ctx)
     conn = db.connect()
     try:
@@ -2086,7 +2379,9 @@ def task_list(ctx: click.Context, topic_name: str | None, project_name: str | No
         params: list[object] = []
 
         if project_name and not topic_name:
-            raise click.ClickException("--project requires --topic for unambiguous scoping")
+            raise click.ClickException(
+                "--project requires --topic for unambiguous scoping"
+            )
         if topic_name:
             joins.append("JOIN topics tp ON t.topic_id = tp.id")
             conditions.append("tp.name = ?")
@@ -2108,18 +2403,31 @@ def task_list(ctx: click.Context, topic_name: str | None, project_name: str | No
         conn.close()
 
     if ctx.obj.get("json"):
-        click.echo(json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str))
+        click.echo(
+            json.dumps([dict(row) for row in rows], ensure_ascii=False, default=str)
+        )
         return
     for row in rows:
-        proj_tag = f" [proj:{row['project_id']}]" if row["project_id"] is not None else ""
-        click.echo(f"[{row['id']}] [{row['status']}] [{row['priority']}]{proj_tag} {row['title']}")
+        proj_tag = (
+            f" [proj:{row['project_id']}]" if row["project_id"] is not None else ""
+        )
+        click.echo(
+            f"[{row['id']}] [{row['status']}] [{row['priority']}]{proj_tag} {row['title']}"
+        )
 
 
 @task.command("add")
 @click.option("--topic", "topic_name", required=True)
-@click.option("--project", "project_name", default=None, help="Assign task to a project under the topic")
+@click.option(
+    "--project",
+    "project_name",
+    default=None,
+    help="Assign task to a project under the topic",
+)
 @click.option("--title", required=True)
-@click.option("--priority", type=click.Choice(["high", "medium", "low"]), default="medium")
+@click.option(
+    "--priority", type=click.Choice(["high", "medium", "low"]), default="medium"
+)
 @click.option("--description", "-d", default="")
 @click.pass_context
 def task_add(
@@ -2134,7 +2442,11 @@ def task_add(
     conn = db.connect()
     try:
         topic_id = _topic_id_or_exit(conn, topic_name)
-        project_id = _project_id_or_exit(conn, topic_name, project_name) if project_name else None
+        project_id = (
+            _project_id_or_exit(conn, topic_name, project_name)
+            if project_name
+            else None
+        )
         conn.execute(
             "INSERT INTO tasks (topic_id, project_id, title, description, priority) VALUES (?, ?, ?, ?, ?)",
             (topic_id, project_id, title, description, priority),
@@ -2145,7 +2457,12 @@ def task_add(
         conn.close()
     _echo(
         ctx,
-        {"task_id": task_id, "title": title, "project_id": project_id, "status": "pending"},
+        {
+            "task_id": task_id,
+            "title": title,
+            "project_id": project_id,
+            "status": "pending",
+        },
         f"Task added: id={task_id}",
     )
 
@@ -2202,7 +2519,9 @@ def _generate_tasks_for_topic(
 
     for paper_obj in papers:
         status_payload = _paper_status_payload(conn, paper_obj)
-        entry = _paper_queue_entry(topic_name, status_payload, conn=conn, topic_id=topic_id)
+        entry = _paper_queue_entry(
+            topic_name, status_payload, conn=conn, topic_id=topic_id
+        )
         bucket = entry["queue_bucket"]
         if bucket == "ready" or bucket not in BUCKET_TASK_TEMPLATES:
             continue
@@ -2282,19 +2601,27 @@ def task_generate(ctx: click.Context, topic_name: str, dry_run: bool) -> None:
         click.echo(json.dumps(result, ensure_ascii=False, default=str))
         return
     if dry_run:
-        click.echo(f"Dry run: {len(result['proposed_tasks'])} tasks would be created for topic '{topic_name}'")
+        click.echo(
+            f"Dry run: {len(result['proposed_tasks'])} tasks would be created for topic '{topic_name}'"
+        )
         for item in result["proposed_tasks"]:
             click.echo(f"  [{item['priority']}] {item['title']}")
     else:
-        click.echo(f"Generated {result['created_count']} tasks for topic '{topic_name}' (skipped {result['skipped_count']})")
+        click.echo(
+            f"Generated {result['created_count']} tasks for topic '{topic_name}' (skipped {result['skipped_count']})"
+        )
 
 
 @task.command("update")
 @click.argument("task_id", type=int)
-@click.option("--status", type=click.Choice(["pending", "in_progress", "done", "blocked"]))
+@click.option(
+    "--status", type=click.Choice(["pending", "in_progress", "done", "blocked"])
+)
 @click.option("--priority", type=click.Choice(["high", "medium", "low"]))
 @click.pass_context
-def task_update(ctx: click.Context, task_id: int, status: str | None, priority: str | None) -> None:
+def task_update(
+    ctx: click.Context, task_id: int, status: str | None, priority: str | None
+) -> None:
     if not status and not priority:
         raise click.ClickException("Nothing to update")
     db = get_db(ctx)
@@ -2333,14 +2660,23 @@ def project() -> None:
 @click.option("--deadline", default="")
 @click.option("--description", "-d", default="")
 @click.pass_context
-def project_add(ctx: click.Context, topic_name: str, name: str, venue: str, deadline: str, description: str) -> None:
+def project_add(
+    ctx: click.Context,
+    topic_name: str,
+    name: str,
+    venue: str,
+    deadline: str,
+    description: str,
+) -> None:
     from .core.project_manager import ProjectManager
 
     db = get_db(ctx)
     conn = db.connect()
     try:
         topic_id = _topic_id_or_exit(conn, topic_name)
-        project_id = ProjectManager(conn).create(topic_id, name, description, venue, deadline)
+        project_id = ProjectManager(conn).create(
+            topic_id, name, description, venue, deadline
+        )
     finally:
         conn.close()
     _echo(
@@ -2365,10 +2701,18 @@ def project_list(ctx: click.Context, topic_name: str | None) -> None:
         conn.close()
 
     if ctx.obj.get("json"):
-        click.echo(json.dumps([dataclasses.asdict(item) for item in projects], ensure_ascii=False, default=str))
+        click.echo(
+            json.dumps(
+                [dataclasses.asdict(item) for item in projects],
+                ensure_ascii=False,
+                default=str,
+            )
+        )
         return
     for item in projects:
-        click.echo(f"[{item.id}] [{item.status}] {item.name} -> {item.target_venue or '?'}")
+        click.echo(
+            f"[{item.id}] [{item.status}] {item.name} -> {item.target_venue or '?'}"
+        )
 
 
 @project.command("show")
@@ -2385,7 +2729,9 @@ def project_show(ctx: click.Context, topic_name: str, project_name: str) -> None
         topic_id = _topic_id_or_exit(conn, topic_name)
         project = ProjectManager(conn).get_project(topic_id, project_name)
         if project is None:
-            raise click.ClickException(f"project '{project_name}' not found under topic '{topic_name}'")
+            raise click.ClickException(
+                f"project '{project_name}' not found under topic '{topic_name}'"
+            )
         review_count = conn.execute(
             "SELECT COUNT(*) AS cnt FROM reviews WHERE project_id = ?",
             (project.id,),
@@ -2397,15 +2743,24 @@ def project_show(ctx: click.Context, topic_name: str, project_name: str) -> None
     finally:
         conn.close()
 
-    payload = {**dataclasses.asdict(project), "topic": topic_name, "review_count": review_count, "task_count": task_count}
+    payload = {
+        **dataclasses.asdict(project),
+        "topic": topic_name,
+        "review_count": review_count,
+        "task_count": task_count,
+    }
     if ctx.obj.get("json"):
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
     click.echo(f"Project: {project.name} (id={project.id})")
     click.echo(f"Topic: {topic_name}")
     click.echo(f"Description: {project.description or '-'}")
-    click.echo(f"Venue: {project.target_venue or '-'}  Deadline: {project.deadline or '-'}")
-    click.echo(f"Status: {project.status}  Tasks: {task_count}  Reviews: {review_count}")
+    click.echo(
+        f"Venue: {project.target_venue or '-'}  Deadline: {project.deadline or '-'}"
+    )
+    click.echo(
+        f"Status: {project.status}  Tasks: {task_count}  Reviews: {review_count}"
+    )
 
 
 @project.command("update")
@@ -2415,7 +2770,10 @@ def project_show(ctx: click.Context, topic_name: str, project_name: str) -> None
 @click.option("--description", default=None)
 @click.option("--venue", default=None)
 @click.option("--deadline", default=None)
-@click.option("--status", type=click.Choice(["planning", "active", "paused", "completed", "archived"]))
+@click.option(
+    "--status",
+    type=click.Choice(["planning", "active", "paused", "completed", "archived"]),
+)
 @click.pass_context
 def project_update(
     ctx: click.Context,
@@ -2440,7 +2798,9 @@ def project_update(
         manager = ProjectManager(conn)
         project = manager.get_project(topic_id, project_name)
         if project is None:
-            raise click.ClickException(f"project '{project_name}' not found under topic '{topic_name}'")
+            raise click.ClickException(
+                f"project '{project_name}' not found under topic '{topic_name}'"
+            )
         manager.update_project(
             project.id or 0,
             name=new_name,
@@ -2455,7 +2815,12 @@ def project_update(
 
     _echo(
         ctx,
-        {"topic": topic_name, "project": updated_name, "previous_name": project_name, "updated": True},
+        {
+            "topic": topic_name,
+            "project": updated_name,
+            "previous_name": project_name,
+            "updated": True,
+        },
         f"Project '{project_name}' updated",
     )
 
@@ -2466,11 +2831,21 @@ def review() -> None:
 
 
 @review.command("add")
-@click.option("--topic", "topic_name", required=True, help="Topic that owns the project")
+@click.option(
+    "--topic", "topic_name", required=True, help="Topic that owns the project"
+)
 @click.option("--project", "project_name", required=True)
-@click.option("--gate", required=True, type=click.Choice(["novelty", "method", "writing", "final"]))
-@click.option("--reviewer", required=True, type=click.Choice(["claude", "codex", "human"]))
-@click.option("--verdict", required=True, type=click.Choice(["pass", "conditional_pass", "fail"]))
+@click.option(
+    "--gate",
+    required=True,
+    type=click.Choice(["novelty", "method", "writing", "final"]),
+)
+@click.option(
+    "--reviewer", required=True, type=click.Choice(["claude", "codex", "human"])
+)
+@click.option(
+    "--verdict", required=True, type=click.Choice(["pass", "conditional_pass", "fail"])
+)
 @click.option("--score", type=float, default=None)
 @click.option("--findings", "-f", default="")
 @click.pass_context
@@ -2490,7 +2865,9 @@ def review_add(
     conn = db.connect()
     try:
         project_id = _project_id_or_exit(conn, topic_name, project_name)
-        review_id = ReviewManager(conn).add_review(project_id, gate, reviewer, verdict, score, findings)
+        review_id = ReviewManager(conn).add_review(
+            project_id, gate, reviewer, verdict, score, findings
+        )
     finally:
         conn.close()
     _echo(
@@ -2509,7 +2886,9 @@ def review_add(
 
 
 @review.command("list")
-@click.option("--topic", "topic_name", required=True, help="Topic that owns the project")
+@click.option(
+    "--topic", "topic_name", required=True, help="Topic that owns the project"
+)
 @click.option("--project", "project_name", required=True)
 @click.pass_context
 def review_list(ctx: click.Context, topic_name: str, project_name: str) -> None:
@@ -2524,11 +2903,19 @@ def review_list(ctx: click.Context, topic_name: str, project_name: str) -> None:
         conn.close()
 
     if ctx.obj.get("json"):
-        click.echo(json.dumps([dataclasses.asdict(item) for item in reviews], ensure_ascii=False, default=str))
+        click.echo(
+            json.dumps(
+                [dataclasses.asdict(item) for item in reviews],
+                ensure_ascii=False,
+                default=str,
+            )
+        )
         return
     for item in reviews:
         score_str = f" ({item.score})" if item.score is not None else ""
-        click.echo(f"[{item.id}] {item.gate}/{item.reviewer} -> {item.verdict}{score_str}  {item.created_at}")
+        click.echo(
+            f"[{item.id}] {item.gate}/{item.reviewer} -> {item.verdict}{score_str}  {item.created_at}"
+        )
 
 
 @main.group()
@@ -2556,7 +2943,9 @@ def primitive_list(ctx: click.Context) -> None:
         click.echo(json.dumps(payload, ensure_ascii=False))
         return
     for item in payload:
-        click.echo(f"{item['name']} [{item['category']}] llm={item['requires_llm']} - {item['description']}")
+        click.echo(
+            f"{item['name']} [{item['category']}] llm={item['requires_llm']} - {item['description']}"
+        )
 
 
 @primitive.command("exec")
@@ -2564,7 +2953,9 @@ def primitive_list(ctx: click.Context) -> None:
 @click.option("--args", "json_args", type=str, default="{}")
 @click.option("--topic", type=int, default=None)
 @click.pass_context
-def primitive_exec(ctx: click.Context, name: str, json_args: str, topic: int | None) -> None:
+def primitive_exec(
+    ctx: click.Context, name: str, json_args: str, topic: int | None
+) -> None:
     """Execute a research primitive."""
     from .execution.tracked import TrackedBackend
     from .provenance import ProvenanceRecorder
@@ -2577,7 +2968,9 @@ def primitive_exec(ctx: click.Context, name: str, json_args: str, topic: int | N
         raise click.ClickException("--args must decode to a JSON object")
 
     raw_backend = _create_backend(ctx)
-    backend = TrackedBackend(raw_backend, ProvenanceRecorder(get_db(ctx)), default_topic_id=topic)
+    backend = TrackedBackend(
+        raw_backend, ProvenanceRecorder(get_db(ctx)), default_topic_id=topic
+    )
     try:
         result = backend.execute(name, **kwargs)
     except NotImplementedError as exc:
@@ -2598,7 +2991,13 @@ def provenance() -> None:
 @click.option("--backend", "backend_name", type=str, default=None)
 @click.option("--limit", type=int, default=20)
 @click.pass_context
-def provenance_list(ctx: click.Context, topic: int | None, primitive: str | None, backend_name: str | None, limit: int) -> None:
+def provenance_list(
+    ctx: click.Context,
+    topic: int | None,
+    primitive: str | None,
+    backend_name: str | None,
+    limit: int,
+) -> None:
     """List provenance records."""
     from .provenance import ProvenanceRecorder
 
@@ -2613,20 +3012,30 @@ def provenance_list(ctx: click.Context, topic: int | None, primitive: str | None
         click.echo(json.dumps(payload, ensure_ascii=False, default=str))
         return
     for record in payload:
-        click.echo(f"[{record['id']}] {record['primitive']} via {record['backend']} success={record['success']}")
+        click.echo(
+            f"[{record['id']}] {record['primitive']} via {record['backend']} success={record['success']}"
+        )
 
 
 @provenance.command("summary")
 @click.option("--topic", type=int, default=None)
 @click.option("--backend", "backend_name", type=str, default=None)
 @click.pass_context
-def provenance_summary(ctx: click.Context, topic: int | None, backend_name: str | None) -> None:
+def provenance_summary(
+    ctx: click.Context, topic: int | None, backend_name: str | None
+) -> None:
     """Show provenance statistics."""
     from .provenance import ProvenanceRecorder
 
-    summary = ProvenanceRecorder(get_db(ctx)).summarize(topic_id=topic, backend=backend_name)
+    summary = ProvenanceRecorder(get_db(ctx)).summarize(
+        topic_id=topic, backend=backend_name
+    )
     payload = dataclasses.asdict(summary)
-    _echo(ctx, payload, f"operations={summary.total_operations} cost={summary.total_cost_usd}")
+    _echo(
+        ctx,
+        payload,
+        f"operations={summary.total_operations} cost={summary.total_cost_usd}",
+    )
 
 
 @provenance.command("show")
@@ -2698,7 +3107,9 @@ def provenance_token_report(ctx: click.Context, topic: str | None) -> None:
 @click.option("--format", "fmt", type=click.Choice(["json", "csv"]), default="json")
 @click.option("--output", "-o", type=click.Path(), help="Output file path")
 @click.pass_context
-def provenance_export(ctx: click.Context, topic: str | None, fmt: str, output: str | None) -> None:
+def provenance_export(
+    ctx: click.Context, topic: str | None, fmt: str, output: str | None
+) -> None:
     """Export provenance records for analysis."""
     from .provenance import ProvenanceRecorder
 
@@ -2721,7 +3132,6 @@ def provenance_export(ctx: click.Context, topic: str | None, fmt: str, output: s
     click.echo(serialized)
 
 
-
 @main.group()
 def orchestrator() -> None:
     """Research pipeline orchestrator: stage-gated workflow control."""
@@ -2730,9 +3140,15 @@ def orchestrator() -> None:
 @orchestrator.command("init")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--mode", type=click.Choice(["explore", "standard", "strict", "demo"]), default="standard")
+@click.option(
+    "--mode",
+    type=click.Choice(["explore", "standard", "strict", "demo"]),
+    default="standard",
+)
 @click.pass_context
-def orchestrator_init(ctx: click.Context, topic_name: str, project_name: str, mode: str) -> None:
+def orchestrator_init(
+    ctx: click.Context, topic_name: str, project_name: str, mode: str
+) -> None:
     """Initialize an orchestrator run for a project."""
     from .orchestrator import OrchestratorService
 
@@ -2754,7 +3170,11 @@ def orchestrator_init(ctx: click.Context, topic_name: str, project_name: str, mo
         "current_stage": run.current_stage,
         "stage_status": run.stage_status,
     }
-    _echo(ctx, payload, f"Orchestrator initialized: {topic_name}/{project_name} -> {run.current_stage}")
+    _echo(
+        ctx,
+        payload,
+        f"Orchestrator initialized: {topic_name}/{project_name} -> {run.current_stage}",
+    )
 
 
 @orchestrator.command("status")
@@ -2774,7 +3194,9 @@ def orchestrator_status(ctx: click.Context, topic_name: str, project_name: str) 
 
     svc = OrchestratorService(db)
     status = svc.get_status(project_id)
-    _echo(ctx, status, f"Status: {status.get('run', {}).get('current_stage', 'unknown')}")
+    _echo(
+        ctx, status, f"Status: {status.get('run', {}).get('current_stage', 'unknown')}"
+    )
 
 
 @orchestrator.command("artifacts")
@@ -2783,7 +3205,13 @@ def orchestrator_status(ctx: click.Context, topic_name: str, project_name: str) 
 @click.option("--stage", default=None, help="Filter by stage")
 @click.option("--type", "artifact_type", default=None, help="Filter by artifact type")
 @click.pass_context
-def orchestrator_artifacts(ctx: click.Context, topic_name: str, project_name: str, stage: str | None, artifact_type: str | None) -> None:
+def orchestrator_artifacts(
+    ctx: click.Context,
+    topic_name: str,
+    project_name: str,
+    stage: str | None,
+    artifact_type: str | None,
+) -> None:
     """List artifacts for a project."""
     from .orchestrator import OrchestratorService
 
@@ -2796,15 +3224,18 @@ def orchestrator_artifacts(ctx: click.Context, topic_name: str, project_name: st
 
     svc = OrchestratorService(db)
     artifacts = svc.list_artifacts(project_id, stage=stage, artifact_type=artifact_type)
-    payload = [{
-        "id": a.id,
-        "stage": a.stage,
-        "type": a.artifact_type,
-        "version": a.version,
-        "status": a.status,
-        "title": a.title,
-        "created_at": a.created_at,
-    } for a in artifacts]
+    payload = [
+        {
+            "id": a.id,
+            "stage": a.stage,
+            "type": a.artifact_type,
+            "version": a.version,
+            "status": a.status,
+            "title": a.title,
+            "created_at": a.created_at,
+        }
+        for a in artifacts
+    ]
     _echo(ctx, payload, f"{len(artifacts)} artifacts")
 
 
@@ -2813,7 +3244,9 @@ def orchestrator_artifacts(ctx: click.Context, topic_name: str, project_name: st
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--actor", default="user", help="Actor name")
 @click.pass_context
-def orchestrator_advance(ctx: click.Context, topic_name: str, project_name: str, actor: str) -> None:
+def orchestrator_advance(
+    ctx: click.Context, topic_name: str, project_name: str, actor: str
+) -> None:
     """Advance the project to the next stage."""
     from .orchestrator import OrchestratorService
 
@@ -2826,7 +3259,12 @@ def orchestrator_advance(ctx: click.Context, topic_name: str, project_name: str,
 
     svc = OrchestratorService(db)
     result = svc.advance(project_id, actor=actor)
-    _echo(ctx, result, result.get("error") or f"Advanced: {result.get('from_stage')} -> {result.get('to_stage')}")
+    _echo(
+        ctx,
+        result,
+        result.get("error")
+        or f"Advanced: {result.get('from_stage')} -> {result.get('to_stage')}",
+    )
 
 
 @orchestrator.command("gate-check")
@@ -2834,7 +3272,9 @@ def orchestrator_advance(ctx: click.Context, topic_name: str, project_name: str,
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--stage", default=None, help="Stage to check (defaults to current)")
 @click.pass_context
-def orchestrator_gate_check(ctx: click.Context, topic_name: str, project_name: str, stage: str | None) -> None:
+def orchestrator_gate_check(
+    ctx: click.Context, topic_name: str, project_name: str, stage: str | None
+) -> None:
     """Check the gate for a stage."""
     from .orchestrator import OrchestratorService
 
@@ -2854,10 +3294,24 @@ def orchestrator_gate_check(ctx: click.Context, topic_name: str, project_name: s
 @orchestrator.command("adversarial-run")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--artifact-id", type=int, required=True, help="Target artifact ID to review")
-@click.option("--proposal", "proposal_json", required=True, help="Proposal snapshot as JSON string")
-@click.option("--objections", "objections_json", required=True, help="Objections as JSON array")
-@click.option("--responses", "responses_json", default=None, help="Proposer responses as JSON array")
+@click.option(
+    "--artifact-id", type=int, required=True, help="Target artifact ID to review"
+)
+@click.option(
+    "--proposal",
+    "proposal_json",
+    required=True,
+    help="Proposal snapshot as JSON string",
+)
+@click.option(
+    "--objections", "objections_json", required=True, help="Objections as JSON array"
+)
+@click.option(
+    "--responses",
+    "responses_json",
+    default=None,
+    help="Proposer responses as JSON array",
+)
 @click.option("--resolver-notes", default="", help="Resolver notes")
 @click.option("--actor", default="user", help="Actor name")
 @click.pass_context
@@ -2902,14 +3356,26 @@ def orchestrator_adversarial_run(
         resolver_notes=resolver_notes,
         actor=actor,
     )
-    _echo(ctx, result, result.get("error") or f"Adversarial round {result.get('round_number')} recorded")
+    _echo(
+        ctx,
+        result,
+        result.get("error")
+        or f"Adversarial round {result.get('round_number')} recorded",
+    )
 
 
 @orchestrator.command("adversarial-resolve")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--round-artifact-id", type=int, required=True, help="Round artifact ID to resolve")
-@click.option("--scores", "scores_json", default="{}", help="Scores dict as JSON (e.g. '{\"novelty\": 4.5}')")
+@click.option(
+    "--round-artifact-id", type=int, required=True, help="Round artifact ID to resolve"
+)
+@click.option(
+    "--scores",
+    "scores_json",
+    default="{}",
+    help="Scores dict as JSON (e.g. '{\"novelty\": 4.5}')",
+)
 @click.option("--notes", default="", help="Resolution notes")
 @click.option("--actor", default="user", help="Actor name")
 @click.pass_context
@@ -2947,14 +3413,21 @@ def orchestrator_adversarial_resolve(
         notes=notes,
         actor=actor,
     )
-    _echo(ctx, result, result.get("error") or f"Resolution: {result.get('outcome')} (score: {result.get('mean_score')})")
+    _echo(
+        ctx,
+        result,
+        result.get("error")
+        or f"Resolution: {result.get('outcome')} (score: {result.get('mean_score')})",
+    )
 
 
 @orchestrator.command("adversarial-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
-def orchestrator_adversarial_status(ctx: click.Context, topic_name: str, project_name: str) -> None:
+def orchestrator_adversarial_status(
+    ctx: click.Context, topic_name: str, project_name: str
+) -> None:
     """Check adversarial status for the project."""
     from .orchestrator import OrchestratorService
 
@@ -2967,14 +3440,28 @@ def orchestrator_adversarial_status(ctx: click.Context, topic_name: str, project
 
     svc = OrchestratorService(db)
     status = svc.check_adversarial_status(project_id)
-    _echo(ctx, status, f"Adversarial status: {status.get('status', status.get('outcome', 'unknown'))}")
+    _echo(
+        ctx,
+        status,
+        f"Adversarial status: {status.get('status', status.get('outcome', 'unknown'))}",
+    )
 
 
 @orchestrator.command("review-bundle")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--integrity-artifact-id", type=int, default=None, help="Integrity report artifact ID")
-@click.option("--scholarly-artifact-id", type=int, default=None, help="Scholarly report artifact ID")
+@click.option(
+    "--integrity-artifact-id",
+    type=int,
+    default=None,
+    help="Integrity report artifact ID",
+)
+@click.option(
+    "--scholarly-artifact-id",
+    type=int,
+    default=None,
+    help="Scholarly report artifact ID",
+)
 @click.pass_context
 def orchestrator_review_bundle(
     ctx: click.Context,
@@ -3000,7 +3487,12 @@ def orchestrator_review_bundle(
             integrity_artifact_id=integrity_artifact_id,
             scholarly_artifact_id=scholarly_artifact_id,
         )
-        _echo(ctx, result, result.get("error") or f"Review bundle created (cycle {result.get('cycle_number')})")
+        _echo(
+            ctx,
+            result,
+            result.get("error")
+            or f"Review bundle created (cycle {result.get('cycle_number')})",
+        )
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
 
@@ -3008,14 +3500,28 @@ def orchestrator_review_bundle(
 @orchestrator.command("review-add-issue")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--review-type", required=True, type=click.Choice(["integrity", "scholarly"]), help="Review type")
-@click.option("--severity", required=True, type=click.Choice(["critical", "high", "medium", "low"]), help="Issue severity")
+@click.option(
+    "--review-type",
+    required=True,
+    type=click.Choice(["integrity", "scholarly"]),
+    help="Review type",
+)
+@click.option(
+    "--severity",
+    required=True,
+    type=click.Choice(["critical", "high", "medium", "low"]),
+    help="Issue severity",
+)
 @click.option("--category", required=True, help="Issue category")
 @click.option("--summary", required=True, help="Issue summary")
 @click.option("--details", default="", help="Detailed description")
-@click.option("--blocking/--no-blocking", default=False, help="Whether issue blocks advancement")
+@click.option(
+    "--blocking/--no-blocking", default=False, help="Whether issue blocks advancement"
+)
 @click.option("--recommended-action", default="", help="Recommended fix")
-@click.option("--review-artifact-id", type=int, default=None, help="Source review artifact ID")
+@click.option(
+    "--review-artifact-id", type=int, default=None, help="Source review artifact ID"
+)
 @click.pass_context
 def orchestrator_review_add_issue(
     ctx: click.Context,
@@ -3052,15 +3558,27 @@ def orchestrator_review_add_issue(
         recommended_action=recommended_action,
         review_artifact_id=review_artifact_id,
     )
-    _echo(ctx, result, result.get("error") or f"Issue #{result.get('issue_id')} added ({severity})")
+    _echo(
+        ctx,
+        result,
+        result.get("error") or f"Issue #{result.get('issue_id')} added ({severity})",
+    )
 
 
 @orchestrator.command("review-issues")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--stage", default=None, help="Filter by stage")
-@click.option("--status", "issue_status", default=None, type=click.Choice(["open", "in_progress", "resolved", "wontfix"]), help="Filter by status")
-@click.option("--blocking-only", is_flag=True, default=False, help="Show only blocking issues")
+@click.option(
+    "--status",
+    "issue_status",
+    default=None,
+    type=click.Choice(["open", "in_progress", "resolved", "wontfix"]),
+    help="Filter by status",
+)
+@click.option(
+    "--blocking-only", is_flag=True, default=False, help="Show only blocking issues"
+)
 @click.pass_context
 def orchestrator_review_issues(
     ctx: click.Context,
@@ -3094,10 +3612,17 @@ def orchestrator_review_issues(
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--issue-id", type=int, required=True, help="Issue ID to respond to")
-@click.option("--response-type", required=True, type=click.Choice(["change", "clarify", "dispute", "acknowledge"]), help="Response type")
+@click.option(
+    "--response-type",
+    required=True,
+    type=click.Choice(["change", "clarify", "dispute", "acknowledge"]),
+    help="Response type",
+)
 @click.option("--text", required=True, help="Response text")
 @click.option("--artifact-id", type=int, default=None, help="Linked artifact ID")
-@click.option("--evidence", "evidence_json", default=None, help="Evidence as JSON string")
+@click.option(
+    "--evidence", "evidence_json", default=None, help="Evidence as JSON string"
+)
 @click.pass_context
 def orchestrator_review_respond(
     ctx: click.Context,
@@ -3144,7 +3669,13 @@ def orchestrator_review_respond(
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.option("--issue-id", type=int, required=True, help="Issue ID to resolve")
-@click.option("--status", "resolution_status", required=True, type=click.Choice(["resolved", "wontfix"]), help="Resolution status")
+@click.option(
+    "--status",
+    "resolution_status",
+    required=True,
+    type=click.Choice(["resolved", "wontfix"]),
+    help="Resolution status",
+)
 @click.pass_context
 def orchestrator_review_resolve(
     ctx: click.Context,
@@ -3165,14 +3696,18 @@ def orchestrator_review_resolve(
 
     svc = OrchestratorService(db)
     result = svc.resolve_review_issue(issue_id, resolution_status)
-    _echo(ctx, result, result.get("error") or f"Issue #{issue_id} -> {resolution_status}")
+    _echo(
+        ctx, result, result.get("error") or f"Issue #{issue_id} -> {resolution_status}"
+    )
 
 
 @orchestrator.command("review-status")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
-def orchestrator_review_status(ctx: click.Context, topic_name: str, project_name: str) -> None:
+def orchestrator_review_status(
+    ctx: click.Context, topic_name: str, project_name: str
+) -> None:
     """Show review status summary."""
     from .orchestrator import OrchestratorService
 
@@ -3187,13 +3722,19 @@ def orchestrator_review_status(ctx: click.Context, topic_name: str, project_name
     status = svc.get_review_status(project_id)
     decision = status.get("decision", "unknown")
     blocking = status.get("blocking_open", 0)
-    _echo(ctx, status, f"Decision: {decision} | Blocking: {blocking} | Cycle: {status.get('cycle_number', 0)}/{status.get('max_cycles', 2)}")
+    _echo(
+        ctx,
+        status,
+        f"Decision: {decision} | Blocking: {blocking} | Cycle: {status.get('cycle_number', 0)}/{status.get('max_cycles', 2)}",
+    )
 
 
 @orchestrator.command("integrity-check")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
-@click.option("--findings", "findings_json", default=None, help="External findings as JSON array")
+@click.option(
+    "--findings", "findings_json", default=None, help="External findings as JSON array"
+)
 @click.pass_context
 def orchestrator_integrity_check(
     ctx: click.Context,
@@ -3223,14 +3764,20 @@ def orchestrator_integrity_check(
     svc = OrchestratorService(db)
     result = svc.run_integrity_check(project_id=project_id, findings=findings)
     passed = "PASSED" if result.get("passed") else "FAILED"
-    _echo(ctx, result, f"Integrity: {passed} | Critical: {result.get('critical_count', 0)} | Findings: {result.get('total_findings', 0)}")
+    _echo(
+        ctx,
+        result,
+        f"Integrity: {passed} | Critical: {result.get('critical_count', 0)} | Findings: {result.get('total_findings', 0)}",
+    )
 
 
 @orchestrator.command("finalize")
 @click.option("--topic", "topic_name", required=True, help="Topic name")
 @click.option("--project", "project_name", required=True, help="Project name")
 @click.pass_context
-def orchestrator_finalize(ctx: click.Context, topic_name: str, project_name: str) -> None:
+def orchestrator_finalize(
+    ctx: click.Context, topic_name: str, project_name: str
+) -> None:
     """Produce final bundle and process summary."""
     from .orchestrator import OrchestratorService
 
@@ -3243,7 +3790,12 @@ def orchestrator_finalize(ctx: click.Context, topic_name: str, project_name: str
 
     svc = OrchestratorService(db)
     result = svc.finalize_project(project_id=project_id)
-    _echo(ctx, result, result.get("error") or f"Finalized: {result.get('artifact_count', 0)} artifacts, {result.get('stages_traversed', 0)} stage events")
+    _echo(
+        ctx,
+        result,
+        result.get("error")
+        or f"Finalized: {result.get('artifact_count', 0)} artifacts, {result.get('stages_traversed', 0)} stage events",
+    )
 
 
 @main.command()
@@ -3256,55 +3808,96 @@ def doctor(ctx: click.Context) -> None:
     checks.append({"check": "sqlite3", "version": sqlite3.sqlite_version, "ok": True})
     try:
         import paperindex  # type: ignore
-        checks.append({"check": "paperindex", "version": getattr(paperindex, "__version__", "unknown"), "ok": True})
+
+        checks.append(
+            {
+                "check": "paperindex",
+                "version": getattr(paperindex, "__version__", "unknown"),
+                "ok": True,
+            }
+        )
     except ImportError:
-        checks.append({"check": "paperindex", "version": "not installed", "ok": True, "note": "optional"})
+        checks.append(
+            {
+                "check": "paperindex",
+                "version": "not installed",
+                "ok": True,
+                "note": "optional",
+            }
+        )
     runtime_config = get_runtime_config(ctx)
-    checks.append({
-        "check": "config",
-        "source": runtime_config.source,
-        "workspace_root": str(runtime_config.workspace_root) if runtime_config.workspace_root else None,
-        "config_path": str(runtime_config.config_path) if runtime_config.config_path else None,
-        "execution_backend": runtime_config.execution_backend,
-        "ok": True,
-    })
+    checks.append(
+        {
+            "check": "config",
+            "source": runtime_config.source,
+            "workspace_root": str(runtime_config.workspace_root)
+            if runtime_config.workspace_root
+            else None,
+            "config_path": str(runtime_config.config_path)
+            if runtime_config.config_path
+            else None,
+            "execution_backend": runtime_config.execution_backend,
+            "ok": True,
+        }
+    )
     db = get_db(ctx)
     db_size = db.db_path.stat().st_size if db.db_path.exists() else 0
-    checks.append({"check": "database", "path": str(db.db_path), "size_kb": db_size // 1024, "ok": True})
+    checks.append(
+        {
+            "check": "database",
+            "path": str(db.db_path),
+            "size_kb": db_size // 1024,
+            "ok": True,
+        }
+    )
     checks.append(
         {
             "check": "llm_config",
-            "configured": bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("KIMI_API_KEY")),
+            "configured": bool(
+                os.environ.get("OPENAI_API_KEY") or os.environ.get("KIMI_API_KEY")
+            ),
             "ok": True,
             "note": "optional: needed for paper annotation",
         }
     )
-    checks.append({
-        "check": "execution_backend",
-        "backend": runtime_config.execution_backend,
-        "ok": True,
-    })
-    checks.append({
-        "check": "primitives",
-        "registered": len(list_primitives()),
-        "ok": True,
-    })
+    checks.append(
+        {
+            "check": "execution_backend",
+            "backend": runtime_config.execution_backend,
+            "ok": True,
+        }
+    )
+    checks.append(
+        {
+            "check": "primitives",
+            "registered": len(list_primitives()),
+            "ok": True,
+        }
+    )
     conn = db.connect()
     try:
         provenance_exists = _table_exists(conn, "provenance_records")
-        checks.append({
-            "check": "provenance",
-            "table_exists": provenance_exists,
-            "record_count": _count_records(conn, "provenance_records"),
-            "ok": provenance_exists,
-        })
+        checks.append(
+            {
+                "check": "provenance",
+                "table_exists": provenance_exists,
+                "record_count": _count_records(conn, "provenance_records"),
+                "ok": provenance_exists,
+            }
+        )
     finally:
         conn.close()
     if ctx.obj.get("json"):
         click.echo(json.dumps(checks, ensure_ascii=False, default=str))
         return
     for item in checks:
-        detail = item.get("version") or item.get("path") or item.get("backend") or item.get("note") or ""
+        detail = (
+            item.get("version")
+            or item.get("path")
+            or item.get("backend")
+            or item.get("note")
+            or ""
+        )
         click.echo(f"[OK] {item['check']}: {detail}")
 
 
@@ -3320,12 +3913,35 @@ def auto_runner_group() -> None:
 
 @auto_runner_group.command("start")
 @click.option("--project-id", type=int, required=True, help="Project ID")
-@click.option("--topic-id", type=int, default=None, help="Topic ID (resolved from project if omitted)")
-@click.option("--direction", type=str, default="", help="Research direction description")
-@click.option("--mode", type=click.Choice(["explore", "standard", "strict", "demo"]), default="standard")
-@click.option("--session-command", type=str, default="claude-kimi", help="Session command (e.g. claude-kimi)")
-@click.option("--auto-approve", is_flag=True, default=False, help="Auto-approve human checkpoints (demo mode)")
-@click.option("--dry-run", is_flag=True, default=False, help="Show plan without executing")
+@click.option(
+    "--topic-id",
+    type=int,
+    default=None,
+    help="Topic ID (resolved from project if omitted)",
+)
+@click.option(
+    "--direction", type=str, default="", help="Research direction description"
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["explore", "standard", "strict", "demo"]),
+    default="standard",
+)
+@click.option(
+    "--session-command",
+    type=str,
+    default="claude-kimi",
+    help="Session command (e.g. claude-kimi)",
+)
+@click.option(
+    "--auto-approve",
+    is_flag=True,
+    default=False,
+    help="Auto-approve human checkpoints (demo mode)",
+)
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show plan without executing"
+)
 @click.pass_context
 def auto_runner_start(
     ctx: click.Context,
@@ -3372,7 +3988,11 @@ def auto_runner_status(ctx: click.Context, project_id: int) -> None:
     from .auto_runner.runner import get_status
 
     result = get_status(project_id)
-    _echo(ctx, result, f"{result.get('current_stage', '?')} [{result.get('stage_state', '?')}]")
+    _echo(
+        ctx,
+        result,
+        f"{result.get('current_stage', '?')} [{result.get('stage_state', '?')}]",
+    )
 
 
 if __name__ == "__main__":

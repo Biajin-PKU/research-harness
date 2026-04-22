@@ -19,11 +19,21 @@ from .models import SessionObservation
 logger = logging.getLogger(__name__)
 
 # Fields that may contain paper text or other sensitive content
-_SENSITIVE_FIELDS = frozenset({
-    "text", "content", "abstract", "code", "pdf_path",
-    "study_spec", "previous_code", "review_feedback",
-    "outline", "sections", "evidence_summary",
-})
+_SENSITIVE_FIELDS = frozenset(
+    {
+        "text",
+        "content",
+        "abstract",
+        "code",
+        "pdf_path",
+        "study_spec",
+        "previous_code",
+        "review_feedback",
+        "outline",
+        "sections",
+        "evidence_summary",
+    }
+)
 
 
 def _sanitize_args(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -67,6 +77,7 @@ def _init_trajectory_recorder(db: Database, session_id: str) -> Any:
     """Initialize TrajectoryRecorder, returning None if table not yet migrated."""
     try:
         from ..evolution.trajectory import TrajectoryRecorder
+
         return TrajectoryRecorder(db, session_id)
     except Exception:
         logger.debug("TrajectoryRecorder not available (migration pending?)")
@@ -150,9 +161,15 @@ class ObservationMiddleware:
                         success, cost_usd, latency_ms, stage, gate_outcome)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
-                        obs.session_id, obs.tool_name, obs.arguments_hash,
-                        obs.result_summary, int(obs.success), obs.cost_usd,
-                        obs.latency_ms, obs.stage, obs.gate_outcome,
+                        obs.session_id,
+                        obs.tool_name,
+                        obs.arguments_hash,
+                        obs.result_summary,
+                        int(obs.success),
+                        obs.cost_usd,
+                        obs.latency_ms,
+                        obs.stage,
+                        obs.gate_outcome,
                     ),
                 )
                 conn.commit()
@@ -160,7 +177,9 @@ class ObservationMiddleware:
                 conn.close()
         except Exception:
             # Never let observation recording break tool execution
-            logger.debug("Failed to record observation for %s", tool_name, exc_info=True)
+            logger.debug(
+                "Failed to record observation for %s", tool_name, exc_info=True
+            )
 
     @property
     def trajectory_recorder(self) -> Any:
@@ -210,7 +229,9 @@ class ObservationMiddleware:
                         latency_ms=elapsed_ms,
                     )
                 except Exception:
-                    logger.debug("Trajectory recording failed for %s", tool_name, exc_info=True)
+                    logger.debug(
+                        "Trajectory recording failed for %s", tool_name, exc_info=True
+                    )
 
             return result
         except Exception as exc:
@@ -240,7 +261,8 @@ class ObservationMiddleware:
                 except Exception:
                     logger.debug(
                         "Trajectory recorder failed for %s",
-                        tool_name, exc_info=True,
+                        tool_name,
+                        exc_info=True,
                     )
 
             raise

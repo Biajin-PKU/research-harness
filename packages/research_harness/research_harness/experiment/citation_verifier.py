@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import re
-import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -54,7 +53,22 @@ def _tokenize(text: str) -> set[str]:
     text = re.sub(r"[^a-z0-9\s]", " ", text)
     tokens = set(text.split())
     # Remove common stop words
-    stop_words = {"a", "an", "the", "of", "in", "on", "for", "and", "to", "with", "is", "by", "at", "from"}
+    stop_words = {
+        "a",
+        "an",
+        "the",
+        "of",
+        "in",
+        "on",
+        "for",
+        "and",
+        "to",
+        "with",
+        "is",
+        "by",
+        "at",
+        "from",
+    }
     return tokens - stop_words
 
 
@@ -87,7 +101,9 @@ def _check_crossref(title: str, http_fn: Any = None) -> CitationResult | None:
 
             encoded = urllib.parse.quote(title)
             url = f"https://api.crossref.org/works?query.bibliographic={encoded}&rows=3"
-            req = urllib.request.Request(url, headers={"User-Agent": "ResearchHarness/1.0"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "ResearchHarness/1.0"}
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
         else:
@@ -123,7 +139,9 @@ def _check_openalex(title: str, http_fn: Any = None) -> CitationResult | None:
 
             encoded = urllib.parse.quote(title)
             url = f"https://api.openalex.org/works?filter=title.search:{encoded}&per_page=3"
-            req = urllib.request.Request(url, headers={"User-Agent": "ResearchHarness/1.0"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "ResearchHarness/1.0"}
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
         else:
@@ -196,7 +214,9 @@ def _check_datacite(title: str, http_fn: Any = None) -> CitationResult | None:
 
             encoded = urllib.parse.quote(title)
             url = f"https://api.datacite.org/dois?query={encoded}&page[size]=3"
-            req = urllib.request.Request(url, headers={"User-Agent": "ResearchHarness/1.0"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "ResearchHarness/1.0"}
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
         else:
@@ -205,7 +225,11 @@ def _check_datacite(title: str, http_fn: Any = None) -> CitationResult | None:
         items = data.get("data", [])
         for item in items[:3]:
             attrs = item.get("attributes", {})
-            candidate_title = " ".join(attrs.get("titles", [{}])[0].get("title", "").split()) if attrs.get("titles") else ""
+            candidate_title = (
+                " ".join(attrs.get("titles", [{}])[0].get("title", "").split())
+                if attrs.get("titles")
+                else ""
+            )
             if not candidate_title:
                 continue
             sim = jaccard_similarity(title, candidate_title)
@@ -297,4 +321,6 @@ def verify_citations(
     breaker_fn: Any = None,
 ) -> list[CitationResult]:
     """Verify a batch of citations."""
-    return [verify_citation(c, http_fn=http_fn, breaker_fn=breaker_fn) for c in citations]
+    return [
+        verify_citation(c, http_fn=http_fn, breaker_fn=breaker_fn) for c in citations
+    ]

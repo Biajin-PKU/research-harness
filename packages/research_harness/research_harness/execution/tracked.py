@@ -25,7 +25,11 @@ class TrackedBackend:
 
     def execute(self, primitive: str, **kwargs: Any) -> PrimitiveResult:
         # Accept both _topic_id (internal) and topic_id (from MCP arguments)
-        topic_id = kwargs.pop("_topic_id", None) or kwargs.get("topic_id") or self._default_topic_id
+        topic_id = (
+            kwargs.pop("_topic_id", None)
+            or kwargs.get("topic_id")
+            or self._default_topic_id
+        )
         parent_id = kwargs.pop("_parent_id", None)
         stage = kwargs.pop("_stage", "")
 
@@ -39,7 +43,9 @@ class TrackedBackend:
                 parent_id=parent_id,
             )
         except Exception:
-            logging.getLogger(__name__).debug("Observation recording failed", exc_info=True)
+            logging.getLogger(__name__).debug(
+                "Observation recording failed", exc_info=True
+            )
         return result
 
     def get_info(self) -> BackendInfo:

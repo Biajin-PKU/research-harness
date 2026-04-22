@@ -61,7 +61,9 @@ class TestHarnessLocalExecution:
     def test_paper_search_via_harness(self, harness, db):
         conn = db.connect()
         try:
-            _insert_paper(conn, "Test Search Paper", "Searchable paper content.", "search-paper")
+            _insert_paper(
+                conn, "Test Search Paper", "Searchable paper content.", "search-paper"
+            )
         finally:
             conn.close()
 
@@ -138,7 +140,9 @@ class TestHarnessLLMExecution:
         mock_client.model = "kimi-test"
         mock_get_client.return_value = mock_client
 
-        result = harness.execute("claim_extract", paper_ids=[paper_id], topic_id=topic_id)
+        result = harness.execute(
+            "claim_extract", paper_ids=[paper_id], topic_id=topic_id
+        )
         assert result.success
         assert len(result.output.claims) == 1
         assert "outperforms" in result.output.claims[0].content

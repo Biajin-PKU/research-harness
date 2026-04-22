@@ -1,4 +1,5 @@
 """Tests for `hub topic overview` CLI command."""
+
 from __future__ import annotations
 
 import json
@@ -11,19 +12,47 @@ from research_harness.cli import main
 def _setup_topic_with_mixed_papers(runner: CliRunner, topic: str = "dl-opt") -> None:
     runner.invoke(main, ["topic", "init", topic])
     # Paper with PDF (needs annotation)
-    runner.invoke(main, [
-        "paper", "ingest", "--title", "Paper A", "--arxiv-id", "2401.10001",
-        "--pdf-path", "/tmp/a.pdf", "--topic", topic,
-    ])
+    runner.invoke(
+        main,
+        [
+            "paper",
+            "ingest",
+            "--title",
+            "Paper A",
+            "--arxiv-id",
+            "2401.10001",
+            "--pdf-path",
+            "/tmp/a.pdf",
+            "--topic",
+            topic,
+        ],
+    )
     # Paper without PDF
-    runner.invoke(main, [
-        "paper", "ingest", "--title", "Paper B", "--arxiv-id", "2401.10002",
-        "--topic", topic,
-    ])
+    runner.invoke(
+        main,
+        [
+            "paper",
+            "ingest",
+            "--title",
+            "Paper B",
+            "--arxiv-id",
+            "2401.10002",
+            "--topic",
+            topic,
+        ],
+    )
     # Add a task
-    runner.invoke(main, [
-        "task", "add", "--topic", topic, "--title", "Read paper A",
-    ])
+    runner.invoke(
+        main,
+        [
+            "task",
+            "add",
+            "--topic",
+            topic,
+            "--title",
+            "Read paper A",
+        ],
+    )
 
 
 def test_topic_overview_json(runner):

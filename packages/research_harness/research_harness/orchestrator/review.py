@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..primitives.types import SCHOLARLY_REVIEW_DIMENSIONS
 from ..storage.db import Database
 from .artifacts import ArtifactManager
 from .models import ReviewIssue, ReviewResponse
@@ -20,7 +21,10 @@ from .models import ReviewIssue, ReviewResponse
 
 MAX_REVIEW_CYCLES = 2
 
-from ..primitives.types import SCHOLARLY_REVIEW_DIMENSIONS as REVIEW_DIMENSIONS  # noqa: E402
+# Unified scholarly-review dimensions (7 weighted axes). Re-exported here so
+# orchestrator code and tests can import from a stable location.
+REVIEW_DIMENSIONS = SCHOLARLY_REVIEW_DIMENSIONS
+
 
 REVIEW_CATEGORIES: tuple[str, ...] = (
     "methodology",
@@ -84,9 +88,7 @@ class ReviewManager:
         # Count existing bundles for cycle tracking
         cycle_number = self._count_bundles(project_id) + 1
         if cycle_number > MAX_REVIEW_CYCLES:
-            raise ValueError(
-                f"Maximum review cycles ({MAX_REVIEW_CYCLES}) exceeded"
-            )
+            raise ValueError(f"Maximum review cycles ({MAX_REVIEW_CYCLES}) exceeded")
 
         payload = {
             "integrity_report_artifact_id": integrity_report_id,
@@ -204,9 +206,7 @@ class ReviewManager:
     ) -> ReviewIssue:
         """Mark an issue as resolved or wontfix."""
         if resolution_status not in ("resolved", "wontfix"):
-            raise ValueError(
-                f"Invalid resolution status: {resolution_status}"
-            )
+            raise ValueError(f"Invalid resolution status: {resolution_status}")
         conn = self._db.connect()
         try:
             conn.execute(

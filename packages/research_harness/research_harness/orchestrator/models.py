@@ -59,12 +59,12 @@ SUBSTEP_TO_STAGE: dict[str, str] = {
 # Replaces the old linear STAGE_ORDER + LOOPBACK_TRANSITIONS.
 # Self-loops allow staying in the same stage for iteration.
 STAGE_GRAPH: dict[str, frozenset[str]] = {
-    "init":       frozenset({"build", "init"}),
-    "build":      frozenset({"analyze", "build"}),
-    "analyze":    frozenset({"propose", "build", "analyze"}),
-    "propose":    frozenset({"experiment", "build", "analyze", "propose"}),
+    "init": frozenset({"build", "init"}),
+    "build": frozenset({"analyze", "build"}),
+    "analyze": frozenset({"propose", "build", "analyze"}),
+    "propose": frozenset({"experiment", "build", "analyze", "propose"}),
     "experiment": frozenset({"write", "propose", "experiment"}),
-    "write":      frozenset({"write", "experiment"}),
+    "write": frozenset({"write", "experiment"}),
 }
 
 # Backward-compat alias (used in some imports)
@@ -133,7 +133,7 @@ AUTONOMY_MODES = ("supervised", "autonomous")
 TASK_PROFILES = ("exploratory", "bounded", "benchmark", "writing")
 
 AutonomyMode = str  # one of AUTONOMY_MODES
-TaskProfile = str   # one of TASK_PROFILES
+TaskProfile = str  # one of TASK_PROFILES
 
 
 # Convenience type aliases
@@ -153,6 +153,7 @@ ArtifactStatus = str  # one of ARTIFACT_STATUSES
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class StageMetadata:

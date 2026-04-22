@@ -44,6 +44,7 @@ class BudgetLimits:
     def from_policy_json(cls, policy_json: str) -> "BudgetLimits":
         """Create from RunPolicy JSON stored in orchestrator_runs."""
         import json
+
         try:
             data = json.loads(policy_json) if policy_json else {}
         except (json.JSONDecodeError, TypeError):
@@ -133,13 +134,19 @@ class BudgetMonitor:
                 "wall_time", total_elapsed, self._limits.max_wall_time_min, "min"
             ),
             self._check_dimension(
-                "tool_calls", self._state.total_tool_calls, self._limits.max_tool_calls, "calls"
+                "tool_calls",
+                self._state.total_tool_calls,
+                self._limits.max_tool_calls,
+                "calls",
             ),
             self._check_dimension(
                 "papers", self._state.total_papers, self._limits.max_papers, "papers"
             ),
             self._check_dimension(
-                "iterations", self._state.total_iterations, self._limits.max_iterations, "iters"
+                "iterations",
+                self._state.total_iterations,
+                self._limits.max_iterations,
+                "iters",
             ),
         ]
 
@@ -153,13 +160,13 @@ class BudgetMonitor:
             )
 
         warnings = [c for c in checks if c.action == "warn"]
-        new_warnings = [
-            c for c in warnings if c.dimension not in self._warnings_issued
-        ]
+        new_warnings = [c for c in warnings if c.dimension not in self._warnings_issued]
         if new_warnings:
             for w in new_warnings:
                 self._warnings_issued.add(w.dimension)
-                logger.warning("Budget warning: %s at %.0f%%", w.dimension, w.usage_pct * 100)
+                logger.warning(
+                    "Budget warning: %s at %.0f%%", w.dimension, w.usage_pct * 100
+                )
             return BudgetCheckResult(
                 action="warn",
                 checks=checks,
@@ -172,8 +179,14 @@ class BudgetMonitor:
         self, dimension: str, current: float, limit: float, unit: str
     ) -> "DimensionCheck":
         if limit <= 0:
-            return DimensionCheck(dimension=dimension, current=current, limit=limit,
-                                  usage_pct=0.0, action="ok", unit=unit)
+            return DimensionCheck(
+                dimension=dimension,
+                current=current,
+                limit=limit,
+                usage_pct=0.0,
+                action="ok",
+                unit=unit,
+            )
         pct = current / limit
         if pct >= 1.0:
             action = "halt"
@@ -181,8 +194,14 @@ class BudgetMonitor:
             action = "warn"
         else:
             action = "ok"
-        return DimensionCheck(dimension=dimension, current=current, limit=limit,
-                              usage_pct=pct, action=action, unit=unit)
+        return DimensionCheck(
+            dimension=dimension,
+            current=current,
+            limit=limit,
+            usage_pct=pct,
+            action=action,
+            unit=unit,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for checkpoint storage."""

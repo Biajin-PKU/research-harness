@@ -110,14 +110,16 @@ def reading_prioritize(
             rec = _recency_decay(row["year"])
             total = w["gap"] * gap + w["citation"] * cit + w["recency"] * rec
 
-            scored.append(PrioritizedPaper(
-                paper_id=int(row["id"]),
-                title=row["title"] or f"Paper #{row['id']}",
-                score=round(total, 4),
-                gap_relevance=round(gap, 4),
-                citation_score=round(cit, 4),
-                recency_score=round(rec, 4),
-            ))
+            scored.append(
+                PrioritizedPaper(
+                    paper_id=int(row["id"]),
+                    title=row["title"] or f"Paper #{row['id']}",
+                    score=round(total, 4),
+                    gap_relevance=round(gap, 4),
+                    citation_score=round(cit, 4),
+                    recency_score=round(rec, 4),
+                )
+            )
 
         scored.sort(key=lambda p: p.score, reverse=True)
         return ReadingPrioritizeOutput(
@@ -134,29 +136,56 @@ def reading_prioritize(
 
 _CHECKLIST_TEMPLATE: list[dict[str, str]] = [
     # Baselines
-    {"category": "baselines", "item": "Include at least one well-known baseline from the literature"},
+    {
+        "category": "baselines",
+        "item": "Include at least one well-known baseline from the literature",
+    },
     {"category": "baselines", "item": "Include the current state-of-the-art method"},
-    {"category": "baselines", "item": "Include a simple baseline (e.g., random, heuristic)"},
+    {
+        "category": "baselines",
+        "item": "Include a simple baseline (e.g., random, heuristic)",
+    },
     # Metrics
-    {"category": "metrics", "item": "Define primary evaluation metric with clear justification"},
+    {
+        "category": "metrics",
+        "item": "Define primary evaluation metric with clear justification",
+    },
     {"category": "metrics", "item": "Include secondary metrics for robustness"},
-    {"category": "metrics", "item": "Report confidence intervals or statistical significance"},
+    {
+        "category": "metrics",
+        "item": "Report confidence intervals or statistical significance",
+    },
     # Datasets
     {"category": "datasets", "item": "Use at least one standard benchmark dataset"},
-    {"category": "datasets", "item": "Include dataset statistics (size, splits, class distribution)"},
+    {
+        "category": "datasets",
+        "item": "Include dataset statistics (size, splits, class distribution)",
+    },
     {"category": "datasets", "item": "Describe data preprocessing steps"},
     # Ablations
-    {"category": "ablations", "item": "Ablate each key component of the proposed method"},
+    {
+        "category": "ablations",
+        "item": "Ablate each key component of the proposed method",
+    },
     {"category": "ablations", "item": "Test sensitivity to key hyperparameters"},
-    {"category": "ablations", "item": "Analyze computational cost vs. performance tradeoff"},
+    {
+        "category": "ablations",
+        "item": "Analyze computational cost vs. performance tradeoff",
+    },
     # Reproducibility
     {"category": "reproducibility", "item": "Report all hyperparameters used"},
     {"category": "reproducibility", "item": "Specify hardware and training time"},
-    {"category": "reproducibility", "item": "Plan to release code and/or trained models"},
+    {
+        "category": "reproducibility",
+        "item": "Plan to release code and/or trained models",
+    },
     # Analysis
     {"category": "analysis", "item": "Include qualitative examples / case studies"},
     {"category": "analysis", "item": "Analyze failure cases"},
-    {"category": "analysis", "item": "Compare with related methods on shared evaluation settings"},
+    {
+        "category": "analysis",
+        "item": "Compare with related methods on shared evaluation settings",
+    },
 ]
 
 
@@ -218,12 +247,14 @@ def experiment_design_checklist(
         elif cat == "metrics" and known_metrics:
             notes = f"Known metrics: {', '.join(list(known_metrics)[:5])}"
 
-        items.append(ChecklistItem(
-            category=cat,
-            item=tpl["item"],
-            status="pending",
-            notes=notes,
-        ))
+        items.append(
+            ChecklistItem(
+                category=cat,
+                item=tpl["item"],
+                status="pending",
+                notes=notes,
+            )
+        )
 
     # Completeness = fraction of items with notes (rough proxy for topic coverage)
     filled = sum(1 for i in items if i.notes) / max(len(items), 1)
@@ -237,6 +268,7 @@ def experiment_design_checklist(
 # ---------------------------------------------------------------------------
 # dataset_index: extract dataset usage from compiled summaries
 # ---------------------------------------------------------------------------
+
 
 @register_primitive(DATASET_INDEX_SPEC)
 def dataset_index(
@@ -279,12 +311,14 @@ def dataset_index(
 
     entries = []
     for ds in sorted(ds_papers.keys()):
-        entries.append(DatasetEntry(
-            dataset=ds,
-            paper_ids=sorted(ds_papers[ds]),
-            metrics=sorted(ds_metrics.get(ds, set())),
-            count=len(ds_papers[ds]),
-        ))
+        entries.append(
+            DatasetEntry(
+                dataset=ds,
+                paper_ids=sorted(ds_papers[ds]),
+                metrics=sorted(ds_metrics.get(ds, set())),
+                count=len(ds_papers[ds]),
+            )
+        )
 
     entries.sort(key=lambda e: e.count, reverse=True)
     return DatasetIndexOutput(datasets=entries, total_papers=len(rows))
@@ -293,6 +327,7 @@ def dataset_index(
 # ---------------------------------------------------------------------------
 # author_coverage: check which authors are represented in the paper pool
 # ---------------------------------------------------------------------------
+
 
 @register_primitive(AUTHOR_COVERAGE_SPEC)
 def author_coverage(
@@ -330,10 +365,7 @@ def author_coverage(
     # Filter by author_name if provided
     if author_name:
         needle = author_name.lower()
-        author_papers = {
-            k: v for k, v in author_papers.items()
-            if needle in k.lower()
-        }
+        author_papers = {k: v for k, v in author_papers.items() if needle in k.lower()}
 
     entries = [
         AuthorEntry(name=name, paper_ids=pids, paper_count=len(pids))
@@ -350,6 +382,7 @@ def author_coverage(
 # ---------------------------------------------------------------------------
 # metrics_aggregate: combine extracted tables + compiled summaries into a unified metrics table
 # ---------------------------------------------------------------------------
+
 
 @register_primitive(METRICS_AGGREGATE_SPEC)
 def metrics_aggregate(
@@ -433,21 +466,32 @@ def metrics_aggregate(
                         (topic_id, paper_id, method, dataset, metric, value, source_type, source_ref, confidence)
                         VALUES (?, ?, ?, ?, ?, ?, 'table', ?, 0.8)
                         """,
-                        (topic_id, pid, method, dataset, metric_name, value,
-                         f"Table {table_num}, row {row_idx + 1}"),
+                        (
+                            topic_id,
+                            pid,
+                            method,
+                            dataset,
+                            metric_name,
+                            value,
+                            f"Table {table_num}, row {row_idx + 1}",
+                        ),
                     )
-                    mid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
-                    metrics.append(AggregatedMetric(
-                        metric_id=mid_row["id"] if mid_row else 0,
-                        paper_id=pid,
-                        method=method,
-                        dataset=dataset,
-                        metric=metric_name,
-                        value=value,
-                        source_type="table",
-                        source_ref=f"Table {table_num}, row {row_idx + 1}",
-                        confidence=0.8,
-                    ))
+                    mid_row = conn.execute(
+                        "SELECT last_insert_rowid() as id"
+                    ).fetchone()
+                    metrics.append(
+                        AggregatedMetric(
+                            metric_id=mid_row["id"] if mid_row else 0,
+                            paper_id=pid,
+                            method=method,
+                            dataset=dataset,
+                            metric=metric_name,
+                            value=value,
+                            source_type="table",
+                            source_ref=f"Table {table_num}, row {row_idx + 1}",
+                            confidence=0.8,
+                        )
+                    )
 
         # Process compiled summaries
         for srow in summary_rows:
@@ -463,7 +507,7 @@ def metrics_aggregate(
                 ds = met.get("dataset", "")
                 metric = met.get("metric", "")
                 value = str(met.get("value", ""))
-                baseline = met.get("baseline", "")
+                _baseline = met.get("baseline", "")
 
                 if not metric or not value:
                     continue
@@ -488,17 +532,19 @@ def metrics_aggregate(
                     (topic_id, pid, method, ds, metric, value),
                 )
                 mid_row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
-                metrics.append(AggregatedMetric(
-                    metric_id=mid_row["id"] if mid_row else 0,
-                    paper_id=pid,
-                    method=method,
-                    dataset=ds,
-                    metric=metric,
-                    value=value,
-                    source_type="text",
-                    source_ref="compiled_summary",
-                    confidence=0.5,
-                ))
+                metrics.append(
+                    AggregatedMetric(
+                        metric_id=mid_row["id"] if mid_row else 0,
+                        paper_id=pid,
+                        method=method,
+                        dataset=ds,
+                        metric=metric,
+                        value=value,
+                        source_type="text",
+                        source_ref="compiled_summary",
+                        confidence=0.5,
+                    )
+                )
 
         conn.commit()
         papers_processed = len(set(m.paper_id for m in metrics))
@@ -517,6 +563,7 @@ def metrics_aggregate(
 # Phase 4: topic_export — structured markdown report
 # ---------------------------------------------------------------------------
 
+
 @register_primitive(TOPIC_EXPORT_SPEC)
 def topic_export(
     *,
@@ -527,7 +574,9 @@ def topic_export(
     """Export a topic overview as a structured markdown report."""
     conn = db.connect()
     try:
-        topic_row = conn.execute("SELECT name, description FROM topics WHERE id = ?", (topic_id,)).fetchone()
+        topic_row = conn.execute(
+            "SELECT name, description FROM topics WHERE id = ?", (topic_id,)
+        ).fetchone()
         if not topic_row:
             return TopicExportOutput(markdown="Topic not found.")
 
@@ -553,7 +602,8 @@ def topic_export(
 
         # Normalized claims count
         claims_count = conn.execute(
-            "SELECT COUNT(*) as cnt FROM normalized_claims WHERE topic_id = ?", (topic_id,),
+            "SELECT COUNT(*) as cnt FROM normalized_claims WHERE topic_id = ?",
+            (topic_id,),
         ).fetchone()["cnt"]
 
         # Contradictions
@@ -610,7 +660,7 @@ def topic_export(
     md_parts.append(f"- **Contradictions detected:** {len(contradictions)}")
     md_parts.append(f"- **Methods in taxonomy:** {len(tax_nodes)}")
     if venues:
-        md_parts.append(f"\n### Venue Distribution\n")
+        md_parts.append("\n### Venue Distribution\n")
         for v in venues:
             md_parts.append(f"- {v['venue']}: {v['cnt']}")
 
@@ -621,7 +671,9 @@ def topic_export(
         cite = p["citation_count"] or 0
         year = p["year"] or "?"
         venue = p["venue"] or ""
-        md_parts.append(f"- [{p['id']}] {p['title']} ({year}) {venue} — {cite} citations [{p['relevance']}]")
+        md_parts.append(
+            f"- [{p['id']}] {p['title']} ({year}) {venue} — {cite} citations [{p['relevance']}]"
+        )
 
     # Method taxonomy
     if tax_nodes:
@@ -653,7 +705,9 @@ def topic_export(
             gap_data = json.loads(gaps[0]["payload_json"])
             for g in gap_data.get("gaps", [])[:10]:
                 if isinstance(g, dict):
-                    md_parts.append(f"- [{g.get('severity', '?')}] {g.get('description', '')}")
+                    md_parts.append(
+                        f"- [{g.get('severity', '?')}] {g.get('description', '')}"
+                    )
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -682,6 +736,7 @@ def topic_export(
 # Phase 4: visualize_topic — Mermaid diagram generation
 # ---------------------------------------------------------------------------
 
+
 @register_primitive(VISUALIZE_TOPIC_SPEC)
 def visualize_topic(
     *,
@@ -698,7 +753,9 @@ def visualize_topic(
     elif viz_type == "timeline":
         return _viz_timeline(db, topic_id)
     else:
-        return VisualizationOutput(mermaid_code="", viz_type=viz_type, title="Unknown viz type")
+        return VisualizationOutput(
+            mermaid_code="", viz_type=viz_type, title="Unknown viz type"
+        )
 
 
 def _viz_paper_graph(db: Database, topic_id: int) -> VisualizationOutput:
@@ -745,7 +802,7 @@ def _viz_paper_graph(db: Database, topic_id: int) -> VisualizationOutput:
     lines = ["graph LR"]
     for p in papers:
         label = (p["title"] or f"P{p['id']}")[:30]
-        lines.append(f"    P{p['id']}[\"{label}\"]")
+        lines.append(f'    P{p["id"]}["{label}"]')
 
     for e in shared[:30]:
         lines.append(f"    P{e['p1']} -->|{e['method'][:15]}| P{e['p2']}")
@@ -773,19 +830,20 @@ def _viz_taxonomy_tree(db: Database, topic_id: int) -> VisualizationOutput:
         counts = {}
         for n in nodes:
             cnt = conn.execute(
-                "SELECT COUNT(*) as cnt FROM taxonomy_assignments WHERE node_id = ?", (n["id"],),
+                "SELECT COUNT(*) as cnt FROM taxonomy_assignments WHERE node_id = ?",
+                (n["id"],),
             ).fetchone()
             counts[n["id"]] = cnt["cnt"] if cnt else 0
     finally:
         conn.close()
 
     lines = ["graph TD"]
-    lines.append("    ROOT[\"Methods\"]")
+    lines.append('    ROOT["Methods"]')
 
     for n in nodes:
         nid = n["id"]
         label = f"{n['name']} ({counts.get(nid, 0)})"
-        lines.append(f"    N{nid}[\"{label}\"]")
+        lines.append(f'    N{nid}["{label}"]')
 
         parent = n["parent_id"]
         if parent:

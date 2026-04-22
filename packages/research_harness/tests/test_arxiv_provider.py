@@ -24,12 +24,12 @@ ARXIV_FEED = """<?xml version='1.0' encoding='UTF-8'?>
 
 def test_arxiv_provider_parses_atom_feed() -> None:
     provider = ArxivProvider(fetcher=lambda url, headers: ARXIV_FEED)
-    results = provider.search(SearchQuery(query='attention', limit=1))
+    results = provider.search(SearchQuery(query="attention", limit=1))
 
     assert len(results) == 1
     result = results[0]
-    assert result.title == 'Attention is All you Need'
-    assert result.arxiv_id == '1706.03762v7'
-    assert result.doi == '10.48550/arXiv.1706.03762'
-    assert result.authors == ['Ashish Vaswani', 'Noam Shazeer']
-    assert result.pdf_candidates[0].url == 'http://arxiv.org/pdf/1706.03762v7'
+    assert result.title == "Attention is All you Need"
+    assert result.arxiv_id == "1706.03762v7"
+    assert result.doi == "10.48550/arXiv.1706.03762"
+    assert result.authors == ["Ashish Vaswani", "Noam Shazeer"]
+    assert result.pdf_candidates[0].url == "http://arxiv.org/pdf/1706.03762v7"

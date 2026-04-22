@@ -50,18 +50,42 @@ _VERBATIM_ENVS = re.compile(
 )
 
 # Section classification
-STRICT_SECTIONS = frozenset({
-    "results", "experiments", "experiment", "experimental results",
-    "experimental setup", "evaluation", "main results", "ablation",
-    "ablation study", "quantitative results", "comparison",
-})
+STRICT_SECTIONS = frozenset(
+    {
+        "results",
+        "experiments",
+        "experiment",
+        "experimental results",
+        "experimental setup",
+        "evaluation",
+        "main results",
+        "ablation",
+        "ablation study",
+        "quantitative results",
+        "comparison",
+    }
+)
 
-LENIENT_SECTIONS = frozenset({
-    "introduction", "intro", "related work", "related works",
-    "background", "preliminaries", "motivation", "abstract",
-    "conclusion", "conclusions", "discussion", "future work",
-    "limitations", "appendix", "acknowledgments", "acknowledgements",
-})
+LENIENT_SECTIONS = frozenset(
+    {
+        "introduction",
+        "intro",
+        "related work",
+        "related works",
+        "background",
+        "preliminaries",
+        "motivation",
+        "abstract",
+        "conclusion",
+        "conclusions",
+        "discussion",
+        "future work",
+        "limitations",
+        "appendix",
+        "acknowledgments",
+        "acknowledgements",
+    }
+)
 
 
 @dataclass
@@ -159,7 +183,7 @@ def extract_numbers(
             continue
 
         # Find approximate line number
-        line_num = cleaned[:match.start()].count("\n") + 1
+        line_num = cleaned[: match.start()].count("\n") + 1
 
         occurrences.append(
             NumberOccurrence(

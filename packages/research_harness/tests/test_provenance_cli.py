@@ -8,7 +8,14 @@ from research_harness.cli import main
 def test_provenance_list_and_show_json(runner):
     execute = runner.invoke(
         main,
-        ["--json", "primitive", "exec", "paper_ingest", "--args", '{"source":"10.1000/prov-one"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "paper_ingest",
+            "--args",
+            '{"source":"10.1000/prov-one"}',
+        ],
     )
     assert execute.exit_code == 0
 
@@ -28,11 +35,25 @@ def test_provenance_list_and_show_json(runner):
 def test_provenance_summary_json(runner):
     runner.invoke(
         main,
-        ["--json", "primitive", "exec", "paper_ingest", "--args", '{"source":"10.1000/prov-a"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "paper_ingest",
+            "--args",
+            '{"source":"10.1000/prov-a"}',
+        ],
     )
     runner.invoke(
         main,
-        ["--json", "primitive", "exec", "paper_ingest", "--args", '{"source":"10.1000/prov-b"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "paper_ingest",
+            "--args",
+            '{"source":"10.1000/prov-b"}',
+        ],
     )
 
     summary = runner.invoke(main, ["--json", "provenance", "summary"])
@@ -47,10 +68,21 @@ def test_provenance_export_json_and_csv(runner, tmp_path):
         main,
         ["--json", "topic", "init", "prov-topic"],
     )
-    topic = json.loads(runner.invoke(main, ["--json", "topic", "show", "prov-topic"]).output)
+    topic = json.loads(
+        runner.invoke(main, ["--json", "topic", "show", "prov-topic"]).output
+    )
     runner.invoke(
         main,
-        ["--json", "primitive", "exec", "--topic", str(topic["id"]), "paper_ingest", "--args", '{"source":"10.1000/prov-export"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "--topic",
+            str(topic["id"]),
+            "paper_ingest",
+            "--args",
+            '{"source":"10.1000/prov-export"}',
+        ],
     )
 
     exported = runner.invoke(main, ["provenance", "export", "--topic", "prov-topic"])
@@ -62,7 +94,16 @@ def test_provenance_export_json_and_csv(runner, tmp_path):
     csv_path = tmp_path / "provenance.csv"
     exported_csv = runner.invoke(
         main,
-        ["provenance", "export", "--topic", "prov-topic", "--format", "csv", "--output", str(csv_path)],
+        [
+            "provenance",
+            "export",
+            "--topic",
+            "prov-topic",
+            "--format",
+            "csv",
+            "--output",
+            str(csv_path),
+        ],
     )
     assert exported_csv.exit_code == 0
     rows = list(csv.DictReader(io.StringIO(csv_path.read_text())))
@@ -72,9 +113,23 @@ def test_provenance_export_json_and_csv(runner, tmp_path):
 
 
 def test_topic_export_json(runner, tmp_path):
-    created = runner.invoke(main, ["--json", "topic", "init", "export-topic", "--description", "desc", "--venue", "ICLR"])
+    created = runner.invoke(
+        main,
+        [
+            "--json",
+            "topic",
+            "init",
+            "export-topic",
+            "--description",
+            "desc",
+            "--venue",
+            "ICLR",
+        ],
+    )
     assert created.exit_code == 0
-    topic = json.loads(runner.invoke(main, ["--json", "topic", "show", "export-topic"]).output)
+    topic = json.loads(
+        runner.invoke(main, ["--json", "topic", "show", "export-topic"]).output
+    )
 
     paper = runner.invoke(
         main,
@@ -95,7 +150,17 @@ def test_topic_export_json(runner, tmp_path):
 
     project = runner.invoke(
         main,
-        ["--json", "project", "add", "--topic", "export-topic", "--name", "proj-a", "--description", "ship it"],
+        [
+            "--json",
+            "project",
+            "add",
+            "--topic",
+            "export-topic",
+            "--name",
+            "proj-a",
+            "--description",
+            "ship it",
+        ],
     )
     assert project.exit_code == 0
     project_payload = json.loads(project.output)
@@ -140,7 +205,16 @@ def test_topic_export_json(runner, tmp_path):
 
     runner.invoke(
         main,
-        ["--json", "primitive", "exec", "--topic", str(topic["id"]), "paper_search", "--args", '{"query":"Exported"}'],
+        [
+            "--json",
+            "primitive",
+            "exec",
+            "--topic",
+            str(topic["id"]),
+            "paper_search",
+            "--args",
+            '{"query":"Exported"}',
+        ],
     )
 
     exported = runner.invoke(main, ["topic", "export", "export-topic"])
@@ -157,7 +231,9 @@ def test_topic_export_json(runner, tmp_path):
     assert len(payload["provenance"]) == 1
 
     output_path = tmp_path / "topic-export.json"
-    exported_file = runner.invoke(main, ["topic", "export", "export-topic", "--output", str(output_path)])
+    exported_file = runner.invoke(
+        main, ["topic", "export", "export-topic", "--output", str(output_path)]
+    )
     assert exported_file.exit_code == 0
     file_payload = json.loads(output_path.read_text())
     assert file_payload["topic"]["name"] == "export-topic"
